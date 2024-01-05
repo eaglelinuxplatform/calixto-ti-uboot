@@ -1,0 +1,45 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * AM62x LP SK dts file for R5 SPL
+ * Copyright (C) 2021-2023 Texas Instruments Incorporated - https://www.ti.com/
+ */
+
+#include "k3-am62-lp-sk.dts"
+#include "k3-am62x-ddr-lp4-50-800-800.dtsi"
+#include "k3-am62-ddr.dtsi"
+
+#include "k3-am62-lp-sk-u-boot.dtsi"
+#include "k3-am62x-r5-sk-common.dtsi"
+#include "k3-am62-lp-sk-binman.dtsi"
+
+/ {
+	dummy_133mhz_clk: clock {
+		#clock-cells = <0>;
+		compatible = "fixed-clock";
+		clock-frequency = <133333333>;
+		bootph-pre-ram;
+	};
+
+	memory@80000000 {
+		device_type = "memory";
+		/* 2G RAM */
+		reg = <0x00000000 0x80000000 0x00000000 0x80000000>;
+		bootph-pre-ram;
+	};
+};
+
+/*
+&ospi0 {
+	reg = <0x00 0x0fc40000 0x00 0x100>,
+	      <0x00 0x60000000 0x00 0x08000000>;
+};
+*/
+
+&gpmc0 {
+	/delete-property/ power-domains;
+	clocks = <&dummy_133mhz_clk>;
+};
+
+&elm0 {
+	/delete-property/ power-domains;
+};

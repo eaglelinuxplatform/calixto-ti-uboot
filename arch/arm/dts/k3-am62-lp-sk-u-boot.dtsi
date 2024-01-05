@@ -1,0 +1,37 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * AM62x LP SK dts file for SPLs
+ * Copyright (C) 2021-2023 Texas Instruments Incorporated - https://www.ti.com/
+ */
+
+#include "k3-am62-lp-sk-binman.dtsi"
+#include "k3-am62x-sk-common-u-boot.dtsi"
+#include "k3-am62-lp-sk-nand.dtsi"
+
+&vddshv_sdio {
+	bootph-pre-ram;
+};
+
+&vddshv_sdio_pins_default {
+	bootph-pre-ram;
+};
+
+&ospi0_pins_default {
+	bootph-pre-ram;
+};
+
+&ospi0 {
+	bootph-pre-ram;
+
+	flash@0 {
+		bootph-pre-ram;
+
+		partitions {
+			bootph-pre-ram;
+
+			partition@7fc0000 {
+				bootph-pre-ram;
+			};
+		};
+	};
+};
