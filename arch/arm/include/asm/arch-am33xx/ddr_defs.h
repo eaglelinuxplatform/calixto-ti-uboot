@@ -166,6 +166,28 @@
 #define CALIXTO128_DDR2_EMIF_SDCFG		0x41805232
 #define CALIXTO128_DDR2_EMIF_SDREF		0x0000081A
 
+/******************** VERSA NXT 1GB DDR ***********************/
+#if defined(CONFIG_1024DDR3)
+#define CALIXTO_DDR3_RATIO                      0x100
+#define CALIXTO_DDR3_INVERT_CLKOUT              0x1
+#define CALIXTO_DDR3_RD_DQS                     0x3A
+#define CALIXTO_DDR3_WR_DQS                     0x90
+#define CALIXTO_DDR3_PHY_FIFO_WE                0x107
+#define CALIXTO_DDR3_PHY_WR_DATA                0xD0
+#define CALIXTO_DDR3_IOCTRL_VALUE               0x18B
+#endif
+
+/* Axeme DDR3 1024MB on CalixtoSOM */
+#define CALIXTO1024_DDR3_EMIF_READ_LATENCY       0x08
+#define CALIXTO1024_DDR3_EMIF_TIM1               0x0AAAD4DB
+#define CALIXTO1024_DDR3_EMIF_TIM2               0x248F7FDA
+#define CALIXTO1024_DDR3_EMIF_TIM3               0x50FFE8BF
+#define CALIXTO1024_DDR3_EMIF_SDCFG              0x61A052B2
+#define CALIXTO1024_DDR3_EMIF_SDREF              0x00000C30
+#define CALIXTO1024_DDR3_ZQ_CFG                  0x50074BE4
+
+/*************************************************************/
+
 #define  LPDDR2_ADDRCTRL_IOCTRL_VALUE   0x294
 #define  LPDDR2_ADDRCTRL_WD0_IOCTRL_VALUE 0x00000000
 #define  LPDDR2_ADDRCTRL_WD1_IOCTRL_VALUE 0x00000000

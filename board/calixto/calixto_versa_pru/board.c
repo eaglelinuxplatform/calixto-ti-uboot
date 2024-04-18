@@ -156,6 +156,26 @@ int board_init(void)
 	return 0;
 }
 
+void lan_phy_reset(void)
+{
+	int ret;
+	int idx;
+
+        // Initialize GPIOs
+	ret = gpio_request(61, "PIN0");    
+	printf("gpio_request(%d) returned %d\n", 61, ret);
+	if( ret == 0) {
+			ret = gpio_direction_output(61, 0);      
+			//printf("gpio_direction_output(%d) returned %d\n", 61, ret);
+                        udelay(20);
+                        ret = gpio_direction_output(61, 1);  
+	}
+	if( ret != 0) {
+		printf("export error");
+		return;
+	}  
+}
+
 #ifdef CONFIG_BOARD_LATE_INIT
 int board_late_init(void)
 {
@@ -167,6 +187,7 @@ int board_late_init(void)
 #ifdef CONFIG_UARTLOAD
 	setenv("boot_targets", "uart");
 #endif
+	//lan_phy_reset();
 	return 0;
 }
 #endif
@@ -240,9 +261,28 @@ int board_eth_init(bd_t *bis)
 			eth_setenv_enetaddr("ethaddr", mac_addr);
 	}
 
+ /******************* second mac address *******************************/
+       	mac_lo = readl(&cdev->macid1l);
+	mac_hi = readl(&cdev->macid1h);
+	mac_addr[0] = mac_hi & 0xFF;
+	mac_addr[1] = (mac_hi & 0xFF00) >> 8;
+	mac_addr[2] = (mac_hi & 0xFF0000) >> 16;
+	mac_addr[3] = (mac_hi & 0xFF000000) >> 24;
+	mac_addr[4] = mac_lo & 0xFF;
+	mac_addr[5] = (mac_lo & 0xFF00) >> 8;
+
+	if (!getenv("eth1addr")) {
+		printf("<eth1addr> not set. Validating first E-fuse MAC\n");
+
+		if (is_valid_ether_addr(mac_addr))
+			eth_setenv_enetaddr("eth1addr", mac_addr);
+	}
+
+      /**********************************************************************/
+
 #ifdef CONFIG_DRIVER_TI_CPSW
 
-	mac_lo = readl(&cdev->macid1l);
+	/*mac_lo = readl(&cdev->macid1l);
 	mac_hi = readl(&cdev->macid1h);
 	mac_addr[0] = mac_hi & 0xFF;
 	mac_addr[1] = (mac_hi & 0xFF00) >> 8;
@@ -264,7 +304,7 @@ int board_eth_init(bd_t *bis)
 	if (rv < 0)
 		printf("Error %d registering CPSW switch\n", rv);
 	else
-		n += rv;
+		n += rv;*/
 #endif
 #endif
 #if defined(CONFIG_USB_ETHER) && \

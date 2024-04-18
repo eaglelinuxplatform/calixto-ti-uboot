@@ -52,6 +52,16 @@ static const struct cmd_control ddr3_calixto_stamp_nxt_cmd_ctrl_data = {
         .cmd2iclkout = CALIXTO_DDR3_INVERT_CLKOUT,
 };
 
+static struct emif_regs ddr3_calixto1024_emif_reg_data = {
+        .sdram_config = CALIXTO1024_DDR3_EMIF_SDCFG,
+        .ref_ctrl = CALIXTO1024_DDR3_EMIF_SDREF,
+        .sdram_tim1 = CALIXTO1024_DDR3_EMIF_TIM1,
+        .sdram_tim2 = CALIXTO1024_DDR3_EMIF_TIM2,
+        .sdram_tim3 = CALIXTO1024_DDR3_EMIF_TIM3,
+        .zq_config = CALIXTO1024_DDR3_ZQ_CFG,
+        .emif_ddr_phy_ctlr_1 = CALIXTO1024_DDR3_EMIF_READ_LATENCY,
+};
+
 static struct emif_regs ddr3_calixto_stamp_nxt_512_emif_reg_data = {
         .sdram_config = CALIXTO512_DDR3_EMIF_SDCFG,
         .ref_ctrl = CALIXTO512_DDR3_EMIF_SDREF,
@@ -126,6 +136,10 @@ void sdram_init(void)
 #elif defined(CONFIG_256DDR3)
 	config_ddr(303, CALIXTO_DDR3_IOCTRL_VALUE, &ddr3_calixto_stamp_nxt_data,
 			&ddr3_calixto_stamp_nxt_cmd_ctrl_data, &ddr3_calixto_stamp_nxt_256_emif_reg_data, 0);
+#elif defined(CONFIG_1024DDR3)
+	config_ddr(303, CALIXTO_DDR3_IOCTRL_VALUE, &ddr3_calixto_stamp_nxt_data,
+			&ddr3_calixto_stamp_nxt_cmd_ctrl_data, &ddr3_calixto1024_emif_reg_data, 0);
+
 #endif
 }
 #endif
