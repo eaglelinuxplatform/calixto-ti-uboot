@@ -1,7 +1,8 @@
-/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  *  Copyright (C) 2011 Samsung Electronics
  *  Lukasz Majewski <l.majewski@samsung.com>
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef __MAX8997_PMIC_H_
@@ -169,6 +170,7 @@ enum {
 #define SAFEOUT_3_30V 0x03
 
 /* Charger */
+enum {CHARGER_ENABLE, CHARGER_DISABLE};
 #define DETBAT                  (1 << 2)
 #define MBCICHFCSET             (1 << 4)
 #define MBCHOSTEN               (1 << 6)

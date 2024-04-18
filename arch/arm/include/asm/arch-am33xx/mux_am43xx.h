@@ -1,20 +1,24 @@
-/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * mux_am43xx.h
  *
  * Copyright (C) 2013 Texas Instruments Incorporated - http://www.ti.com/
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef _MUX_AM43XX_H_
 #define _MUX_AM43XX_H_
 
+#include <common.h>
 #include <asm/io.h>
 
 #define MUX_CFG(value, offset)	\
 	__raw_writel(value, (CTRL_BASE + offset));
 
 /* PAD Control Fields */
-#define SLEWCTRL	(0x1 << 19)
+#define DSPULLUDEN	(0x1 << 27) /* DS0 mode Pull-Up/Down enable */
+#define DSPULLUDDIS	(0x0 << 27) /* DS0 mode Pull-Up/Down Disable */
+#define SLEWCTRL	(0x1 << 19) /* Slow slew rate selection */
 #define RXACTIVE	(0x1 << 18)
 #define PULLDOWN_EN	(0x0 << 17) /* Pull Down Selection */
 #define PULLUP_EN	(0x1 << 17) /* Pull Up Selection */
@@ -135,76 +139,6 @@ struct pad_signals {
 	int mcasp0_fsr;
 	int mcasp0_axr1;
 	int mcasp0_ahclkx;
-	int cam0_hd;
-	int cam0_vd;
-	int cam0_field;
-	int cam0_wen;
-	int cam0_pclk;
-	int cam0_data8;
-	int cam0_data9;
-	int cam1_data9;
-	int cam1_data8;
-	int cam1_hd;
-	int cam1_vd;
-	int cam1_pclk;
-	int cam1_field;
-	int cam1_wen;
-	int cam1_data0;
-	int cam1_data1;
-	int cam1_data2;
-	int cam1_data3;
-	int cam1_data4;
-	int cam1_data5;
-	int cam1_data6;
-	int cam1_data7;
-	int cam0_data0;
-	int cam0_data1;
-	int cam0_data2;
-	int cam0_data3;
-	int cam0_data4;
-	int cam0_data5;
-	int cam0_data6;
-	int cam0_data7;
-	int uart3_rxd;
-	int uart3_txd;
-	int uart3_ctsn;
-	int uart3_rtsn;
-	int gpio5_8;
-	int gpio5_9;
-	int gpio5_10;
-	int gpio5_11;
-	int gpio5_12;
-	int gpio5_13;
-	int spi4_sclk;
-	int spi4_d0;
-	int spi4_d1;
-	int spi4_cs0;
-	int spi2_sclk;
-	int spi2_d0;
-	int spi2_d1;
-	int spi2_cs0;
-	int xdma_evt_intr0;
-	int xdma_evt_intr1;
-	int clkreq;
-	int nresetin_out;
-	int rsvd1;
-	int nnmi;
-	int rsvd2;
-	int rsvd3;
-	int tms;
-	int tdi;
-	int tdo;
-	int tck;
-	int ntrst;
-	int emu0;
-	int emu1;
-	int osc1_in;
-	int osc1_out;
-	int rtc_porz;
-	int ext_wakeup0;
-	int pmic_power_en0;
-	int usb0_drvvbus;
-	int usb1_drvvbus;
 };
 
 #endif /* _MUX_AM43XX_H_ */

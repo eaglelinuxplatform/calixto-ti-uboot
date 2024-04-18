@@ -1,49 +1,42 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright 2009-2011 Freescale Semiconductor, Inc.
  *	Dave Liu <daveliu@freescale.com>
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 #include <common.h>
-#include <env.h>
-#include <fs_loader.h>
-#include <image.h>
 #include <malloc.h>
 #include <asm/io.h>
-#include <dm/device_compat.h>
-#include <linux/errno.h>
-#include <u-boot/crc.h>
-#include <dm.h>
+#include <asm/errno.h>
 
 #include "fm.h"
-#include <fsl_qe.h>		/* For struct qe_firmware */
+#include "../../qe/qe.h"		/* For struct qe_firmware */
 
+#ifdef CONFIG_SYS_QE_FMAN_FW_IN_NAND
 #include <nand.h>
+#elif defined(CONFIG_SYS_QE_FW_IN_SPIFLASH)
 #include <spi_flash.h>
+#elif defined(CONFIG_SYS_QE_FMAN_FW_IN_MMC)
 #include <mmc.h>
-
-#ifdef CONFIG_ARM64
-#include <asm/armv8/mmu.h>
-#include <asm/arch/cpu.h>
 #endif
 
-struct fm_muram muram[CFG_SYS_NUM_FMAN];
+struct fm_muram muram[CONFIG_SYS_NUM_FMAN];
 
-void *fm_muram_base(int fm_idx)
+u32 fm_muram_base(int fm_idx)
 {
 	return muram[fm_idx].base;
 }
 
-void *fm_muram_alloc(int fm_idx, size_t size, ulong align)
+u32 fm_muram_alloc(int fm_idx, u32 size, u32 align)
 {
-	void *ret;
-	ulong align_mask;
-	size_t off;
-	void *save;
+	u32 ret;
+	u32 align_mask, off;
+	u32 save;
 
 	align_mask = align - 1;
 	save = muram[fm_idx].alloc;
 
-	off = (ulong)save & align_mask;
+	off = save & align_mask;
 	if (off != 0)
 		muram[fm_idx].alloc += (align - off);
 	off = size & align_mask;
@@ -52,7 +45,6 @@ void *fm_muram_alloc(int fm_idx, size_t size, ulong align)
 	if ((muram[fm_idx].alloc + size) >= muram[fm_idx].top) {
 		muram[fm_idx].alloc = save;
 		printf("%s: run out of ram.\n", __func__);
-		return NULL;
 	}
 
 	ret = muram[fm_idx].alloc;
@@ -64,12 +56,12 @@ void *fm_muram_alloc(int fm_idx, size_t size, ulong align)
 
 static void fm_init_muram(int fm_idx, void *reg)
 {
-	void *base = reg;
+	u32 base = (u32)reg;
 
 	muram[fm_idx].base = base;
-	muram[fm_idx].size = CFG_SYS_FM_MURAM_SIZE;
+	muram[fm_idx].size = CONFIG_SYS_FM_MURAM_SIZE;
 	muram[fm_idx].alloc = base + FM_MURAM_RES_SIZE;
-	muram[fm_idx].top = base + CFG_SYS_FM_MURAM_SIZE;
+	muram[fm_idx].top = base + CONFIG_SYS_FM_MURAM_SIZE;
 }
 
 /*
@@ -88,11 +80,11 @@ static void fm_upload_ucode(int fm_idx, struct fm_imem *imem,
 	out_be32(&imem->iadd, IRAM_IADD_AIE);
 	/* write microcode to IRAM */
 	for (i = 0; i < size / 4; i++)
-		out_be32(&imem->idata, (be32_to_cpu(ucode[i])));
+		out_be32(&imem->idata, ucode[i]);
 
 	/* verify if the writing is over */
 	out_be32(&imem->iadd, 0);
-	while ((in_be32(&imem->idata) != be32_to_cpu(ucode[0])) && --timeout)
+	while ((in_be32(&imem->idata) != ucode[0]) && --timeout)
 		;
 	if (!timeout)
 		printf("Fman%u: microcode upload timeout\n", fm_idx + 1);
@@ -185,15 +177,14 @@ static int fman_upload_firmware(int fm_idx,
 		const struct qe_microcode *ucode = &firmware->microcode[i];
 
 		/* Upload a microcode if it's present */
-		if (be32_to_cpu(ucode->code_offset)) {
+		if (ucode->code_offset) {
 			u32 ucode_size;
 			u32 *code;
 			printf("Fman%u: Uploading microcode version %u.%u.%u\n",
 			       fm_idx + 1, ucode->major, ucode->minor,
 			       ucode->revision);
-			code = (void *)firmware +
-			       be32_to_cpu(ucode->code_offset);
-			ucode_size = sizeof(u32) * be32_to_cpu(ucode->count);
+			code = (void *)firmware + ucode->code_offset;
+			ucode_size = sizeof(u32) * ucode->count;
 			fm_upload_ucode(fm_idx, fm_imem, code, ucode_size);
 		}
 	}
@@ -264,9 +255,7 @@ static void fm_init_fpm(struct fm_fpm *fpm)
 static int fm_init_bmi(int fm_idx, struct fm_bmi_common *bmi)
 {
 	int blk, i, port_id;
-	u32 val;
-	size_t offset;
-	void *base;
+	u32 val, offset, base;
 
 	/* alloc free buffer pool in MURAM */
 	base = fm_muram_alloc(fm_idx, FM_FREE_POOL_SIZE, FM_FREE_POOL_ALIGN);
@@ -342,6 +331,9 @@ static int fm_init_bmi(int fm_idx, struct fm_bmi_common *bmi)
 
 static void fm_init_qmi(struct fm_qmi_common *qmi)
 {
+	/* disable enqueue and dequeue of QMI */
+	clrbits_be32(&qmi->fmqm_gc, FMQM_GC_ENQ_EN | FMQM_GC_DEQ_EN);
+
 	/* disable all error interrupts */
 	out_be32(&qmi->fmqm_eien, FMQM_EIEN_DISABLE_ALL);
 	/* clear all error events */
@@ -354,161 +346,32 @@ static void fm_init_qmi(struct fm_qmi_common *qmi)
 }
 
 /* Init common part of FM, index is fm num# like fm as above */
-#ifdef CONFIG_TFABOOT
-int fm_init_common(int index, struct ccsr_fman *reg, const char *firmware_name)
+int fm_init_common(int index, struct ccsr_fman *reg)
 {
 	int rc;
-	void *addr = NULL;
-	enum boot_src src = get_boot_src();
-
-	if (src == BOOT_SOURCE_IFC_NOR) {
-		addr = (void *)(CONFIG_SYS_FMAN_FW_ADDR +
-				CFG_SYS_FSL_IFC_BASE);
-#ifdef CONFIG_CMD_NAND
-	} else if (src == BOOT_SOURCE_IFC_NAND) {
-		size_t fw_length = CONFIG_SYS_QE_FMAN_FW_LENGTH;
-
-		addr = malloc(CONFIG_SYS_QE_FMAN_FW_LENGTH);
-
-		rc = nand_read(get_nand_dev_by_index(0),
-			       (loff_t)CONFIG_SYS_FMAN_FW_ADDR,
-			       &fw_length, (u_char *)addr);
-		if (rc == -EUCLEAN) {
-			printf("NAND read of FMAN firmware at offset 0x%x failed %d\n",
-			       CONFIG_SYS_FMAN_FW_ADDR, rc);
-		}
-#endif
-	} else if (src == BOOT_SOURCE_QSPI_NOR) {
-		struct spi_flash *ucode_flash;
-
-		addr = malloc(CONFIG_SYS_QE_FMAN_FW_LENGTH);
-		int ret = 0;
-
-#if CONFIG_IS_ENABLED(DM_SPI_FLASH)
-		struct udevice *new;
-
-		/* speed and mode will be read from DT */
-		ret = spi_flash_probe_bus_cs(CONFIG_SF_DEFAULT_BUS,
-					     CONFIG_SF_DEFAULT_CS, &new);
-
-		ucode_flash = dev_get_uclass_priv(new);
-#else
-		ucode_flash = spi_flash_probe(CONFIG_ENV_SPI_BUS,
-					      CONFIG_ENV_SPI_CS,
-					      CONFIG_ENV_SPI_MAX_HZ,
-					      CONFIG_ENV_SPI_MODE);
-#endif
-		if (!ucode_flash) {
-			printf("SF: probe for ucode failed\n");
-		} else {
-			ret = spi_flash_read(ucode_flash,
-					     CONFIG_SYS_FMAN_FW_ADDR +
-					     CFG_SYS_FSL_QSPI_BASE,
-					     CONFIG_SYS_QE_FMAN_FW_LENGTH,
-					     addr);
-			if (ret)
-				printf("SF: read for ucode failed\n");
-			spi_flash_free(ucode_flash);
-		}
-	} else if (src == BOOT_SOURCE_SD_MMC) {
-		int dev = CONFIG_SYS_MMC_ENV_DEV;
-
-		addr = malloc(CONFIG_SYS_QE_FMAN_FW_LENGTH);
-		u32 cnt = CONFIG_SYS_QE_FMAN_FW_LENGTH / 512;
-		u32 blk = CONFIG_SYS_FMAN_FW_ADDR / 512;
-		struct mmc *mmc = find_mmc_device(CONFIG_SYS_MMC_ENV_DEV);
-
-		if (!mmc) {
-			printf("\nMMC cannot find device for ucode\n");
-		} else {
-			printf("\nMMC read: dev # %u, block # %u, count %u ...\n",
-			       dev, blk, cnt);
-			mmc_init(mmc);
-			(void)blk_dread(mmc_get_blk_desc(mmc), blk, cnt,
-						addr);
-		}
-	} else {
-		addr = NULL;
-	}
-
-	/* Upload the Fman microcode if it's present */
-	rc = fman_upload_firmware(index, &reg->fm_imem, addr);
-	if (rc)
-		return rc;
-	env_set_addr("fman_ucode", addr);
-
-	fm_init_muram(index, &reg->muram);
-	fm_init_qmi(&reg->fm_qmi_common);
-	fm_init_fpm(&reg->fm_fpm);
-
-	/* clear DMA status */
-	setbits_be32(&reg->fm_dma.fmdmsr, FMDMSR_CLEAR_ALL);
-
-	/* set DMA mode */
-	setbits_be32(&reg->fm_dma.fmdmmr, FMDMMR_SBER);
-
-	return fm_init_bmi(index, &reg->fm_bmi_common);
-}
-#else
-int fm_init_common(int index, struct ccsr_fman *reg, const char *firmware_name)
-{
-	int rc;
-#if defined(CONFIG_SYS_QE_FMAN_FW_IN_FS)
-	struct udevice *fs_loader;
-	void *addr = malloc(CONFIG_SYS_QE_FMAN_FW_LENGTH);
-
-	if (!addr)
-		return -ENOMEM;
-
-	rc = get_fs_loader(&fs_loader);
-	if (rc) {
-		debug("could not get fs loader: %d\n", rc);
-		return rc;
-	}
-
-	if (!firmware_name)
-		firmware_name = "fman.itb";
-
-	rc = request_firmware_into_buf(fs_loader, firmware_name, addr,
-				       CONFIG_SYS_QE_FMAN_FW_LENGTH, 0);
-	if (rc < 0) {
-		debug("could not request %s: %d\n", firmware_name, rc);
-		return rc;
-	}
-#elif defined(CONFIG_SYS_QE_FMAN_FW_IN_NOR)
-	void *addr = (void *)CONFIG_SYS_FMAN_FW_ADDR;
+#if defined(CONFIG_SYS_QE_FMAN_FW_IN_NOR)
+	void *addr = (void *)CONFIG_SYS_QE_FMAN_FW_ADDR;
 #elif defined(CONFIG_SYS_QE_FMAN_FW_IN_NAND)
 	size_t fw_length = CONFIG_SYS_QE_FMAN_FW_LENGTH;
 	void *addr = malloc(CONFIG_SYS_QE_FMAN_FW_LENGTH);
 
-	rc = nand_read(get_nand_dev_by_index(0),
-		       (loff_t)CONFIG_SYS_FMAN_FW_ADDR,
+	rc = nand_read(&nand_info[0], (loff_t)CONFIG_SYS_QE_FMAN_FW_ADDR,
 		       &fw_length, (u_char *)addr);
 	if (rc == -EUCLEAN) {
 		printf("NAND read of FMAN firmware at offset 0x%x failed %d\n",
-			CONFIG_SYS_FMAN_FW_ADDR, rc);
+			CONFIG_SYS_QE_FMAN_FW_ADDR, rc);
 	}
-#elif defined(CONFIG_SYS_QE_FMAN_FW_IN_SPIFLASH)
+#elif defined(CONFIG_SYS_QE_FW_IN_SPIFLASH)
 	struct spi_flash *ucode_flash;
 	void *addr = malloc(CONFIG_SYS_QE_FMAN_FW_LENGTH);
 	int ret = 0;
 
-#if CONFIG_IS_ENABLED(DM_SPI_FLASH)
-	struct udevice *new;
-
-	/* speed and mode will be read from DT */
-	ret = spi_flash_probe_bus_cs(CONFIG_SF_DEFAULT_BUS, CONFIG_SF_DEFAULT_CS,
-				     &new);
-
-	ucode_flash = dev_get_uclass_priv(new);
-#else
 	ucode_flash = spi_flash_probe(CONFIG_ENV_SPI_BUS, CONFIG_ENV_SPI_CS,
 			CONFIG_ENV_SPI_MAX_HZ, CONFIG_ENV_SPI_MODE);
-#endif
 	if (!ucode_flash)
 		printf("SF: probe for ucode failed\n");
 	else {
-		ret = spi_flash_read(ucode_flash, CONFIG_SYS_FMAN_FW_ADDR,
+		ret = spi_flash_read(ucode_flash, CONFIG_SYS_QE_FMAN_FW_ADDR,
 				CONFIG_SYS_QE_FMAN_FW_LENGTH, addr);
 		if (ret)
 			printf("SF: read for ucode failed\n");
@@ -518,7 +381,7 @@ int fm_init_common(int index, struct ccsr_fman *reg, const char *firmware_name)
 	int dev = CONFIG_SYS_MMC_ENV_DEV;
 	void *addr = malloc(CONFIG_SYS_QE_FMAN_FW_LENGTH);
 	u32 cnt = CONFIG_SYS_QE_FMAN_FW_LENGTH / 512;
-	u32 blk = CONFIG_SYS_FMAN_FW_ADDR / 512;
+	u32 blk = CONFIG_SYS_QE_FMAN_FW_ADDR / 512;
 	struct mmc *mmc = find_mmc_device(CONFIG_SYS_MMC_ENV_DEV);
 
 	if (!mmc)
@@ -527,37 +390,21 @@ int fm_init_common(int index, struct ccsr_fman *reg, const char *firmware_name)
 		printf("\nMMC read: dev # %u, block # %u, count %u ...\n",
 				dev, blk, cnt);
 		mmc_init(mmc);
-		(void)blk_dread(mmc_get_blk_desc(mmc), blk, cnt,
-						addr);
+		(void)mmc->block_dev.block_read(dev, blk, cnt, addr);
+		/* flush cache after read */
+		flush_cache((ulong)addr, cnt * 512);
 	}
 #elif defined(CONFIG_SYS_QE_FMAN_FW_IN_REMOTE)
-	void *addr = (void *)CONFIG_SYS_FMAN_FW_ADDR;
+	void *addr = (void *)CONFIG_SYS_QE_FMAN_FW_ADDR;
 #else
 	void *addr = NULL;
 #endif
-
-	rc = fit_check_format(addr, CONFIG_SYS_QE_FMAN_FW_LENGTH);
-	if (!rc) {
-		size_t unused;
-		const void *new_addr;
-
-		rc = fit_get_data_conf_prop(addr, "fman", &new_addr, &unused);
-		if (rc)
-			return rc;
-		addr = (void *)new_addr;
-	} else if (CONFIG_IS_ENABLED(FIT_SIGNATURE)) {
-		/*
-		 * Using a (signed) FIT wrapper is mandatory if we are
-		 * doing verified boot.
-		 */
-		return rc;
-	}
 
 	/* Upload the Fman microcode if it's present */
 	rc = fman_upload_firmware(index, &reg->fm_imem, addr);
 	if (rc)
 		return rc;
-	env_set_addr("fman_ucode", addr);
+	setenv_addr("fman_ucode", addr);
 
 	fm_init_muram(index, &reg->muram);
 	fm_init_qmi(&reg->fm_qmi_common);
@@ -571,87 +418,3 @@ int fm_init_common(int index, struct ccsr_fman *reg, const char *firmware_name)
 
 	return fm_init_bmi(index, &reg->fm_bmi_common);
 }
-#endif
-
-struct fman_priv {
-	struct ccsr_fman *reg;
-	unsigned int fman_id;
-};
-
-static const struct udevice_id fman_ids[] = {
-	{ .compatible = "fsl,fman" },
-	{}
-};
-
-static int fman_probe(struct udevice *dev)
-{
-	const char *firmware_name = NULL;
-	int ret;
-	struct fman_priv *priv = dev_get_priv(dev);
-
-	priv->reg = (struct ccsr_fman *)(uintptr_t)dev_read_addr(dev);
-
-	if (dev_read_u32(dev, "cell-index", &priv->fman_id)) {
-		printf("FMan node property cell-index missing\n");
-		return -EINVAL;
-	}
-
-	ret = dev_read_string_index(dev, "firmware-name", 0, &firmware_name);
-	if (ret && ret != -EINVAL) {
-		dev_dbg(dev, "Could not read firmware-name\n");
-		return ret;
-	}
-
-	return fm_init_common(priv->fman_id, priv->reg, firmware_name);
-}
-
-static int fman_remove(struct udevice *dev)
-{
-	return 0;
-}
-
-int fman_id(struct udevice *dev)
-{
-	struct fman_priv *priv = dev_get_priv(dev);
-
-	return priv->fman_id;
-}
-
-void *fman_port(struct udevice *dev, int num)
-{
-	struct fman_priv *priv = dev_get_priv(dev);
-
-	return &priv->reg->port[num - 1].fm_bmi;
-}
-
-void *fman_mdio(struct udevice *dev, enum fm_mac_type type, int num)
-{
-	struct fman_priv *priv = dev_get_priv(dev);
-	void *res = NULL;
-
-	switch (type) {
-#ifdef CONFIG_SYS_FMAN_V3
-	case FM_MEMAC:
-		res = &priv->reg->memac[num].fm_memac_mdio;
-		break;
-#else
-	case FM_DTSEC:
-		res = &priv->reg->mac_1g[num].fm_mdio.miimcfg;
-		break;
-	case FM_TGEC:
-		res = &priv->reg->mac_10g[num].fm_10gec_mdio;
-		break;
-#endif
-	}
-	return res;
-}
-
-U_BOOT_DRIVER(fman) = {
-	.name = "fman",
-	.id = UCLASS_SIMPLE_BUS,
-	.of_match = fman_ids,
-	.probe = fman_probe,
-	.remove = fman_remove,
-	.priv_auto	= sizeof(struct fman_priv),
-	.flags = DM_FLAG_ALLOC_PRIV_DMA,
-};

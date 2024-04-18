@@ -1,8 +1,9 @@
-/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Header file for Advanced Crypto Engine - SFR definitions
  *
  * Copyright (c) 2012  Samsung Electronics
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef __ACE_SHA_H
@@ -71,10 +72,9 @@ struct exynos_ace_sfr {
 	unsigned char   res12[0x30];
 	unsigned int	hash_result[8];
 	unsigned char   res13[0x20];
-	unsigned int	hash_seed[5];
-	unsigned char	res14[12];
-	unsigned int	hash_prng[5];
-	unsigned char	res15[0x18c];
+	unsigned int	hash_seed[8];
+	unsigned int	hash_prng[8];
+	unsigned char   res14[0x180];
 
 	unsigned int	pka_sfr[5];		/* base + 0x700 */
 };
@@ -291,7 +291,6 @@ struct exynos_ace_sfr {
 #define ACE_HASH_PRNGERROR_MASK	(1 << 7)
 #define ACE_HASH_PRNGERROR_OFF		(0 << 7)
 #define ACE_HASH_PRNGERROR_ON		(1 << 7)
-#define ACE_HASH_PRNG_REG_NUM		5
 
 #define ACE_SHA_TYPE_SHA1		1
 #define ACE_SHA_TYPE_SHA256		2
@@ -306,7 +305,7 @@ struct exynos_ace_sfr {
  *			should allocate at least 32 bytes at pOut in advance.
  * @param hash_type SHA1 or SHA256
  *
- * Return:		0 on Success, -1 on Failure (Timeout)
+ * @return		0 on Success, -1 on Failure (Timeout)
  */
 int ace_sha_hash_digest(const uchar * in_addr, uint buflen,
 			uchar * out_addr, uint hash_type);

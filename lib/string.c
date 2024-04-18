@@ -15,8 +15,6 @@
  *    reentrant and should be faster). Use only strsep() in new code, please.
  */
 
-#include <config.h>
-#include <linux/compiler.h>
 #include <linux/types.h>
 #include <linux/string.h>
 #include <linux/ctype.h>
@@ -104,35 +102,6 @@ char * strncpy(char * dest,const char *src,size_t count)
 }
 #endif
 
-#ifndef __HAVE_ARCH_STRLCPY
-/**
- * strlcpy - Copy a C-string into a sized buffer
- * @dest: Where to copy the string to
- * @src: Where to copy the string from
- * @size: size of destination buffer
- *
- * Compatible with *BSD: the result is always a valid
- * NUL-terminated string that fits in the buffer (unless,
- * of course, the buffer size is zero). It does not pad
- * out the result like strncpy() does.
- *
- * Return: the number of bytes copied
- */
-size_t strlcpy(char *dest, const char *src, size_t size)
-{
-	if (size) {
-		size_t srclen = strlen(src);
-		size_t len = (srclen >= size) ? size - 1 : srclen;
-
-		memcpy(dest, src, len);
-		dest[len] = '\0';
-		return len + 1;
-	}
-
-	return 0;
-}
-#endif
-
 #ifndef __HAVE_ARCH_STRCAT
 /**
  * strcat - Append one %NUL-terminated string to another
@@ -181,45 +150,22 @@ char * strncat(char *dest, const char *src, size_t count)
 }
 #endif
 
-#ifndef __HAVE_ARCH_STRLCAT
-/**
- * strlcat - Append a length-limited, %NUL-terminated string to another
- * @dest: The string to be appended to
- * @src: The string to append to it
- * @size: The size of @dest
- *
- * Compatible with *BSD: the result is always a valid NUL-terminated string that
- * fits in the buffer (unless, of course, the buffer size is zero). It does not
- * write past @size like strncat() does.
- */
-size_t strlcat(char *dest, const char *src, size_t size)
-{
-	size_t len = strnlen(dest, size);
-
-	return len + strlcpy(dest + len, src, size - len);
-}
-#endif
-
 #ifndef __HAVE_ARCH_STRCMP
 /**
  * strcmp - Compare two strings
  * @cs: One string
  * @ct: Another string
  */
-int strcmp(const char *cs, const char *ct)
+int strcmp(const char * cs,const char * ct)
 {
-	int ret;
+	register signed char __res;
 
 	while (1) {
-		unsigned char a = *cs++;
-		unsigned char b = *ct++;
-
-		ret = a - b;
-		if (ret || !b)
+		if ((__res = *cs - *ct++) != 0 || !*cs++)
 			break;
 	}
 
-	return ret;
+	return __res;
 }
 #endif
 
@@ -230,20 +176,17 @@ int strcmp(const char *cs, const char *ct)
  * @ct: Another string
  * @count: The maximum number of bytes to compare
  */
-int strncmp(const char *cs, const char *ct, size_t count)
+int strncmp(const char * cs,const char * ct,size_t count)
 {
-	int ret = 0;
+	register signed char __res = 0;
 
-	while (count--) {
-		unsigned char a = *cs++;
-		unsigned char b = *ct++;
-
-		ret = a - b;
-		if (ret || !b)
+	while (count) {
+		if ((__res = *cs - *ct++) != 0 || !*cs++)
 			break;
+		count--;
 	}
 
-	return ret;
+	return __res;
 }
 #endif
 
@@ -261,14 +204,6 @@ char * strchr(const char * s, int c)
 	return (char *) s;
 }
 #endif
-
-const char *strchrnul(const char *s, int c)
-{
-	for (; *s != (char)c; ++s)
-		if (*s == '\0')
-			break;
-	return s;
-}
 
 #ifndef __HAVE_ARCH_STRRCHR
 /**
@@ -318,30 +253,6 @@ size_t strnlen(const char * s, size_t count)
 }
 #endif
 
-#ifndef __HAVE_ARCH_STRCSPN
-/**
- * strcspn - Calculate the length of the initial substring of @s which does
- * not contain letters in @reject
- * @s: The string to be searched
- * @reject: The string to avoid
- */
-size_t strcspn(const char *s, const char *reject)
-{
-	const char *p;
-	const char *r;
-	size_t count = 0;
-
-	for (p = s; *p != '\0'; ++p) {
-		for (r = reject; *r != '\0'; ++r) {
-			if (*p == *r)
-				return count;
-		}
-		++count;
-	}
-	return count;
-}
-#endif
-
 #ifndef __HAVE_ARCH_STRDUP
 char * strdup(const char *s)
 {
@@ -353,29 +264,6 @@ char * strdup(const char *s)
 	}
 
 	strcpy (new, s);
-	return new;
-}
-
-char * strndup(const char *s, size_t n)
-{
-	size_t len;
-	char *new;
-
-	if (s == NULL)
-		return NULL;
-
-	len = strlen(s);
-
-	if (n < len)
-		len = n;
-
-	new = malloc(len + 1);
-	if (new == NULL)
-		return NULL;
-
-	strncpy(new, s, len);
-	new[len] = '\0';
-
 	return new;
 }
 #endif
@@ -521,13 +409,11 @@ char *strswab(const char *s)
  *
  * Do not use memset() to access IO space, use memset_io() instead.
  */
-__used void * memset(void * s,int c,size_t count)
+void * memset(void * s,int c,size_t count)
 {
 	unsigned long *sl = (unsigned long *) s;
-	char *s8;
-
-#if !CONFIG_IS_ENABLED(TINY_MEMSET)
 	unsigned long cl = 0;
+	char *s8;
 	int i;
 
 	/* do it one word at a time (32 bits or 64 bits) while possible */
@@ -541,12 +427,36 @@ __used void * memset(void * s,int c,size_t count)
 			count -= sizeof(*sl);
 		}
 	}
-#endif	/* fill 8 bits at a time */
+	/* fill 8 bits at a time */
 	s8 = (char *)sl;
 	while (count--)
 		*s8++ = c;
 
 	return s;
+}
+#endif
+
+#ifndef __HAVE_ARCH_BCOPY
+/**
+ * bcopy - Copy one area of memory to another
+ * @src: Where to copy from
+ * @dest: Where to copy to
+ * @count: The size of the area.
+ *
+ * Note that this is the same as memcpy(), with the arguments reversed.
+ * memcpy() is the standard, bcopy() is a legacy BSD function.
+ *
+ * You should not use this function to access IO space, use memcpy_toio()
+ * or memcpy_fromio() instead.
+ */
+char * bcopy(const char * src, char * dest, int count)
+{
+	char *tmp = dest;
+
+	while (count--)
+		*tmp++ = *src++;
+
+	return dest;
 }
 #endif
 
@@ -560,7 +470,7 @@ __used void * memset(void * s,int c,size_t count)
  * You should not use this function to access IO space, use memcpy_toio()
  * or memcpy_fromio() instead.
  */
-__used void * memcpy(void *dest, const void *src, size_t count)
+void * memcpy(void *dest, const void *src, size_t count)
 {
 	unsigned long *dl = (unsigned long *)dest, *sl = (unsigned long *)src;
 	char *d8, *s8;
@@ -594,25 +504,20 @@ __used void * memcpy(void *dest, const void *src, size_t count)
  *
  * Unlike memcpy(), memmove() copes with overlapping areas.
  */
-__used void * memmove(void * dest,const void *src,size_t count)
+void * memmove(void * dest,const void *src,size_t count)
 {
 	char *tmp, *s;
 
-	if (dest <= src || (src + count) <= dest) {
-	/*
-	 * Use the fast memcpy implementation (ARCH optimized or lib/string.c) when it is possible:
-	 * - when dest is before src (assuming that memcpy is doing forward-copying)
-	 * - when destination don't overlap the source buffer (src + count <= dest)
-	 *
-	 * WARNING: the first optimisation cause an issue, when __HAVE_ARCH_MEMCPY is defined,
-	 *          __HAVE_ARCH_MEMMOVE is not defined and if the memcpy ARCH-specific
-	 *          implementation is not doing a forward-copying.
-	 *
-	 * No issue today because memcpy is doing a forward-copying in lib/string.c and for ARM32
-	 * architecture; no other arches use __HAVE_ARCH_MEMCPY without __HAVE_ARCH_MEMMOVE.
-	 */
-		memcpy(dest, src, count);
-	} else {
+	if (src == dest)
+		return dest;
+
+	if (dest <= src) {
+		tmp = (char *) dest;
+		s = (char *) src;
+		while (count--)
+			*tmp++ = *s++;
+		}
+	else {
 		tmp = (char *) dest + count;
 		s = (char *) src + count;
 		while (count--)
@@ -630,7 +535,7 @@ __used void * memmove(void * dest,const void *src,size_t count)
  * @ct: Another area of memory
  * @count: The size of the area.
  */
-__used int memcmp(const void * cs,const void * ct,size_t count)
+int memcmp(const void * cs,const void * ct,size_t count)
 {
 	const unsigned char *su1, *su2;
 	int res = 0;
@@ -665,19 +570,6 @@ void * memscan(void * addr, int c, size_t size)
 	return (void *) p;
 }
 #endif
-
-char *memdup(const void *src, size_t len)
-{
-	char *p;
-
-	p = malloc(len);
-	if (!p)
-		return NULL;
-
-	memcpy(p, src, len);
-
-	return p;
-}
 
 #ifndef __HAVE_ARCH_STRSTR
 /**

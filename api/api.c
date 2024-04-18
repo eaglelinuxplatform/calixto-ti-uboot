@@ -1,20 +1,18 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2007 Semihalf
  *
  * Written by: Rafal Jaworowski <raj@semihalf.com>
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <config.h>
 #include <command.h>
 #include <common.h>
-#include <env.h>
 #include <malloc.h>
-#include <env_internal.h>
-#include <linux/delay.h>
+#include <environment.h>
 #include <linux/types.h>
 #include <api_public.h>
-#include <u-boot/crc.h>
 
 #include "api_private.h"
 
@@ -54,10 +52,10 @@ static int API_getc(va_list ap)
 {
 	int *c;
 
-	if ((c = (int *)va_arg(ap, uintptr_t)) == NULL)
+	if ((c = (int *)va_arg(ap, u_int32_t)) == NULL)
 		return API_EINVAL;
 
-	*c = getchar();
+	*c = getc();
 	return 0;
 }
 
@@ -70,7 +68,7 @@ static int API_tstc(va_list ap)
 {
 	int *t;
 
-	if ((t = (int *)va_arg(ap, uintptr_t)) == NULL)
+	if ((t = (int *)va_arg(ap, u_int32_t)) == NULL)
 		return API_EINVAL;
 
 	*t = tstc();
@@ -86,7 +84,7 @@ static int API_putc(va_list ap)
 {
 	char *c;
 
-	if ((c = (char *)va_arg(ap, uintptr_t)) == NULL)
+	if ((c = (char *)va_arg(ap, u_int32_t)) == NULL)
 		return API_EINVAL;
 
 	putc(*c);
@@ -102,7 +100,7 @@ static int API_puts(va_list ap)
 {
 	char *s;
 
-	if ((s = (char *)va_arg(ap, uintptr_t)) == NULL)
+	if ((s = (char *)va_arg(ap, u_int32_t)) == NULL)
 		return API_EINVAL;
 
 	puts(s);
@@ -134,7 +132,7 @@ static int API_get_sys_info(va_list ap)
 {
 	struct sys_info *si;
 
-	si = (struct sys_info *)va_arg(ap, uintptr_t);
+	si = (struct sys_info *)va_arg(ap, u_int32_t);
 	if (si == NULL)
 		return API_ENOMEM;
 
@@ -150,7 +148,7 @@ static int API_udelay(va_list ap)
 {
 	unsigned long *d;
 
-	if ((d = (unsigned long *)va_arg(ap, unsigned long)) == NULL)
+	if ((d = (unsigned long *)va_arg(ap, u_int32_t)) == NULL)
 		return API_EINVAL;
 
 	udelay(*d);
@@ -166,11 +164,11 @@ static int API_get_timer(va_list ap)
 {
 	unsigned long *base, *cur;
 
-	cur = (unsigned long *)va_arg(ap, unsigned long);
+	cur = (unsigned long *)va_arg(ap, u_int32_t);
 	if (cur == NULL)
 		return API_EINVAL;
 
-	base = (unsigned long *)va_arg(ap, unsigned long);
+	base = (unsigned long *)va_arg(ap, u_int32_t);
 	if (base == NULL)
 		return API_EINVAL;
 
@@ -191,7 +189,7 @@ static int API_get_timer(va_list ap)
  *
  *   - net: &eth_device struct address from list pointed to by eth_devices
  *
- *   - storage: struct blk_desc struct address from &ide_dev_desc[n],
+ *   - storage: block_dev_desc_t struct address from &ide_dev_desc[n],
  *     &scsi_dev_desc[n] and similar tables
  *
  ****************************************************************************/
@@ -201,7 +199,7 @@ static int API_dev_enum(va_list ap)
 	struct device_info *di;
 
 	/* arg is ptr to the device_info struct we are going to fill out */
-	di = (struct device_info *)va_arg(ap, uintptr_t);
+	di = (struct device_info *)va_arg(ap, u_int32_t);
 	if (di == NULL)
 		return API_EINVAL;
 
@@ -235,7 +233,7 @@ static int API_dev_open(va_list ap)
 	int err = 0;
 
 	/* arg is ptr to the device_info struct */
-	di = (struct device_info *)va_arg(ap, uintptr_t);
+	di = (struct device_info *)va_arg(ap, u_int32_t);
 	if (di == NULL)
 		return API_EINVAL;
 
@@ -267,7 +265,7 @@ static int API_dev_close(va_list ap)
 	int err = 0;
 
 	/* arg is ptr to the device_info struct */
-	di = (struct device_info *)va_arg(ap, uintptr_t);
+	di = (struct device_info *)va_arg(ap, u_int32_t);
 	if (di == NULL)
 		return API_EINVAL;
 
@@ -297,35 +295,31 @@ static int API_dev_close(va_list ap)
 
 
 /*
+ * Notice: this is for sending network packets only, as U-Boot does not
+ * support writing to storage at the moment (12.2007)
+ *
  * pseudo signature:
  *
  * int API_dev_write(
  *	struct device_info *di,
  *	void *buf,
- *	int *len,
- *	unsigned long *start
+ *	int *len
  * )
  *
  * buf:	ptr to buffer from where to get the data to send
  *
- * len: ptr to length to be read
- *      - network: len of packet to be sent (in bytes)
- *      - storage: # of blocks to write (can vary in size depending on define)
+ * len: length of packet to be sent (in bytes)
  *
- * start: ptr to start block (only used for storage devices, ignored for
- *        network)
  */
 static int API_dev_write(va_list ap)
 {
 	struct device_info *di;
 	void *buf;
-	lbasize_t *len_stor, act_len_stor;
-	lbastart_t *start;
-	int *len_net;
+	int *len;
 	int err = 0;
 
 	/* 1. arg is ptr to the device_info struct */
-	di = (struct device_info *)va_arg(ap, uintptr_t);
+	di = (struct device_info *)va_arg(ap, u_int32_t);
 	if (di == NULL)
 		return API_EINVAL;
 
@@ -335,40 +329,27 @@ static int API_dev_write(va_list ap)
 		return API_ENODEV;
 
 	/* 2. arg is ptr to buffer from where to get data to write */
-	buf = (void *)va_arg(ap, uintptr_t);
+	buf = (void *)va_arg(ap, u_int32_t);
 	if (buf == NULL)
 		return API_EINVAL;
 
-	if (di->type & DEV_TYP_STOR) {
-		/* 3. arg - ptr to var with # of blocks to write */
-		len_stor = (lbasize_t *)va_arg(ap, uintptr_t);
-		if (!len_stor)
-			return API_EINVAL;
-		if (*len_stor <= 0)
-			return API_EINVAL;
+	/* 3. arg is length of buffer */
+	len = (int *)va_arg(ap, u_int32_t);
+	if (len == NULL)
+		return API_EINVAL;
+	if (*len <= 0)
+		return API_EINVAL;
 
-		/* 4. arg - ptr to var with start block */
-		start = (lbastart_t *)va_arg(ap, uintptr_t);
+	if (di->type & DEV_TYP_STOR)
+		/*
+		 * write to storage is currently not supported by U-Boot:
+		 * no storage device implements block_write() method
+		 */
+		return API_ENODEV;
 
-		act_len_stor = dev_write_stor(di->cookie, buf, *len_stor, *start);
-		if (act_len_stor != *len_stor) {
-			debugf("write @ %llu: done %llu out of %llu blocks",
-				   (uint64_t)blk, (uint64_t)act_len_stor,
-				   (uint64_t)len_stor);
-			return API_EIO;
-		}
-
-	} else if (di->type & DEV_TYP_NET) {
-		/* 3. arg points to the var with length of packet to write */
-		len_net = (int *)va_arg(ap, uintptr_t);
-		if (!len_net)
-			return API_EINVAL;
-		if (*len_net <= 0)
-			return API_EINVAL;
-
-		err = dev_write_net(di->cookie, buf, *len_net);
-
-	} else
+	else if (di->type & DEV_TYP_NET)
+		err = dev_write_net(di->cookie, buf, *len);
+	else
 		err = API_ENODEV;
 
 	return err;
@@ -406,7 +387,7 @@ static int API_dev_read(va_list ap)
 	int *len_net, *act_len_net;
 
 	/* 1. arg is ptr to the device_info struct */
-	di = (struct device_info *)va_arg(ap, uintptr_t);
+	di = (struct device_info *)va_arg(ap, u_int32_t);
 	if (di == NULL)
 		return API_EINVAL;
 
@@ -416,23 +397,23 @@ static int API_dev_read(va_list ap)
 		return API_ENODEV;
 
 	/* 2. arg is ptr to buffer from where to put the read data */
-	buf = (void *)va_arg(ap, uintptr_t);
+	buf = (void *)va_arg(ap, u_int32_t);
 	if (buf == NULL)
 		return API_EINVAL;
 
 	if (di->type & DEV_TYP_STOR) {
 		/* 3. arg - ptr to var with # of blocks to read */
-		len_stor = (lbasize_t *)va_arg(ap, uintptr_t);
+		len_stor = (lbasize_t *)va_arg(ap, u_int32_t);
 		if (!len_stor)
 			return API_EINVAL;
 		if (*len_stor <= 0)
 			return API_EINVAL;
 
 		/* 4. arg - ptr to var with start block */
-		start = (lbastart_t *)va_arg(ap, uintptr_t);
+		start = (lbastart_t *)va_arg(ap, u_int32_t);
 
 		/* 5. arg - ptr to var where to put the len actually read */
-		act_len_stor = (lbasize_t *)va_arg(ap, uintptr_t);
+		act_len_stor = (lbasize_t *)va_arg(ap, u_int32_t);
 		if (!act_len_stor)
 			return API_EINVAL;
 
@@ -441,14 +422,14 @@ static int API_dev_read(va_list ap)
 	} else if (di->type & DEV_TYP_NET) {
 
 		/* 3. arg points to the var with length of packet to read */
-		len_net = (int *)va_arg(ap, uintptr_t);
+		len_net = (int *)va_arg(ap, u_int32_t);
 		if (!len_net)
 			return API_EINVAL;
 		if (*len_net <= 0)
 			return API_EINVAL;
 
 		/* 4. - ptr to var where to put the len actually read */
-		act_len_net = (int *)va_arg(ap, uintptr_t);
+		act_len_net = (int *)va_arg(ap, u_int32_t);
 		if (!act_len_net)
 			return API_EINVAL;
 
@@ -472,12 +453,12 @@ static int API_env_get(va_list ap)
 {
 	char *name, **value;
 
-	if ((name = (char *)va_arg(ap, uintptr_t)) == NULL)
+	if ((name = (char *)va_arg(ap, u_int32_t)) == NULL)
 		return API_EINVAL;
-	if ((value = (char **)va_arg(ap, uintptr_t)) == NULL)
+	if ((value = (char **)va_arg(ap, u_int32_t)) == NULL)
 		return API_EINVAL;
 
-	*value = env_get(name);
+	*value = getenv(name);
 
 	return 0;
 }
@@ -495,12 +476,12 @@ static int API_env_set(va_list ap)
 {
 	char *name, *value;
 
-	if ((name = (char *)va_arg(ap, uintptr_t)) == NULL)
+	if ((name = (char *)va_arg(ap, u_int32_t)) == NULL)
 		return API_EINVAL;
-	if ((value = (char *)va_arg(ap, uintptr_t)) == NULL)
+	if ((value = (char *)va_arg(ap, u_int32_t)) == NULL)
 		return API_EINVAL;
 
-	env_set(name, value);
+	setenv(name, value);
 
 	return 0;
 }
@@ -514,47 +495,45 @@ static int API_env_set(va_list ap)
  */
 static int API_env_enum(va_list ap)
 {
-	int i, buflen;
-	char *last, **next, *s;
-	struct env_entry *match, search;
-	static char *var;
+	int i, n;
+	char *last, **next;
 
-	last = (char *)va_arg(ap, unsigned long);
+	last = (char *)va_arg(ap, u_int32_t);
 
-	if ((next = (char **)va_arg(ap, uintptr_t)) == NULL)
+	if ((next = (char **)va_arg(ap, u_int32_t)) == NULL)
 		return API_EINVAL;
 
-	if (last == NULL) {
-		var = NULL;
-		i = 0;
-	} else {
-		var = strdup(last);
-		s = strchr(var, '=');
-		if (s != NULL)
-			*s = 0;
-		search.key = var;
-		i = hsearch_r(search, ENV_FIND, &match, &env_htab, 0);
-		if (i == 0) {
-			i = API_EINVAL;
-			goto done;
+	if (last == NULL)
+		/* start over */
+		*next = ((char *)env_get_addr(0));
+	else {
+		*next = last;
+
+		for (i = 0; env_get_char(i) != '\0'; i = n + 1) {
+			for (n = i; env_get_char(n) != '\0'; ++n) {
+				if (n >= CONFIG_ENV_SIZE) {
+					/* XXX shouldn't we set *next = NULL?? */
+					return 0;
+				}
+			}
+
+			if (envmatch((uchar *)last, i) < 0)
+				continue;
+
+			/* try to get next name */
+			i = n + 1;
+			if (env_get_char(i) == '\0') {
+				/* no more left */
+				*next = NULL;
+				return 0;
+			}
+
+			*next = ((char *)env_get_addr(i));
+			return 0;
 		}
 	}
 
-	/* match the next entry after i */
-	i = hmatch_r("", i, &match, &env_htab);
-	if (i == 0)
-		goto done;
-	buflen = strlen(match->key) + strlen(match->data) + 2;
-	var = realloc(var, buflen);
-	snprintf(var, buflen, "%s=%s", match->key, match->data);
-	*next = var;
 	return 0;
-
-done:
-	free(var);
-	var = NULL;
-	*next = NULL;
-	return i;
 }
 
 /*
@@ -642,9 +621,9 @@ int syscall(int call, int *retval, ...)
 	return 1;
 }
 
-int api_init(void)
+void api_init(void)
 {
-	struct api_signature *sig;
+	struct api_signature *sig = NULL;
 
 	/* TODO put this into linker set one day... */
 	calls_table[API_RSVD] = NULL;
@@ -679,20 +658,17 @@ int api_init(void)
 	sig = malloc(sizeof(struct api_signature));
 	if (sig == NULL) {
 		printf("API: could not allocate memory for the signature!\n");
-		return -ENOMEM;
+		return;
 	}
 
-	env_set_hex("api_address", (unsigned long)sig);
-	debugf("API sig @ 0x%lX\n", (unsigned long)sig);
+	debugf("API sig @ 0x%08x\n", sig);
 	memcpy(sig->magic, API_SIG_MAGIC, 8);
 	sig->version = API_SIG_VERSION;
 	sig->syscall = &syscall;
 	sig->checksum = 0;
 	sig->checksum = crc32(0, (unsigned char *)sig,
 			      sizeof(struct api_signature));
-	debugf("syscall entry: 0x%lX\n", (unsigned long)sig->syscall);
-
-	return 0;
+	debugf("syscall entry: 0x%08x\n", sig->syscall);
 }
 
 void platform_set_mr(struct sys_info *si, unsigned long start, unsigned long size,

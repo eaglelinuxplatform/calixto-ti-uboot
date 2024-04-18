@@ -1,15 +1,28 @@
-# SPDX-License-Identifier: GPL-2.0+
 #
 # Copyright (C) 2012 Samsung Electronics
 # Lukasz Majewski <l.majewski@samsung.com>
+#
+# SPDX-License-Identifier:	GPL-2.0+
+#
 
-obj-$(CONFIG_USB_GADGET_DOWNLOAD) += gadget.o
-obj-$(CONFIG_MISC_COMMON) += misc.o
+include $(TOPDIR)/config.mk
 
-ifndef CONFIG_SPL_BUILD
-obj-$(CONFIG_BOARD_COMMON)	+= board.o sromc.o
-ifdef CONFIG_EXYNOS5_DT
-obj-y += exynos5-dt.o
-obj-$(CONFIG_BOARD_TYPES) += exynos5-dt-types.o
-endif
-endif
+LIB	= $(obj)libsamsung.o
+
+COBJS-$(CONFIG_SOFT_I2C_MULTI_BUS) += multi_i2c.o
+COBJS-$(CONFIG_THOR_FUNCTION) += thor.o
+
+SRCS    := $(COBJS-y:.o=.c)
+OBJS	:= $(addprefix $(obj),$(COBJS-y))
+
+$(LIB):	$(obj).depend $(OBJS)
+	$(call cmd_link_o_target, $(OBJS))
+
+#########################################################################
+
+# defines $(obj).depend target
+include $(SRCTREE)/rules.mk
+
+sinclude $(obj).depend
+
+#########################################################################

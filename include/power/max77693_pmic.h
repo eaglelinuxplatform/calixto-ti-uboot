@@ -1,13 +1,16 @@
-/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Copyright (C) 2013 Samsung Electronics
  * Piotr Wilczek <p.wilczek@samsung.com>
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef __MAX77693_PMIC_H_
 #define __MAX77693_PMIC_H_
 
 #include <power/power_chrg.h>
+
+enum {CHARGER_ENABLE, CHARGER_DISABLE};
 
 #define CHARGER_MIN_CURRENT 200
 #define CHARGER_MAX_CURRENT 2000

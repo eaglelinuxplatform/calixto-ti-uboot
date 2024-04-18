@@ -1,24 +1,27 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2003
  * Wolfgang Denk, DENX Software Engineering, wd@denx.de.
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
-#include <bootstage.h>
-#include <env.h>
+#include <command.h>
 #include <image.h>
-#include <fdt_support.h>
-#include <lmb.h>
-#include <log.h>
+#include <u-boot/zlib.h>
+#include <asm/byteorder.h>
 #include <asm/addrspace.h>
-#include <asm/global_data.h>
-#include <asm/io.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 
 #define	LINUX_MAX_ENVS		256
 #define	LINUX_MAX_ARGS		256
+
+#if defined(CONFIG_QEMU_MALTA)
+#define mips_boot_qemu_malta	1
+#else
+#define mips_boot_qemu_malta	0
+#endif
 
 static int linux_argc;
 static char **linux_argv;
@@ -39,13 +42,20 @@ static ulong arch_get_sp(void)
 
 void arch_lmb_reserve(struct lmb *lmb)
 {
-	arch_lmb_reserve_generic(lmb, arch_get_sp(), gd->ram_top, 4096);
+	ulong sp;
+
+	sp = arch_get_sp();
+	debug("## Current stack ends at 0x%08lx\n", sp);
+
+	/* adjust sp by 4K to be safe */
+	sp -= 4096;
+	lmb_reserve(lmb, sp, CONFIG_SYS_SDRAM_BASE + gd->ram_size - sp);
 }
 
 static void linux_cmdline_init(void)
 {
 	linux_argc = 1;
-	linux_argv = (char **)CKSEG1ADDR(gd->bd->bi_boot_params);
+	linux_argv = (char **)UNCACHED_SDRAM(gd->bd->bi_boot_params);
 	linux_argv[0] = 0;
 	linux_argp = (char *)(linux_argv + LINUX_MAX_ARGS);
 }
@@ -71,13 +81,13 @@ static void linux_cmdline_dump(void)
 		debug("   arg %03d: %s\n", i, linux_argv[i]);
 }
 
-static void linux_cmdline_legacy(struct bootm_headers *images)
+static void boot_cmdline_linux(bootm_headers_t *images)
 {
 	const char *bootargs, *next, *quote;
 
 	linux_cmdline_init();
 
-	bootargs = env_get("bootargs");
+	bootargs = getenv("bootargs");
 	if (!bootargs)
 		return;
 
@@ -109,28 +119,8 @@ static void linux_cmdline_legacy(struct bootm_headers *images)
 
 		bootargs = next;
 	}
-}
 
-static void linux_cmdline_append(struct bootm_headers *images)
-{
-	char buf[24];
-	ulong mem, rd_start, rd_size;
-
-	/* append mem */
-	mem = gd->ram_size >> 20;
-	sprintf(buf, "mem=%luM", mem);
-	linux_cmdline_set(buf, strlen(buf));
-
-	/* append rd_start and rd_size */
-	rd_start = images->initrd_start;
-	rd_size = images->initrd_end - images->initrd_start;
-
-	if (rd_size) {
-		sprintf(buf, "rd_start=0x%08lX", rd_start);
-		linux_cmdline_set(buf, strlen(buf));
-		sprintf(buf, "rd_size=0x%lX", rd_size);
-		linux_cmdline_set(buf, strlen(buf));
-	}
+	linux_cmdline_dump();
 }
 
 static void linux_env_init(void)
@@ -149,7 +139,7 @@ static void linux_env_set(const char *env_name, const char *env_val)
 		strcpy(linux_env_p, env_name);
 		linux_env_p += strlen(env_name);
 
-		if (CONFIG_IS_ENABLED(MALTA)) {
+		if (mips_boot_qemu_malta) {
 			linux_env_p++;
 			linux_env[++linux_env_idx] = linux_env_p;
 		} else {
@@ -164,23 +154,22 @@ static void linux_env_set(const char *env_name, const char *env_val)
 	}
 }
 
-static void linux_env_legacy(struct bootm_headers *images)
+static void boot_prep_linux(bootm_headers_t *images)
 {
 	char env_buf[12];
 	const char *cp;
 	ulong rd_start, rd_size;
 
-	if (CONFIG_IS_ENABLED(MEMSIZE_IN_BYTES)) {
-		sprintf(env_buf, "%lu", (ulong)gd->ram_size);
-		debug("## Giving linux memsize in bytes, %lu\n",
-		      (ulong)gd->ram_size);
-	} else {
-		sprintf(env_buf, "%lu", (ulong)(gd->ram_size >> 20));
-		debug("## Giving linux memsize in MB, %lu\n",
-		      (ulong)(gd->ram_size >> 20));
-	}
+#ifdef CONFIG_MEMSIZE_IN_BYTES
+	sprintf(env_buf, "%lu", (ulong)gd->ram_size);
+	debug("## Giving linux memsize in bytes, %lu\n", (ulong)gd->ram_size);
+#else
+	sprintf(env_buf, "%lu", (ulong)(gd->ram_size >> 20));
+	debug("## Giving linux memsize in MB, %lu\n",
+	      (ulong)(gd->ram_size >> 20));
+#endif /* CONFIG_MEMSIZE_IN_BYTES */
 
-	rd_start = CKSEG1ADDR(images->initrd_start);
+	rd_start = UNCACHED_SDRAM(images->initrd_start);
 	rd_size = images->initrd_end - images->initrd_start;
 
 	linux_env_init();
@@ -199,79 +188,19 @@ static void linux_env_legacy(struct bootm_headers *images)
 	sprintf(env_buf, "0x%X", (uint) (gd->bd->bi_flashsize));
 	linux_env_set("flash_size", env_buf);
 
-	cp = env_get("ethaddr");
+	cp = getenv("ethaddr");
 	if (cp)
 		linux_env_set("ethaddr", cp);
 
-	cp = env_get("eth1addr");
+	cp = getenv("eth1addr");
 	if (cp)
 		linux_env_set("eth1addr", cp);
 
-	if (CONFIG_IS_ENABLED(MALTA)) {
-		sprintf(env_buf, "%un8r", gd->baudrate);
-		linux_env_set("modetty0", env_buf);
-	}
+	if (mips_boot_qemu_malta)
+		linux_env_set("modetty0", "38400n8r");
 }
 
-static int boot_reloc_fdt(struct bootm_headers *images)
-{
-	/*
-	 * In case of legacy uImage's, relocation of FDT is already done
-	 * by do_bootm_states() and should not repeated in 'bootm prep'.
-	 */
-	if (images->state & BOOTM_STATE_FDT) {
-		debug("## FDT already relocated\n");
-		return 0;
-	}
-
-#if CONFIG_IS_ENABLED(MIPS_BOOT_FDT) && CONFIG_IS_ENABLED(OF_LIBFDT)
-	boot_fdt_add_mem_rsv_regions(&images->lmb, images->ft_addr);
-	return boot_relocate_fdt(&images->lmb, &images->ft_addr,
-		&images->ft_len);
-#else
-	return 0;
-#endif
-}
-
-#if CONFIG_IS_ENABLED(MIPS_BOOT_FDT) && CONFIG_IS_ENABLED(OF_LIBFDT)
-int arch_fixup_fdt(void *blob)
-{
-	u64 mem_start = virt_to_phys((void *)gd->ram_base);
-	u64 mem_size = gd->ram_size;
-
-	return fdt_fixup_memory_banks(blob, &mem_start, &mem_size, 1);
-}
-#endif
-
-static int boot_setup_fdt(struct bootm_headers *images)
-{
-	images->initrd_start = virt_to_phys((void *)images->initrd_start);
-	images->initrd_end = virt_to_phys((void *)images->initrd_end);
-	return image_setup_libfdt(images, images->ft_addr, images->ft_len,
-		&images->lmb);
-}
-
-static void boot_prep_linux(struct bootm_headers *images)
-{
-	if (CONFIG_IS_ENABLED(MIPS_BOOT_FDT) && images->ft_len) {
-		boot_reloc_fdt(images);
-		boot_setup_fdt(images);
-	} else {
-		if (CONFIG_IS_ENABLED(MIPS_BOOT_CMDLINE_LEGACY)) {
-			linux_cmdline_legacy(images);
-
-			if (!CONFIG_IS_ENABLED(MIPS_BOOT_ENV_LEGACY))
-				linux_cmdline_append(images);
-
-			linux_cmdline_dump();
-		}
-
-		if (CONFIG_IS_ENABLED(MIPS_BOOT_ENV_LEGACY))
-			linux_env_legacy(images);
-	}
-}
-
-static void boot_jump_linux(struct bootm_headers *images)
+static void boot_jump_linux(bootm_headers_t *images)
 {
 	typedef void __noreturn (*kernel_entry_t)(int, ulong, ulong, ulong);
 	kernel_entry_t kernel = (kernel_entry_t) images->ep;
@@ -281,50 +210,40 @@ static void boot_jump_linux(struct bootm_headers *images)
 
 	bootstage_mark(BOOTSTAGE_ID_RUN_OS);
 
-	if (CONFIG_IS_ENABLED(MALTA))
+	if (mips_boot_qemu_malta)
 		linux_extra = gd->ram_size;
 
-#if IS_ENABLED(CONFIG_BOOTSTAGE_FDT)
-	bootstage_fdt_add_report();
-#endif
-#if IS_ENABLED(CONFIG_BOOTSTAGE_REPORT)
-	bootstage_report();
-#endif
+	/* we assume that the kernel is in place */
+	printf("\nStarting kernel ...\n\n");
 
-	if (CONFIG_IS_ENABLED(RESTORE_EXCEPTION_VECTOR_BASE))
-		trap_restore();
-
-	if (images->ft_len)
-		kernel(-2, (ulong)images->ft_addr, 0, 0);
-	else
-		kernel(linux_argc, (ulong)linux_argv, (ulong)linux_env,
-			linux_extra);
+	kernel(linux_argc, (ulong)linux_argv, (ulong)linux_env, linux_extra);
 }
 
-int do_bootm_linux(int flag, int argc, char *const argv[],
-		   struct bootm_headers *images)
+int do_bootm_linux(int flag, int argc, char * const argv[],
+			bootm_headers_t *images)
 {
 	/* No need for those on MIPS */
 	if (flag & BOOTM_STATE_OS_BD_T)
 		return -1;
 
-	/*
-	 * Cmdline init has been moved to 'bootm prep' because it has to be
-	 * done after relocation of ramdisk to always pass correct values
-	 * for rd_start and rd_size to Linux kernel.
-	 */
-	if (flag & BOOTM_STATE_OS_CMDLINE)
+	if (flag & BOOTM_STATE_OS_CMDLINE) {
+		boot_cmdline_linux(images);
 		return 0;
+	}
 
 	if (flag & BOOTM_STATE_OS_PREP) {
 		boot_prep_linux(images);
 		return 0;
 	}
 
-	if (flag & (BOOTM_STATE_OS_GO | BOOTM_STATE_OS_FAKE_GO)) {
+	if (flag & BOOTM_STATE_OS_GO) {
 		boot_jump_linux(images);
 		return 0;
 	}
+
+	boot_cmdline_linux(images);
+	boot_prep_linux(images);
+	boot_jump_linux(images);
 
 	/* does not return */
 	return 1;

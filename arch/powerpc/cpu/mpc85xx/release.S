@@ -1,12 +1,16 @@
-/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Copyright 2008-2012 Freescale Semiconductor, Inc.
  * Kumar Gala <kumar.gala@freescale.com>
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <asm-offsets.h>
 #include <config.h>
 #include <mpc85xx.h>
+#include <version.h>
+
+#define _LINUX_CONFIG_H 1	/* avoid reading Linux autoconf.h file	*/
 
 #include <ppc_asm.tmpl>
 #include <ppc_defs.h>
@@ -26,13 +30,6 @@
 	.globl	__secondary_start_page
 	.align	12
 __secondary_start_page:
-#ifdef CONFIG_SYS_FSL_ERRATUM_A005125
-	msync
-	isync
-	mfspr	r3, SPRN_HDBCR0
-	oris	r3, r3, 0x0080
-	mtspr	SPRN_HDBCR0, r3
-#endif
 /* First do some preliminary setup */
 	lis	r3, HID0_EMCP@h		/* enable machine check */
 #ifndef CONFIG_E500MC
@@ -190,18 +187,12 @@ __secondary_start_page:
 
 	mtspr	SPRN_PIR,r4	/* write to PIR register */
 
-#ifdef CONFIG_SYS_FSL_ERRATUM_A007907
-	mfspr	r8, L1CSR2
-	clrrwi	r8, r8, 10	/* clear bit [54-63] DCSTASHID */
-	mtspr	L1CSR2, r8
-#else
 #ifdef CONFIG_SYS_CACHE_STASHING
 	/* set stash id to (coreID) * 2 + 32 + L1 CT (0) */
 	slwi	r8,r4,1
 	addi	r8,r8,32
 	mtspr	L1CSR2,r8
 #endif
-#endif	/* CONFIG_SYS_FSL_ERRATUM_A007907 */
 
 #if defined(CONFIG_SYS_P4080_ERRATUM_CPU22) || \
 	defined(CONFIG_SYS_FSL_ERRATUM_NMG_CPU_A011)
@@ -276,8 +267,8 @@ __secondary_start_page:
 	mtspr	SPRN_L2CSR1,r3
 #endif
 
-	lis	r3,CFG_SYS_INIT_L2CSR0@h
-	ori	r3,r3,CFG_SYS_INIT_L2CSR0@l
+	lis	r3,CONFIG_SYS_INIT_L2CSR0@h
+	ori	r3,r3,CONFIG_SYS_INIT_L2CSR0@l
 	mtspr	SPRN_L2CSR0,r3
 	isync
 2:
@@ -415,6 +406,9 @@ __second_half_boot_page:
 	andi.	r11,r4,1
 	bne	3b
 	isync
+
+	/* setup IVORs to match fixed offsets */
+#include "fixed_ivor.S"
 
 	/* get the upper bits of the addr */
 	lwz	r11,ENTRY_ADDR_UPPER(r10)

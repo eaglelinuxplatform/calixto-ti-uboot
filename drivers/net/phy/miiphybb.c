@@ -1,10 +1,11 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2009 Industrie Dial Face S.p.A.
  * Luigi 'Comio' Mantellini <luigi.mantellini@idf-hit.com>
  *
  * (C) Copyright 2001
  * Gerald Van Baren, Custom IDEAS, vanbaren@cideas.com.
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 /*
@@ -16,7 +17,6 @@
 #include <ioports.h>
 #include <ppc_asm.tmpl>
 #include <miiphy.h>
-#include <asm/global_data.h>
 
 #define BB_MII_RELOCATE(v,off) (v += (v?off:0))
 
@@ -106,7 +106,7 @@ int bb_miiphy_buses_num = sizeof(bb_miiphy_buses) /
 			  sizeof(bb_miiphy_buses[0]);
 #endif
 
-int bb_miiphy_init(void)
+void bb_miiphy_init(void)
 {
 	int i;
 
@@ -125,8 +125,6 @@ int bb_miiphy_init(void)
 			bb_miiphy_buses[i].init(&bb_miiphy_buses[i]);
 		}
 	}
-
-	return 0;
 }
 
 static inline struct bb_miiphy_bus *bb_miiphy_getbus(const char *devname)
@@ -232,15 +230,21 @@ static void miiphy_pre(struct bb_miiphy_bus *bus, char read,
  * Returns:
  *   0 on success
  */
-int bb_miiphy_read(struct mii_dev *miidev, int addr, int devad, int reg)
+int bb_miiphy_read(const char *devname, unsigned char addr,
+		   unsigned char reg, unsigned short *value)
 {
-	unsigned short rdreg; /* register working value */
+	short rdreg; /* register working value */
 	int v;
 	int j; /* counter */
 	struct bb_miiphy_bus *bus;
 
-	bus = bb_miiphy_getbus(miidev->name);
+	bus = bb_miiphy_getbus(devname);
 	if (bus == NULL) {
+		return -1;
+	}
+
+	if (value == NULL) {
+		puts("NULL value pointer\n");
 		return -1;
 	}
 
@@ -263,7 +267,8 @@ int bb_miiphy_read(struct mii_dev *miidev, int addr, int devad, int reg)
 			bus->set_mdc(bus, 1);
 			bus->delay(bus);
 		}
-		/* There is no PHY, return */
+		/* There is no PHY, set value to 0xFFFF and return */
+		*value = 0xFFFF;
 		return -1;
 	}
 
@@ -289,11 +294,13 @@ int bb_miiphy_read(struct mii_dev *miidev, int addr, int devad, int reg)
 	bus->set_mdc(bus, 1);
 	bus->delay(bus);
 
+	*value = rdreg;
+
 #ifdef DEBUG
-	printf("miiphy_read(0x%x) @ 0x%x = 0x%04x\n", reg, addr, rdreg);
+	printf ("miiphy_read(0x%x) @ 0x%x = 0x%04x\n", reg, addr, *value);
 #endif
 
-	return rdreg;
+	return 0;
 }
 
 
@@ -304,13 +311,13 @@ int bb_miiphy_read(struct mii_dev *miidev, int addr, int devad, int reg)
  * Returns:
  *   0 on success
  */
-int bb_miiphy_write(struct mii_dev *miidev, int addr, int devad, int reg,
-		    u16 value)
+int bb_miiphy_write (const char *devname, unsigned char addr,
+		     unsigned char reg, unsigned short value)
 {
 	struct bb_miiphy_bus *bus;
 	int j;			/* counter */
 
-	bus = bb_miiphy_getbus(miidev->name);
+	bus = bb_miiphy_getbus(devname);
 	if (bus == NULL) {
 		/* Bus not found! */
 		return -1;

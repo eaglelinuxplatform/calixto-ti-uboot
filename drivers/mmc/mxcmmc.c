@@ -23,8 +23,7 @@
 #include <part.h>
 #include <malloc.h>
 #include <mmc.h>
-#include <time.h>
-#include <linux/errno.h>
+#include <asm/errno.h>
 #include <asm/io.h>
 #include <asm/arch/clock.h>
 
@@ -123,8 +122,6 @@ struct mxcmci_host {
 };
 
 static struct mxcmci_host mxcmci_host;
-
-/* maintainer note: do we really want to have a global host pointer? */
 static struct mxcmci_host *host = &mxcmci_host;
 
 static inline int mxcmci_use_dma(struct mxcmci_host *host)
@@ -212,11 +209,11 @@ static int mxcmci_finish_data(struct mxcmci_host *host, unsigned int stat)
 		} else if (stat & STATUS_CRC_WRITE_ERR) {
 			u32 err_code = (stat >> 9) & 0x3;
 			if (err_code == 2) /* No CRC response */
-				data_error = -ETIMEDOUT;
+				data_error = TIMEOUT;
 			else
 				data_error = -EILSEQ;
 		} else if (stat & STATUS_TIME_OUT_READ) {
-			data_error = -ETIMEDOUT;
+			data_error = TIMEOUT;
 		} else {
 			data_error = -EIO;
 		}
@@ -239,7 +236,7 @@ static int mxcmci_read_response(struct mxcmci_host *host, unsigned int stat)
 
 	if (stat & STATUS_TIME_OUT_RESP) {
 		printf("CMD TIMEOUT\n");
-		return -ETIMEDOUT;
+		return TIMEOUT;
 	} else if (stat & STATUS_RESP_CRC_ERR && cmd->resp_type & MMC_RSP_CRC) {
 		printf("cmd crc error\n");
 		return -EILSEQ;
@@ -449,7 +446,7 @@ static void mxcmci_set_clk_rate(struct mxcmci_host *host, unsigned int clk_ios)
 	writel((prescaler << 4) | divider, &host->base->clk_rate);
 }
 
-static int mxcmci_set_ios(struct mmc *mmc)
+static void mxcmci_set_ios(struct mmc *mmc)
 {
 	struct mxcmci_host *host = mmc->priv;
 	if (mmc->bus_width == 4)
@@ -465,8 +462,6 @@ static int mxcmci_set_ios(struct mmc *mmc)
 	}
 
 	host->clock = mmc->clock;
-
-	return 0;
 }
 
 static int mxcmci_init(struct mmc *mmc)
@@ -490,35 +485,40 @@ static int mxcmci_init(struct mmc *mmc)
 	return 0;
 }
 
-static const struct mmc_ops mxcmci_ops = {
-	.send_cmd	= mxcmci_request,
-	.set_ios	= mxcmci_set_ios,
-	.init		= mxcmci_init,
-};
-
-static struct mmc_config mxcmci_cfg = {
-	.name		= "MXC MCI",
-	.ops		= &mxcmci_ops,
-	.host_caps	= MMC_MODE_4BIT,
-	.voltages	= MMC_VDD_32_33 | MMC_VDD_33_34,
-	.b_max		= CONFIG_SYS_MMC_MAX_BLK_COUNT,
-};
-
-static int mxcmci_initialize(struct bd_info *bis)
+static int mxcmci_initialize(bd_t *bis)
 {
+	struct mmc *mmc = NULL;
+
+	mmc = malloc(sizeof(struct mmc));
+
+	if (!mmc)
+		return -ENOMEM;
+
+	sprintf(mmc->name, "MXC MCI");
+	mmc->send_cmd = mxcmci_request;
+	mmc->set_ios = mxcmci_set_ios;
+	mmc->init = mxcmci_init;
+	mmc->getcd = NULL;
+	mmc->getwp = NULL;
+	mmc->host_caps = MMC_MODE_4BIT;
+
 	host->base = (struct mxcmci_regs *)CONFIG_MXC_MCI_REGS_BASE;
+	mmc->priv = host;
+	host->mmc = mmc;
 
-	mxcmci_cfg.f_min = mxc_get_clock(MXC_ESDHC_CLK) >> 7;
-	mxcmci_cfg.f_max = mxc_get_clock(MXC_ESDHC_CLK) >> 1;
+	mmc->voltages = MMC_VDD_32_33 | MMC_VDD_33_34;
 
-	host->mmc = mmc_create(&mxcmci_cfg, host);
-	if (host->mmc == NULL)
-		return -1;
+	mmc->f_min = mxc_get_clock(MXC_ESDHC_CLK) >> 7;
+	mmc->f_max = mxc_get_clock(MXC_ESDHC_CLK) >> 1;
+
+	mmc->b_max = 0;
+
+	mmc_register(mmc);
 
 	return 0;
 }
 
-int mxc_mmc_init(struct bd_info *bis)
+int mxc_mmc_init(bd_t *bis)
 {
 	return mxcmci_initialize(bis);
 }

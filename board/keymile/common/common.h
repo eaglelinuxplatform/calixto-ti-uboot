@@ -1,7 +1,8 @@
-/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * (C) Copyright 2008
  * Heiko Schocher, DENX Software Engineering, hs@denx.de.
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef __KEYMILE_COMMON_H
@@ -120,30 +121,31 @@ struct bfticu_iomap {
 	u8	pb_dbug;
 };
 
+#if !defined(CONFIG_PIGGY_MAC_ADRESS_OFFSET)
+#define CONFIG_PIGGY_MAC_ADRESS_OFFSET	0
+#endif
+
 int ethernet_present(void);
-int ivm_read_eeprom(unsigned char *buf, int len, int mac_address_offset);
-int ivm_analyze_eeprom(unsigned char *buf, int len);
+int ivm_read_eeprom(void);
 
 int trigger_fpga_config(void);
 int wait_for_fpga_config(void);
 int fpga_reset(void);
 int toggle_eeprom_spi_bus(void);
 
-int get_testpin(void);
-
 int set_km_env(void);
-
-ulong early_bootcount_load(void);
-void early_bootcount_store(ulong ebootcount);
-void check_for_uboot_update(void);
+int fdt_set_node_and_value(void *blob,
+			char *nodename,
+			char *regname,
+			void *var,
+			int size);
+int fdt_get_node_and_value(void *blob,
+				char *nodename,
+				char *propname,
+				void **var);
 
 #define DELAY_ABORT_SEQ		62  /* @200kHz 9 clocks = 44us, 62us is ok */
 #define DELAY_HALF_PERIOD	(500 / (CONFIG_SYS_I2C_SPEED / 1000))
-
-void set_sda(int state);
-void set_scl(int state);
-int get_sda(void);
-int get_scl(void);
 
 int i2c_soft_read_pin(void);
 int i2c_make_abort(void);

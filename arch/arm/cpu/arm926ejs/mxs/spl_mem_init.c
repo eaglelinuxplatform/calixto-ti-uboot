@@ -1,15 +1,14 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * Freescale i.MX28 RAM init
  *
  * Copyright (C) 2011 Marek Vasut <marek.vasut@gmail.com>
  * on behalf of DENX Software Engineering GmbH
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
 #include <config.h>
-#include <init.h>
-#include <log.h>
 #include <asm/io.h>
 #include <asm/arch/imx-regs.h>
 #include <asm/arch/sys_proto.h>
@@ -17,7 +16,7 @@
 
 #include "mxs_init.h"
 
-__weak uint32_t mxs_dram_vals[] = {
+static uint32_t dram_vals[] = {
 /*
  * i.MX28 DDR2 at 200MHz
  */
@@ -93,7 +92,6 @@ __weak uint32_t mxs_dram_vals[] = {
 
 __weak void mxs_adjust_memory_params(uint32_t *dram_vals)
 {
-	debug("SPL: Using default SDRAM parameters\n");
 }
 
 #ifdef CONFIG_MX28
@@ -101,20 +99,17 @@ static void initialize_dram_values(void)
 {
 	int i;
 
-	debug("SPL: Setting mx28 board specific SDRAM parameters\n");
-	mxs_adjust_memory_params(mxs_dram_vals);
+	mxs_adjust_memory_params(dram_vals);
 
-	debug("SPL: Applying SDRAM parameters\n");
-	for (i = 0; i < ARRAY_SIZE(mxs_dram_vals); i++)
-		writel(mxs_dram_vals[i], MXS_DRAM_BASE + (4 * i));
+	for (i = 0; i < ARRAY_SIZE(dram_vals); i++)
+		writel(dram_vals[i], MXS_DRAM_BASE + (4 * i));
 }
 #else
 static void initialize_dram_values(void)
 {
 	int i;
 
-	debug("SPL: Setting mx23 board specific SDRAM parameters\n");
-	mxs_adjust_memory_params(mxs_dram_vals);
+	mxs_adjust_memory_params(dram_vals);
 
 	/*
 	 * HW_DRAM_CTL27, HW_DRAM_CTL28 and HW_DRAM_CTL35 are not initialized as
@@ -125,11 +120,10 @@ static void initialize_dram_values(void)
 	 * HW_DRAM_CTL8 is setup as the last element.
 	 * So skip the initialization of these HW_DRAM_CTL registers.
 	 */
-	debug("SPL: Applying SDRAM parameters\n");
-	for (i = 0; i < ARRAY_SIZE(mxs_dram_vals); i++) {
+	for (i = 0; i < ARRAY_SIZE(dram_vals); i++) {
 		if (i == 8 || i == 27 || i == 28 || i == 35)
 			continue;
-		writel(mxs_dram_vals[i], MXS_DRAM_BASE + (4 * i));
+		writel(dram_vals[i], MXS_DRAM_BASE + (4 * i));
 	}
 
 	/*
@@ -151,8 +145,6 @@ static void mxs_mem_init_clock(void)
 	/* Fractional divider for ref_emi is 21 ; 480 * 18 / 21 = 411MHz */
 	const unsigned char divider = 21;
 #endif
-
-	debug("SPL: Initialising FRAC0\n");
 
 	/* Gate EMI clock */
 	writeb(CLKCTRL_FRAC_CLKGATE,
@@ -178,15 +170,12 @@ static void mxs_mem_init_clock(void)
 		&clkctrl_regs->hw_clkctrl_clkseq_clr);
 
 	early_delay(10000);
-	debug("SPL: FRAC0 Initialised\n");
 }
 
 static void mxs_mem_setup_cpu_and_hbus(void)
 {
 	struct mxs_clkctrl_regs *clkctrl_regs =
 		(struct mxs_clkctrl_regs *)MXS_CLKCTRL_BASE;
-
-	debug("SPL: Setting CPU and HBUS clock frequencies\n");
 
 	/* Set fractional divider for ref_cpu to 480 * 18 / 19 = 454MHz
 	 * and ungate CPU clock */
@@ -220,8 +209,6 @@ static void mxs_mem_setup_vdda(void)
 	struct mxs_power_regs *power_regs =
 		(struct mxs_power_regs *)MXS_POWER_BASE;
 
-	debug("SPL: Configuring VDDA\n");
-
 	writel((0xc << POWER_VDDACTRL_TRG_OFFSET) |
 		(0x7 << POWER_VDDACTRL_BO_OFFSET_OFFSET) |
 		POWER_VDDACTRL_LINREG_OFFSET_1STEPS_BELOW,
@@ -253,22 +240,13 @@ static void mx23_mem_setup_vddmem(void)
 	struct mxs_power_regs *power_regs =
 		(struct mxs_power_regs *)MXS_POWER_BASE;
 
-	debug("SPL: Setting mx23 VDDMEM\n");
-
-	/* We must wait before and after disabling the current limiter! */
-	early_delay(10000);
-
 	clrbits_le32(&power_regs->hw_power_vddmemctrl,
 		POWER_VDDMEMCTRL_ENABLE_ILIMIT);
-
-	early_delay(10000);
 
 }
 
 static void mx23_mem_init(void)
 {
-	debug("SPL: Initialising mx23 SDRAM Controller\n");
-
 	/*
 	 * Reset/ungate the EMI block. This is essential, otherwise the system
 	 * suffers from memory instability. This thing is mx23 specific and is
@@ -291,13 +269,7 @@ static void mx23_mem_init(void)
 	setbits_le32(MXS_DRAM_BASE + 0x20, 1 << 16);
 
 	clrbits_le32(MXS_DRAM_BASE + 0x40, 1 << 17);
-
-	/* Wait for EMI_STAT bit DRAM_HALTED */
-	for (;;) {
-		if (!(readl(MXS_EMI_BASE + 0x10) & (1 << 1)))
-			break;
-		early_delay(1000);
-	}
+	early_delay(20000);
 
 	/* Adjust EMI port priority. */
 	clrsetbits_le32(0x80020000, 0x1f << 16, 0x2);
@@ -313,8 +285,6 @@ static void mx28_mem_init(void)
 {
 	struct mxs_pinctrl_regs *pinctrl_regs =
 		(struct mxs_pinctrl_regs *)MXS_PINCTRL_BASE;
-
-	debug("SPL: Initialising mx28 SDRAM Controller\n");
 
 	/* Set DDR2 mode */
 	writel(PINCTRL_EMI_DS_CTRL_DDR_MODE_DDR2,

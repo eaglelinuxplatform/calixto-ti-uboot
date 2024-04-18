@@ -1,8 +1,6 @@
 #ifndef _LINUX_TIME_H
 #define _LINUX_TIME_H
 
-#include <rtc.h>
-#include <vsprintf.h>
 #include <linux/types.h>
 
 #define _DEFUN(a,b,c) a(c)
@@ -95,6 +93,11 @@ _DEFUN (localtime_r, (tim_p, res),
 	rem += SECSPERDAY;
 	--days;
     }
+    while (rem >= SECSPERDAY)
+    {
+	rem -= SECSPERDAY;
+	++days;
+    }
 
     /* compute hour, min, and sec */
     res->tm_hour = (int) (rem / SECSPERHOUR);
@@ -151,11 +154,5 @@ _DEFUN (ctime_r, (tim_p, result),
     struct tm tm;
     return asctime_r (localtime_r (tim_p, &tm), result);
 }
-
-#ifdef CONFIG_LIB_DATE
-time64_t mktime64(const unsigned int year, const unsigned int mon,
-		  const unsigned int day, const unsigned int hour,
-		  const unsigned int min, const unsigned int sec);
-#endif
 
 #endif

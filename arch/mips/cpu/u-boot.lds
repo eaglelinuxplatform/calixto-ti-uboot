@@ -1,8 +1,15 @@
-/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * (C) Copyright 2003
  * Wolfgang Denk Engineering, <wd@denx.de>
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
+
+#if defined(CONFIG_64BIT)
+#define PTR_COUNT_SHIFT	3
+#else
+#define PTR_COUNT_SHIFT	2
+#endif
 
 OUTPUT_ARCH(mips)
 ENTRY(_start)
@@ -12,9 +19,7 @@ SECTIONS
 
 	. = ALIGN(4);
 	.text : {
-		__text_start = .;
 		*(.text*)
-		__text_end = .;
 	}
 
 	. = ALIGN(4);
@@ -27,39 +32,57 @@ SECTIONS
 		*(.data*)
 	}
 
+	. = .;
+	_gp = ALIGN(16) + 0x7ff0;
+
+	.got : {
+		*(.got)
+	}
+
+	num_got_entries = SIZEOF(.got) >> PTR_COUNT_SHIFT;
+
 	. = ALIGN(4);
 	.sdata : {
 		*(.sdata*)
 	}
 
 	. = ALIGN(4);
-	__u_boot_list : {
-		KEEP(*(SORT(__u_boot_list*)));
+	.u_boot_list : {
+		KEEP(*(SORT(.u_boot_list*)));
 	}
 
 	. = ALIGN(4);
 	__image_copy_end = .;
-	__init_end = .;
 
-	.data.reloc : {
-		__rel_start = .;
-		/*
-		 * Space for relocation table
-		 * This needs to be filled so that the
-		 * mips-reloc tool can overwrite the content.
-		 * An invalid value is left at the start of the
-		 * section to abort relocation if the table
-		 * has not been filled in.
-		 */
-		LONG(0xFFFFFFFF);
-		FILL(0);
-		. += CONFIG_MIPS_RELOCATION_TABLE_SIZE - 4;
+	.rel.dyn : {
+		__rel_dyn_start = .;
+		*(.rel.dyn)
+		__rel_dyn_end = .;
 	}
 
-	. = ALIGN(4);
-	_end = .;
+	.deadcode : {
+		/*
+		 * Workaround for a binutils feature (or bug?).
+		 *
+		 * The GNU ld from binutils puts the dynamic relocation
+		 * entries into the .rel.dyn section. Sometimes it
+		 * allocates more dynamic relocation entries than it needs
+		 * and the unused slots are set to R_MIPS_NONE entries.
+		 *
+		 * However the size of the .rel.dyn section in the ELF
+		 * section header does not cover the unused entries, so
+		 * objcopy removes those during stripping.
+		 *
+		 * Create a small section here to avoid that.
+		 */
+		LONG(0xffffffff);
+	}
 
-	.bss __rel_start (OVERLAY) : {
+	.dynsym : {
+		*(.dynsym)
+	}
+
+	.bss __rel_dyn_start (OVERLAY) : {
 		__bss_start = .;
 		*(.sbss.*)
 		*(.bss.*)
@@ -68,75 +91,15 @@ SECTIONS
 		__bss_end = .;
 	}
 
-	/* These mark the ABI of U-Boot for debuggers. */
-	.mdebug.abi32 : {
-		KEEP(*(.mdebug.abi32))
-	}
-	.mdebug.abi64 : {
-		KEEP(*(.mdebug.abi64))
-	}
-
-	/* This is the MIPS specific mdebug section. */
-	.mdebug : { *(.mdebug) }
-
-	/* Stabs debugging sections.  */
-	.stab 0 : { *(.stab) }
-	.stabstr 0 : { *(.stabstr) }
-	.stab.excl 0 : { *(.stab.excl) }
-	.stab.exclstr 0 : { *(.stab.exclstr) }
-	.stab.index 0 : { *(.stab.index) }
-	.stab.indexstr 0 : { *(.stab.indexstr) }
-	.comment 0 : { *(.comment) }
-
-	/*
-	 * DWARF debug sections.
-	 * Symbols in the DWARF debugging sections are relative to
-	 * the beginning of the section so we begin them at 0.
-	 */
-	/* DWARF 1 */
-	.debug 0 : { *(.debug) }
-	.line 0 : { *(.line) }
-	/* GNU DWARF 1 extensions */
-	.debug_srcinfo 0 : { *(.debug_srcinfo) }
-	.debug_sfnames 0 : { *(.debug_sfnames) }
-	/* DWARF 1.1 and DWARF 2 */
-	.debug_aranges 0 : { *(.debug_aranges) }
-	.debug_pubnames 0 : { *(.debug_pubnames) }
-	/* DWARF 2 */
-	.debug_info 0 : {
-		*(.debug_info
-		.gnu.linkonce.wi.*)
-	}
-	.debug_abbrev 0 : { *(.debug_abbrev) }
-	.debug_line 0 : { *(.debug_line) }
-	.debug_frame 0 : { *(.debug_frame) }
-	.debug_str 0 : { *(.debug_str) }
-	.debug_loc 0 : { *(.debug_loc) }
-	.debug_macinfo 0 : { *(.debug_macinfo) }
-	.debug_pubtypes 0 : { *(.debug_pubtypes) }
-	/* DWARF 3 */
-	.debug_ranges 0 : { *(.debug_ranges) }
-	/* SGI/MIPS DWARF 2 extensions */
-	.debug_weaknames 0 : { *(.debug_weaknames) }
-	.debug_funcnames 0 : { *(.debug_funcnames) }
-	.debug_typenames 0 : { *(.debug_typenames) }
-	.debug_varnames 0 : { *(.debug_varnames) }
-	/* GNU DWARF 2 extensions */
-	.debug_gnu_pubnames 0 : { *(.debug_gnu_pubnames) }
-	.debug_gnu_pubtypes 0 : { *(.debug_gnu_pubtypes) }
-	/* DWARF 4 */
-	.debug_types 0 : { *(.debug_types) }
-	/* DWARF 5 */
-	.debug_macro 0 : { *(.debug_macro) }
-	.debug_addr 0 : { *(.debug_addr) }
-
 	/DISCARD/ : {
-		/* ABI crap starts here */
-		*(.MIPS.abiflags)
-		*(.MIPS.options)
-		*(.options)
-		*(.pdr)
-		*(.reginfo)
-		*(.eh_frame)
+		*(.dynbss)
+		*(.dynstr)
+		*(.dynamic)
+		*(.interp)
+		*(.hash)
+		*(.gnu.*)
+		*(.plt)
+		*(.got.plt)
+		*(.rel.plt)
 	}
 }

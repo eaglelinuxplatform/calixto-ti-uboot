@@ -1,42 +1,63 @@
-# SPDX-License-Identifier: GPL-2.0+
 #
 # (C) Copyright 2000-2007
 # Wolfgang Denk, DENX Software Engineering, wd@denx.de.
+#
+# SPDX-License-Identifier:	GPL-2.0+
+#
 
-obj-$(CONFIG_USB_GADGET) += epautoconf.o config.o usbstring.o
-obj-$(CONFIG_USB_ETHER) += epautoconf.o config.o usbstring.o
+include $(TOPDIR)/config.mk
 
-ifdef CONFIG_SPL_BUILD
-obj-$(CONFIG_SPL_USB_GADGET) += g_dnl.o
-obj-$(CONFIG_SPL_DFU) += f_dfu.o
-obj-$(CONFIG_SPL_USB_SDP_SUPPORT) += f_sdp.o
+LIB	:= $(obj)libusb_gadget.o
+
+# if defined(CONFIG_USB_GADGET) || defined(CONFIG_USB_ETHER)
+#   Everytime you forget how crufty makefiles can get things like
+#   this remind you...
+ifneq (,$(CONFIG_USB_GADGET)$(CONFIG_USB_ETHER))
+COBJS-y += epautoconf.o config.o usbstring.o
 endif
 
 # new USB gadget layer dependencies
 ifdef CONFIG_USB_GADGET
-obj-$(CONFIG_USB_GADGET_AT91) += at91_udc.o
-obj-$(CONFIG_USB_GADGET_ATMEL_USBA) += atmel_usba_udc.o
-obj-$(CONFIG_USB_GADGET_BCM_UDC_OTG_PHY) += bcm_udc_otg_phy.o
-obj-$(CONFIG_USB_GADGET_DWC2_OTG) += dwc2_udc_otg.o
-obj-$(CONFIG_USB_GADGET_DWC2_OTG_PHY) += dwc2_udc_otg_phy.o
-obj-$(CONFIG_USB_GADGET_MAX3420) += max3420_udc.o
-ifndef CONFIG_SPL_BUILD
-obj-$(CONFIG_USB_GADGET_DOWNLOAD) += g_dnl.o
-obj-$(CONFIG_USB_FUNCTION_THOR) += f_thor.o
-obj-$(CONFIG_DFU_OVER_USB) += f_dfu.o
-obj-$(CONFIG_USB_FUNCTION_MASS_STORAGE) += f_mass_storage.o
-obj-$(CONFIG_USB_FUNCTION_FASTBOOT) += f_fastboot.o
-obj-$(CONFIG_USB_FUNCTION_SDP) += f_sdp.o
-obj-$(CONFIG_USB_FUNCTION_ROCKUSB) += f_rockusb.o
-obj-$(CONFIG_USB_FUNCTION_ACM)	+= f_acm.o
+COBJS-$(CONFIG_USB_GADGET_ATMEL_USBA) += atmel_usba_udc.o
+COBJS-$(CONFIG_USB_GADGET_S3C_UDC_OTG) += s3c_udc_otg.o
+COBJS-$(CONFIG_USB_GADGET_FOTG210) += fotg210.o
+COBJS-$(CONFIG_THOR_FUNCTION) += f_thor.o
+COBJS-$(CONFIG_USBDOWNLOAD_GADGET) += g_dnl.o
+COBJS-$(CONFIG_DFU_FUNCTION) += f_dfu.o
+COBJS-$(CONFIG_USB_GADGET_MASS_STORAGE) += f_mass_storage.o
 endif
-endif
-
-obj-$(CONFIG_CI_UDC) += ci_udc.o
-
-obj-$(CONFIG_USB_ETHER) += ether.o
-obj-$(CONFIG_USB_ETH_RNDIS) += rndis.o
-
+ifdef CONFIG_USB_ETHER
+COBJS-y += ether.o
+COBJS-$(CONFIG_USB_ETH_RNDIS) += rndis.o
+COBJS-$(CONFIG_MV_UDC)	+= mv_udc.o
+COBJS-$(CONFIG_CPU_PXA25X) += pxa25x_udc.o
+else
 # Devices not related to the new gadget layer depend on CONFIG_USB_DEVICE
-# This is really only N900 and USBTTY now.
-obj-$(CONFIG_USB_DEVICE) += core.o ep0.o
+ifdef CONFIG_USB_DEVICE
+COBJS-y += core.o
+COBJS-y += ep0.o
+COBJS-$(CONFIG_DW_UDC) += designware_udc.o
+COBJS-$(CONFIG_OMAP1510) += omap1510_udc.o
+COBJS-$(CONFIG_OMAP1610) += omap1510_udc.o
+COBJS-$(CONFIG_MPC885_FAMILY) += mpc8xx_udc.o
+COBJS-$(CONFIG_CPU_PXA27X) += pxa27x_udc.o
+endif
+endif
+
+COBJS	:= $(COBJS-y)
+SRCS	:= $(COBJS:.o=.c)
+OBJS	:= $(addprefix $(obj),$(COBJS))
+
+all:	$(LIB)
+
+$(LIB):	$(obj).depend $(OBJS)
+	$(call cmd_link_o_target, $(OBJS))
+
+#########################################################################
+
+# defines $(obj).depend target
+include $(SRCTREE)/rules.mk
+
+sinclude $(obj).depend
+
+#########################################################################

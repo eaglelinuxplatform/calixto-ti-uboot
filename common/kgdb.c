@@ -88,7 +88,6 @@
  ****************************************************************************/
 
 #include <common.h>
-#include <asm/ptrace.h>
 
 #include <kgdb.h>
 #include <command.h>
@@ -104,7 +103,7 @@ static char remcomOutBuffer[BUFMAX];
 static char remcomRegBuffer[BUFMAX];
 
 static int initialized = 0;
-static int kgdb_active;
+static int kgdb_active = 0, first_entry = 1;
 static struct pt_regs entry_regs;
 static long error_jmp_buf[BUFMAX/2];
 static int longjmp_on_fault = 0;
@@ -327,7 +326,7 @@ handle_exception (struct pt_regs *regs)
 		return (0);
 	}
 
-	/* probably should check which exception occurred as well */
+	/* probably should check which exception occured as well */
 	if (longjmp_on_fault) {
 		longjmp_on_fault = 0;
 		kgdb_longjmp(error_jmp_buf, KGDBERR_MEMFAULT);
@@ -349,7 +348,16 @@ handle_exception (struct pt_regs *regs)
 
 	kgdb_enter(regs, &kd);
 
-	entry_regs = *regs;
+	if (first_entry) {
+		/*
+		 * the first time we enter kgdb, we save the processor
+		 * state so that we can return to the monitor if the
+		 * remote end quits gdb (or at least, tells us to quit
+		 * with the 'k' packet)
+		 */
+		entry_regs = *regs;
+		first_entry = 0;
+	}
 
 	ptr = remcomOutBuffer;
 
@@ -451,6 +459,7 @@ handle_exception (struct pt_regs *regs)
 		case 'k':    /* kill the program, actually return to monitor */
 			kd.extype = KGDBEXIT_KILL;
 			*regs = entry_regs;
+			first_entry = 1;
 			goto doexit;
 
 		case 'C':    /* CSS  continue with signal SS */
@@ -527,18 +536,15 @@ handle_exception (struct pt_regs *regs)
  * kgdb_init must be called *after* the
  * monitor is relocated into ram
  */
-int kgdb_init(void)
+void
+kgdb_init(void)
 {
-	puts("KGDB:  ");
-
 	kgdb_serial_init();
 	debugger_exception_handler = handle_exception;
 	initialized = 1;
 
 	putDebugStr("kgdb ready\n");
 	puts("ready\n");
-
-	return 0;
 }
 
 void
@@ -578,7 +584,7 @@ breakpoint(void)
 }
 
 int
-do_kgdb(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
+do_kgdb(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 {
     printf("Entering KGDB mode via exception handler...\n\n");
     kgdb_breakpoint(argc - 1, argv + 1);

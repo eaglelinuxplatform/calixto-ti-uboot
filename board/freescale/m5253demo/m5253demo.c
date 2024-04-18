@@ -1,22 +1,17 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2000-2003
  * Wolfgang Denk, DENX Software Engineering, wd@denx.de.
  *
  * Copyright (C) 2004-2007, 2012 Freescale Semiconductor, Inc.
  * Hayden Fraser (Hayden.Fraser@freescale.com)
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
-#include <init.h>
-#include <net.h>
-#include <asm/global_data.h>
 #include <asm/immap.h>
 #include <netdev.h>
 #include <asm/io.h>
-#include <linux/delay.h>
-
-DECLARE_GLOBAL_DATA_PTR;
 
 int checkboard(void)
 {
@@ -25,7 +20,7 @@ int checkboard(void)
 	return 0;
 };
 
-int dram_init(void)
+phys_size_t initdram(int board_type)
 {
 	u32 dramsize = 0;
 
@@ -36,7 +31,7 @@ int dram_init(void)
 	if (!(mbar_readLong(MCFSIM_DCR) & 0x8000)) {
 		u32 RC, temp;
 
-		RC = (CFG_SYS_CLK / 1000000) >> 1;
+		RC = (CONFIG_SYS_CLK / 1000000) >> 1;
 		RC = (RC * 15) >> 4;
 
 		/* Initialize DRAM Control Register: DCR */
@@ -47,7 +42,7 @@ int dram_init(void)
 		__asm__("nop");
 
 		/* Initialize DMR0 */
-		dramsize = (CFG_SYS_SDRAM_SIZE << 20);
+		dramsize = (CONFIG_SYS_SDRAM_SIZE << 20);
 		temp = (dramsize - 1) & 0xFFFC0000;
 		mbar_writeLong(MCFSIM_DMR0, temp | 1);
 		__asm__("nop");
@@ -57,7 +52,7 @@ int dram_init(void)
 		__asm__("nop");
 
 		/* Write to this block to initiate precharge */
-		*(u32 *) (CFG_SYS_SDRAM_BASE) = 0xa5a5a5a5;
+		*(u32 *) (CONFIG_SYS_SDRAM_BASE) = 0xa5a5a5a5;
 		mb();
 		__asm__("nop");
 
@@ -74,13 +69,11 @@ int dram_init(void)
 			       mbar_readLong(MCFSIM_DACR0) | 0x0040);
 		__asm__("nop");
 
-		*(u32 *) (CFG_SYS_SDRAM_BASE + 0x800) = 0xa5a5a5a5;
+		*(u32 *) (CONFIG_SYS_SDRAM_BASE + 0x800) = 0xa5a5a5a5;
 		mb();
 	}
 
-	gd->ram_size = dramsize;
-
-	return 0;
+	return dramsize;
 }
 
 int testdram(void)
@@ -91,8 +84,13 @@ int testdram(void)
 	return (0);
 }
 
-#ifdef CONFIG_IDE
+#ifdef CONFIG_CMD_IDE
 #include <ata.h>
+int ide_preinit(void)
+{
+	return (0);
+}
+
 void ide_set_reset(int idereset)
 {
 	atac_t *ata = (atac_t *) CONFIG_SYS_ATA_BASE_ADDR;
@@ -113,7 +111,7 @@ void ide_set_reset(int idereset)
 		mbar2_writeLong(CIM_MISCCR, CIM_MISCCR_CPUEND);
 
 #define CALC_TIMING(t) (t + period - 1) / period
-		period = 1000000000 / (CFG_SYS_CLK / 2);	/* period in ns */
+		period = 1000000000 / (CONFIG_SYS_CLK / 2);	/* period in ns */
 
 		/*ata->ton = CALC_TIMING (180); */
 		out_8(&ata->t1, CALC_TIMING(piotms[2][0]));
@@ -131,11 +129,11 @@ void ide_set_reset(int idereset)
 		setbits_8(&ata->cr, 0x01);
 	}
 }
-#endif				/* CONFIG_IDE */
+#endif				/* CONFIG_CMD_IDE */
 
 
 #ifdef CONFIG_DRIVER_DM9000
-int board_eth_init(struct bd_info *bis)
+int board_eth_init(bd_t *bis)
 {
 	return dm9000_initialize(bis);
 }

@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * Board functions for TI AM335X based rut board
  * (C) Copyright 2013 Siemens Schweiz AG
@@ -8,14 +7,12 @@
  * u-boot:/board/ti/am335x/board.c
  *
  * Copyright (C) 2011, Texas Instruments, Incorporated - http://www.ti.com/
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
-#include <env.h>
 #include <errno.h>
-#include <init.h>
-#include <malloc.h>
-#include <net.h>
 #include <spi.h>
 #include <spl.h>
 #include <asm/arch/cpu.h>
@@ -34,9 +31,11 @@
 #include <cpsw.h>
 #include <video.h>
 #include <watchdog.h>
-#include <linux/delay.h>
 #include "board.h"
 #include "../common/factoryset.h"
+#include "../../../drivers/video/da8xx-fb.h"
+
+DECLARE_GLOBAL_DATA_PTR;
 
 /*
  * Read header information from EEPROM into global structure.
@@ -75,60 +74,13 @@ struct cmd_control rut_ddr3_cmd_ctrl_data = {
 	.cmd2iclkout = 1,
 };
 
-const struct ctrl_ioregs ioregs = {
-	.cm0ioctl		= RUT_IOCTRL_VAL,
-	.cm1ioctl		= RUT_IOCTRL_VAL,
-	.cm2ioctl		= RUT_IOCTRL_VAL,
-	.dt0ioctl		= RUT_IOCTRL_VAL,
-	.dt1ioctl		= RUT_IOCTRL_VAL,
-};
-
-	config_ddr(DDR_PLL_FREQ, &ioregs, &rut_ddr3_data,
+	config_ddr(DDR_PLL_FREQ, RUT_IOCTRL_VAL, &rut_ddr3_data,
 		   &rut_ddr3_cmd_ctrl_data, &rut_ddr3_emif_reg_data, 0);
 }
 
-static int request_and_pulse_reset(int gpio, const char *name)
-{
-	int ret;
-	const int delay_us = 2000; /* 2ms */
-
-	ret = gpio_request(gpio, name);
-	if (ret < 0) {
-		printf("%s: Unable to request %s\n", __func__, name);
-		goto err;
-	}
-
-	ret = gpio_direction_output(gpio, 0);
-	if (ret < 0) {
-		printf("%s: Unable to set %s  as output\n", __func__, name);
-		goto err_free_gpio;
-	}
-
-	udelay(delay_us);
-
-	gpio_set_value(gpio, 1);
-
-	return 0;
-
-err_free_gpio:
-	gpio_free(gpio);
-err:
-	return ret;
-}
-
-#define GPIO_TO_PIN(bank, gpio)		(32 * (bank) + (gpio))
-#define ETH_PHY_RESET_GPIO		GPIO_TO_PIN(2, 18)
-#define MAXTOUCH_RESET_GPIO		GPIO_TO_PIN(3, 18)
-#define DISPLAY_RESET_GPIO		GPIO_TO_PIN(3, 19)
-
-#define REQUEST_AND_PULSE_RESET(N) \
-		request_and_pulse_reset(N, #N);
-
 static void spl_siemens_board_init(void)
 {
-	REQUEST_AND_PULSE_RESET(ETH_PHY_RESET_GPIO);
-	REQUEST_AND_PULSE_RESET(MAXTOUCH_RESET_GPIO);
-	REQUEST_AND_PULSE_RESET(DISPLAY_RESET_GPIO);
+	return;
 }
 #endif /* if def CONFIG_SPL_BUILD */
 
@@ -175,15 +127,15 @@ static struct cpsw_platform_data cpsw_data = {
 };
 
 #if defined(CONFIG_DRIVER_TI_CPSW) || \
-	(defined(CONFIG_USB_ETHER) && defined(CONFIG_USB_MUSB_GADGET))
-int board_eth_init(struct bd_info *bis)
+	(defined(CONFIG_USB_ETHER) && defined(CONFIG_MUSB_GADGET))
+int board_eth_init(bd_t *bis)
 {
 	struct ctrl_dev *cdev = (struct ctrl_dev *)CTRL_DEVICE_BASE;
 	int n = 0;
 	int rv;
 
 #ifndef CONFIG_SPL_BUILD
-	factoryset_env_set();
+	factoryset_setenv();
 #endif
 
 	/* Set rgmii mode and enable rmii clock to be sourced from chip */
@@ -223,26 +175,249 @@ void hw_watchdog_init(void)
 }
 #endif /* defined(CONFIG_HW_WATCHDOG) */
 
-#ifdef CONFIG_BOARD_LATE_INIT
-int board_late_init(void)
+#if defined(CONFIG_VIDEO) && !defined(CONFIG_SPL_BUILD)
+static struct da8xx_panel lcd_panels[] = {
+	/* FORMIKE, 4.3", 480x800, KWH043MC17-F01 */
+	[0] = {
+		.name   = "KWH043MC17-F01",
+		.width  = 480,
+		.height = 800,
+		.hfp = 50,              /* no spec, "don't care" values */
+		.hbp = 50,
+		.hsw = 50,
+		.vfp = 50,
+		.vbp = 50,
+		.vsw = 50,
+		.pxl_clk = 35910000,    /* tCYCD=20ns, max 50MHz, 60fps */
+		.invert_pxl_clk = 1,
+	},
+	/* FORMIKE, 4.3", 480x800, KWH043ST20-F01 */
+	[1] = {
+		.name   = "KWH043ST20-F01",
+		.width  = 480,
+		.height = 800,
+		.hfp = 50,              /* no spec, "don't care" values */
+		.hbp = 50,
+		.hsw = 50,
+		.vfp = 50,
+		.vbp = 50,
+		.vsw = 50,
+		.pxl_clk = 35910000,    /* tCYCD=20ns, max 50MHz, 60fps */
+		.invert_pxl_clk = 1,
+	},
+	/* Multi-Inno, 4.3", 480x800, MI0430VT-1 */
+	[2] = {
+		.name   = "MI0430VT-1",
+		.width  = 480,
+		.height = 800,
+		.hfp = 50,              /* no spec, "don't care" values */
+		.hbp = 50,
+		.hsw = 50,
+		.vfp = 50,
+		.vbp = 50,
+		.vsw = 50,
+		.pxl_clk = 35910000,    /* tCYCD=20ns, max 50MHz, 60fps */
+		.invert_pxl_clk = 1,
+	},
+};
+
+static const struct display_panel disp_panels[] = {
+	[0] = {
+		WVGA,
+		16,	/* RGB 888 */
+		16,
+		COLOR_ACTIVE,
+	},
+	[1] = {
+		WVGA,
+		16,	/* RGB 888 */
+		16,
+		COLOR_ACTIVE,
+	},
+	[2] = {
+		WVGA,
+		24,	/* RGB 888 */
+		16,
+		COLOR_ACTIVE,
+	},
+};
+
+static const struct lcd_ctrl_config lcd_cfgs[] = {
+	[0] = {
+		&disp_panels[0],
+		.ac_bias		= 255,
+		.ac_bias_intrpt		= 0,
+		.dma_burst_sz		= 16,
+		.bpp			= 16,
+		.fdd			= 0x80,
+		.tft_alt_mode		= 0,
+		.stn_565_mode		= 0,
+		.mono_8bit_mode		= 0,
+		.invert_line_clock	= 1,
+		.invert_frm_clock	= 1,
+		.sync_edge		= 0,
+		.sync_ctrl		= 1,
+		.raster_order		= 0,
+	},
+	[1] = {
+		&disp_panels[1],
+		.ac_bias		= 255,
+		.ac_bias_intrpt		= 0,
+		.dma_burst_sz		= 16,
+		.bpp			= 16,
+		.fdd			= 0x80,
+		.tft_alt_mode		= 0,
+		.stn_565_mode		= 0,
+		.mono_8bit_mode		= 0,
+		.invert_line_clock	= 1,
+		.invert_frm_clock	= 1,
+		.sync_edge		= 0,
+		.sync_ctrl		= 1,
+		.raster_order		= 0,
+	},
+	[2] = {
+		&disp_panels[2],
+		.ac_bias		= 255,
+		.ac_bias_intrpt		= 0,
+		.dma_burst_sz		= 16,
+		.bpp			= 24,
+		.fdd			= 0x80,
+		.tft_alt_mode		= 0,
+		.stn_565_mode		= 0,
+		.mono_8bit_mode		= 0,
+		.invert_line_clock	= 1,
+		.invert_frm_clock	= 1,
+		.sync_edge		= 0,
+		.sync_ctrl		= 1,
+		.raster_order		= 0,
+	},
+
+};
+
+/* no console on this board */
+int board_cfb_skip(void)
 {
-	int ret;
-	char tmp[2 * MAX_STRING_LENGTH + 2];
+	return 1;
+}
 
-	omap_nand_switch_ecc(1, 8);
+#define PLL_GET_M(v) ((v >> 8) & 0x7ff)
+#define PLL_GET_N(v) (v & 0x7f)
 
-	if (factory_dat.asn[0] != 0)
-		sprintf(tmp, "%s_%s", factory_dat.asn,
-			factory_dat.comp_version);
-	else
-		strcpy(tmp, "QMX7.E38_4.0");
+static struct dpll_regs dpll_lcd_regs = {
+	.cm_clkmode_dpll = CM_WKUP + 0x98,
+	.cm_idlest_dpll = CM_WKUP + 0x48,
+	.cm_clksel_dpll = CM_WKUP + 0x54,
+};
 
-	ret = env_set("boardid", tmp);
-	if (ret)
-		printf("error setting board id\n");
+static int get_clk(struct dpll_regs *dpll_regs)
+{
+	unsigned int val;
+	unsigned int m, n;
+	int f = 0;
+
+	val = readl(dpll_regs->cm_clksel_dpll);
+	m = PLL_GET_M(val);
+	n = PLL_GET_N(val);
+	f = (m * V_OSCK) / n;
+
+	return f;
+};
+
+int clk_get(int clk)
+{
+	return get_clk(&dpll_lcd_regs);
+};
+
+static int conf_disp_pll(int m, int n)
+{
+	struct cm_perpll *cmper = (struct cm_perpll *)CM_PER;
+	struct cm_dpll *cmdpll = (struct cm_dpll *)CM_DPLL;
+	struct dpll_params dpll_lcd = {m, n, -1, -1, -1, -1, -1};
+#if defined(DISPL_PLL_SPREAD_SPECTRUM)
+	struct cm_wkuppll *cmwkup = (struct cm_wkuppll *)CM_WKUP;
+#endif
+
+	u32 *const clk_domains[] = {
+		&cmper->lcdclkctrl,
+		0
+	};
+	u32 *const clk_modules_explicit_en[] = {
+		&cmper->lcdclkctrl,
+		&cmper->lcdcclkstctrl,
+		&cmper->spi1clkctrl,
+		0
+	};
+	do_enable_clocks(clk_domains, clk_modules_explicit_en, 1);
+	/* 0x44e0_0500 write lcdc pixel clock mux Linux hat hier 0 */
+	writel(0x0, &cmdpll->clklcdcpixelclk);
+
+	do_setup_dpll(&dpll_lcd_regs, &dpll_lcd);
+
+#if defined(DISPL_PLL_SPREAD_SPECTRUM)
+	writel(0x64, &cmwkup->resv6[3]); /* 0x50 */
+	writel(0x800, &cmwkup->resv6[2]); /* 0x4c */
+	writel(readl(&cmwkup->clkmoddplldisp) | (1 << 12),
+	       &cmwkup->clkmoddplldisp); /* 0x98 */
+#endif
+	return 0;
+}
+
+static int set_gpio(int gpio, int state)
+{
+	gpio_request(gpio, "temp");
+	gpio_direction_output(gpio, state);
+	gpio_set_value(gpio, state);
+	gpio_free(gpio);
+	return 0;
+}
+
+static int enable_lcd(void)
+{
+	unsigned char buf[1];
+
+	set_gpio(BOARD_LCD_RESET, 1);
+
+	/* spi lcd init */
+	kwh043st20_f01_spi_startup(1, 0, 5000000, SPI_MODE_3);
+
+	/* backlight on */
+	buf[0] = 0xf;
+	i2c_write(0x24, 0x7, 1, buf, 1);
+	buf[0] = 0x3f;
+	i2c_write(0x24, 0x8, 1, buf, 1);
+	return 0;
+}
+
+int arch_early_init_r(void)
+{
+	enable_lcd();
+	return 0;
+}
+
+static int board_video_init(void)
+{
+	int i;
+	int anzdisp = ARRAY_SIZE(lcd_panels);
+	int display = 1;
+
+	for (i = 0; i < anzdisp; i++) {
+		if (strncmp((const char *)factory_dat.disp_name,
+			    lcd_panels[i].name,
+		    strlen((const char *)factory_dat.disp_name)) == 0) {
+			printf("DISPLAY: %s\n", factory_dat.disp_name);
+			break;
+		}
+	}
+	if (i == anzdisp) {
+		i = 1;
+		printf("%s: %s not found, using default %s\n", __func__,
+		       factory_dat.disp_name, lcd_panels[i].name);
+	}
+	conf_disp_pll(25, 2);
+	da8xx_video_init(&lcd_panels[display], &lcd_cfgs[display],
+			 lcd_cfgs[display].bpp);
 
 	return 0;
 }
-#endif
-
+#endif /* ifdef CONFIG_VIDEO */
 #include "../common/board.c"

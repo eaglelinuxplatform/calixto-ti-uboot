@@ -1,25 +1,17 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2007-2008
  * Stelian Pop <stelian@popies.net>
  * Lead Tech Design <www.leadtechdesign.com>
  *
- * (C) Copyright 2009-2015
+ * (C) Copyright 2009-2011
  * Daniel Gorsulowski <daniel.gorsulowski@esd.eu>
  * esd electronic system design gmbh <www.esd.eu>
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
-#include <env.h>
-#include <init.h>
-#include <net.h>
-#include <serial.h>
-#include <vsprintf.h>
-#include <asm/global_data.h>
 #include <asm/io.h>
-#include <asm/gpio.h>
-#include <asm/mach-types.h>
-#include <asm/setup.h>
 #include <asm/arch/at91sam9_smc.h>
 #include <asm/arch/at91_common.h>
 #include <asm/arch/at91_pmc.h>
@@ -35,7 +27,6 @@ DECLARE_GLOBAL_DATA_PTR;
  * Miscelaneous platform dependent initialisations
  */
 
-#ifdef CONFIG_REVISION_TAG
 static int hw_rev = -1;	/* hardware revision */
 
 int get_hw_rev(void)
@@ -53,7 +44,6 @@ int get_hw_rev(void)
 
 	return hw_rev;
 }
-#endif /* CONFIG_REVISION_TAG */
 
 #ifdef CONFIG_CMD_NAND
 static void meesc_nand_hw_init(void)
@@ -84,18 +74,19 @@ static void meesc_nand_hw_init(void)
 		&smc->cs[3].mode);
 
 	/* Configure RDY/BSY */
-	gpio_direction_input(CFG_SYS_NAND_READY_PIN);
+	at91_set_pio_input(CONFIG_SYS_NAND_READY_PIN, 1);
 
 	/* Enable NandFlash */
-	gpio_direction_output(CFG_SYS_NAND_ENABLE_PIN, 1);
+	at91_set_pio_output(CONFIG_SYS_NAND_ENABLE_PIN, 1);
 }
 #endif /* CONFIG_CMD_NAND */
 
 #ifdef CONFIG_MACB
 static void meesc_macb_hw_init(void)
 {
-	at91_periph_clk_enable(ATMEL_ID_EMAC);
-
+	at91_pmc_t	*pmc	= (at91_pmc_t *) ATMEL_BASE_PMC;
+	/* Enable clock */
+	writel(1 << ATMEL_ID_EMAC, &pmc->pcer);
 	at91_macb_hw_init();
 }
 #endif
@@ -133,21 +124,13 @@ static void meesc_ethercat_hw_init(void)
 
 int dram_init(void)
 {
-	/* dram_init must store complete ramsize in gd->ram_size */
-	gd->ram_size = get_ram_size((void *)PHYS_SDRAM,
-				PHYS_SDRAM_SIZE);
+	gd->ram_size = get_ram_size(
+		(void *)CONFIG_SYS_SDRAM_BASE,
+		CONFIG_SYS_SDRAM_SIZE);
 	return 0;
 }
 
-int dram_init_banksize(void)
-{
-	gd->bd->bi_dram[0].start = PHYS_SDRAM;
-	gd->bd->bi_dram[0].size = PHYS_SDRAM_SIZE;
-
-	return 0;
-}
-
-int board_eth_init(struct bd_info *bis)
+int board_eth_init(bd_t *bis)
 {
 	int rc = 0;
 #ifdef CONFIG_MACB
@@ -156,14 +139,13 @@ int board_eth_init(struct bd_info *bis)
 	return rc;
 }
 
-#ifdef CONFIG_DISPLAY_BOARDINFO
 int checkboard(void)
 {
 	char str[32];
 	u_char hw_type;	/* hardware type */
 
 	/* read the "Type" register of the ET1100 controller */
-	hw_type = readb(CFG_ET1100_BASE);
+	hw_type = readb(CONFIG_ET1100_BASE);
 
 	switch (hw_type) {
 	case 0x11:
@@ -186,29 +168,26 @@ int checkboard(void)
 		puts("Board: EtherCAN/2 Gateway");
 		break;
 	}
-	if (env_get_f("serial#", str, sizeof(str)) > 0) {
+	if (getenv_f("serial#", str, sizeof(str)) > 0) {
 		puts(", serial# ");
 		puts(str);
 	}
-#ifdef CONFIG_REVISION_TAG
 	printf("\nHardware-revision: 1.%d\n", get_hw_rev());
-#endif
 	printf("Mach-type: %lu\n", gd->bd->bi_arch_number);
 	return 0;
 }
-#endif /* CONFIG_DISPLAY_BOARDINFO */
 
 #ifdef CONFIG_SERIAL_TAG
 void get_board_serial(struct tag_serialnr *serialnr)
 {
 	char *str;
 
-	char *serial = env_get("serial#");
+	char *serial = getenv("serial#");
 	if (serial) {
 		str = strchr(serial, '_');
 		if (str && (strlen(str) >= 4)) {
 			serialnr->high = (*(str + 1) << 8) | *(str + 2);
-			serialnr->low = hextoul(str + 3, NULL);
+			serialnr->low = simple_strtoul(str + 3, NULL, 16);
 		}
 	} else {
 		serialnr->high = 0;
@@ -236,11 +215,10 @@ int misc_init_r(void)
 	 * In some cases this this needs to be set to 4.
 	 * Check the user has set environment mdiv to 4 to change the divisor.
 	 */
-	str = env_get("mdiv");
-	if (str && (strcmp(str, "4") == 0)) {
+	if ((str = getenv("mdiv")) && (strcmp(str, "4") == 0)) {
 		writel((readl(&pmc->mckr) & ~AT91_PMC_MDIV) |
 			AT91SAM9_PMC_MDIV_4, &pmc->mckr);
-		at91_clock_init(CFG_SYS_AT91_MAIN_CLOCK);
+		at91_clock_init(CONFIG_SYS_AT91_MAIN_CLOCK);
 		serial_setbrg();
 		/* Notify the user that the clock is not default */
 		printf("Setting master clock to %s MHz\n",
@@ -253,7 +231,14 @@ int misc_init_r(void)
 
 int board_early_init_f(void)
 {
-	at91_periph_clk_enable(ATMEL_ID_UHP);
+	at91_pmc_t	*pmc	= (at91_pmc_t *) ATMEL_BASE_PMC;
+
+	/* enable all clocks */
+	writel((1 << ATMEL_ID_PIOA) | (1 << ATMEL_ID_PIOB) |
+		(1 << ATMEL_ID_PIOCDE) | (1 << ATMEL_ID_UHP),
+		&pmc->pcer);
+
+	at91_seriald_hw_init();
 
 	return 0;
 }
@@ -264,10 +249,13 @@ int board_init(void)
 	meesc_ethercat_hw_init();
 
 	/* adress of boot parameters */
-	gd->bd->bi_boot_params = CFG_SYS_SDRAM_BASE + 0x100;
+	gd->bd->bi_boot_params = CONFIG_SYS_SDRAM_BASE + 0x100;
 
 #ifdef CONFIG_CMD_NAND
 	meesc_nand_hw_init();
+#endif
+#ifdef CONFIG_HAS_DATAFLASH
+	at91_spi0_hw_init(1 << 0);
 #endif
 #ifdef CONFIG_MACB
 	meesc_macb_hw_init();

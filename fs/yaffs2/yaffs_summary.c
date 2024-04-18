@@ -28,7 +28,6 @@
 #include "yaffs_nand.h"
 #include "yaffs_getblockinfo.h"
 #include "yaffs_bitmap.h"
-#include <dm/devres.h>
 
 /*
  * The summary is built up in an array of summary tags.
@@ -233,6 +232,7 @@ int yaffs_summary_read(struct yaffs_dev *dev,
 	if (result == YAFFS_OK) {
 		/* Verify header */
 		if (hdr.version != YAFFS_SUMMARY_VERSION ||
+		    hdr.block != blk ||
 		    hdr.seq != bi->seq_number ||
 		    hdr.sum != yaffs_summary_sum(dev))
 			result = YAFFS_FAIL;

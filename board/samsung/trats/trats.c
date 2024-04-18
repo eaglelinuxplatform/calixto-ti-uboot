@@ -1,35 +1,37 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2011 Samsung Electronics
  * Heungjun Kim <riverful.kim@samsung.com>
  * Kyungmin Park <kyungmin.park@samsung.com>
  * Donghwa Lee <dh09.lee@samsung.com>
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
-#include <env.h>
-#include <log.h>
+#include <lcd.h>
 #include <asm/io.h>
-#include <asm/gpio.h>
 #include <asm/arch/cpu.h>
+#include <asm/arch/gpio.h>
+#include <asm/arch/mmc.h>
 #include <asm/arch/pinmux.h>
 #include <asm/arch/clock.h>
+#include <asm/arch/clk.h>
 #include <asm/arch/mipi_dsim.h>
 #include <asm/arch/watchdog.h>
 #include <asm/arch/power.h>
-#include <linux/delay.h>
 #include <power/pmic.h>
-#include <usb/dwc2_udc.h>
+#include <usb/s3c_udc.h>
 #include <power/max8997_pmic.h>
+#include <libtizen.h>
 #include <power/max8997_muic.h>
 #include <power/battery.h>
 #include <power/max17042_fg.h>
-#include <power/pmic.h>
-#include <libtizen.h>
 #include <usb.h>
 #include <usb_mass_storage.h>
 
 #include "setup.h"
+
+DECLARE_GLOBAL_DATA_PTR;
 
 unsigned int board_rev;
 
@@ -41,17 +43,33 @@ u32 get_board_rev(void)
 #endif
 
 static void check_hw_revision(void);
-struct dwc2_plat_otg_data s5pc210_otg_data;
+struct s3c_plat_otg_data s5pc210_otg_data;
 
-int exynos_init(void)
+int board_init(void)
 {
+	gd->bd->bi_boot_params = CONFIG_SYS_SPL_ARGS_ADDR;
+
 	check_hw_revision();
 	printf("HW Revision:\t0x%x\n", board_rev);
 
 	return 0;
 }
 
-#if !CONFIG_IS_ENABLED(DM_I2C) /* TODO(maintainer): Convert to driver model */
+void i2c_init_board(void)
+{
+	struct exynos4_gpio_part1 *gpio1 =
+		(struct exynos4_gpio_part1 *)samsung_get_base_gpio_part1();
+	struct exynos4_gpio_part2 *gpio2 =
+		(struct exynos4_gpio_part2 *)samsung_get_base_gpio_part2();
+
+	/* I2C_5 -> PMIC -> Adapter 0 */
+	s5p_gpio_direction_output(&gpio1->b, 7, 1);
+	s5p_gpio_direction_output(&gpio1->b, 6, 1);
+	/* I2C_9 -> FG -> Adapter 1 */
+	s5p_gpio_direction_output(&gpio2->y4, 0, 1);
+	s5p_gpio_direction_output(&gpio2->y4, 1, 1);
+}
+
 static void trats_low_power_mode(void)
 {
 	struct exynos4_clock *clk =
@@ -109,11 +127,158 @@ static void trats_low_power_mode(void)
 	writel(0x0, &clk->gate_ip_image);	/* IMAGE */
 	writel(0x0, &clk->gate_ip_gps);	/* GPS */
 }
-#endif
 
-int exynos_power_init(void)
+static int pmic_init_max8997(void)
 {
-#if !CONFIG_IS_ENABLED(DM_I2C) /* TODO(maintainer): Convert to driver model */
+	struct pmic *p = pmic_get("MAX8997_PMIC");
+	int i = 0, ret = 0;
+	u32 val;
+
+	if (pmic_probe(p))
+		return -1;
+
+	/* BUCK1 VARM: 1.2V */
+	val = (1200000 - 650000) / 25000;
+	ret |= pmic_reg_write(p, MAX8997_REG_BUCK1DVS1, val);
+	val = ENBUCK | ACTIVE_DISCHARGE;		/* DVS OFF */
+	ret |= pmic_reg_write(p, MAX8997_REG_BUCK1CTRL, val);
+
+	/* BUCK2 VINT: 1.1V */
+	val = (1100000 - 650000) / 25000;
+	ret |= pmic_reg_write(p, MAX8997_REG_BUCK2DVS1, val);
+	val = ENBUCK | ACTIVE_DISCHARGE;		/* DVS OFF */
+	ret |= pmic_reg_write(p, MAX8997_REG_BUCK2CTRL, val);
+
+
+	/* BUCK3 G3D: 1.1V - OFF */
+	ret |= pmic_reg_read(p, MAX8997_REG_BUCK3CTRL, &val);
+	val &= ~ENBUCK;
+	ret |= pmic_reg_write(p, MAX8997_REG_BUCK3CTRL, val);
+
+	val = (1100000 - 750000) / 50000;
+	ret |= pmic_reg_write(p, MAX8997_REG_BUCK3DVS, val);
+
+	/* BUCK4 CAMISP: 1.2V - OFF */
+	ret |= pmic_reg_read(p, MAX8997_REG_BUCK4CTRL, &val);
+	val &= ~ENBUCK;
+	ret |= pmic_reg_write(p, MAX8997_REG_BUCK4CTRL, val);
+
+	val = (1200000 - 650000) / 25000;
+	ret |= pmic_reg_write(p, MAX8997_REG_BUCK4DVS, val);
+
+	/* BUCK5 VMEM: 1.2V */
+	val = (1200000 - 650000) / 25000;
+	for (i = 0; i < 8; i++)
+		ret |= pmic_reg_write(p, MAX8997_REG_BUCK5DVS1 + i, val);
+
+	val = ENBUCK | ACTIVE_DISCHARGE;		/* DVS OFF */
+	ret |= pmic_reg_write(p, MAX8997_REG_BUCK5CTRL, val);
+
+	/* BUCK6 CAM AF: 2.8V */
+	/* No Voltage Setting Register */
+	/* GNSLCT 3.0X */
+	val = GNSLCT;
+	ret |= pmic_reg_write(p, MAX8997_REG_BUCK6CTRL, val);
+
+	/* BUCK7 VCC_SUB: 2.0V */
+	val = (2000000 - 750000) / 50000;
+	ret |= pmic_reg_write(p, MAX8997_REG_BUCK7DVS, val);
+
+	/* LDO1 VADC: 3.3V */
+	val = max8997_reg_ldo(3300000) | DIS_LDO;	/* OFF */
+	ret |= pmic_reg_write(p, MAX8997_REG_LDO1CTRL, val);
+
+	/* LDO1 Disable active discharging */
+	ret |= pmic_reg_read(p, MAX8997_REG_LDO1CONFIG, &val);
+	val &= ~LDO_ADE;
+	ret |= pmic_reg_write(p, MAX8997_REG_LDO1CONFIG, val);
+
+	/* LDO2 VALIVE: 1.1V */
+	val = max8997_reg_ldo(1100000) | EN_LDO;
+	ret |= pmic_reg_write(p, MAX8997_REG_LDO2CTRL, val);
+
+	/* LDO3 VUSB/MIPI: 1.1V */
+	val = max8997_reg_ldo(1100000) | DIS_LDO;	/* OFF */
+	ret |= pmic_reg_write(p, MAX8997_REG_LDO3CTRL, val);
+
+	/* LDO4 VMIPI: 1.8V */
+	val = max8997_reg_ldo(1800000) | DIS_LDO;	/* OFF */
+	ret |= pmic_reg_write(p, MAX8997_REG_LDO4CTRL, val);
+
+	/* LDO5 VHSIC: 1.2V */
+	val = max8997_reg_ldo(1200000) | DIS_LDO;	/* OFF */
+	ret |= pmic_reg_write(p, MAX8997_REG_LDO5CTRL, val);
+
+	/* LDO6 VCC_1.8V_PDA: 1.8V */
+	val = max8997_reg_ldo(1800000) | EN_LDO;
+	ret |= pmic_reg_write(p, MAX8997_REG_LDO6CTRL, val);
+
+	/* LDO7 CAM_ISP: 1.8V */
+	val = max8997_reg_ldo(1800000) | DIS_LDO;	/* OFF */
+	ret |= pmic_reg_write(p, MAX8997_REG_LDO7CTRL, val);
+
+	/* LDO8 VDAC/VUSB: 3.3V */
+	val = max8997_reg_ldo(3300000) | DIS_LDO;	/* OFF */
+	ret |= pmic_reg_write(p, MAX8997_REG_LDO8CTRL, val);
+
+	/* LDO9 VCC_2.8V_PDA: 2.8V */
+	val = max8997_reg_ldo(2800000) | EN_LDO;
+	ret |= pmic_reg_write(p, MAX8997_REG_LDO9CTRL, val);
+
+	/* LDO10 VPLL: 1.1V */
+	val = max8997_reg_ldo(1100000) | EN_LDO;
+	ret |= pmic_reg_write(p, MAX8997_REG_LDO10CTRL, val);
+
+	/* LDO11 TOUCH: 2.8V */
+	val = max8997_reg_ldo(2800000) | DIS_LDO;	/* OFF */
+	ret |= pmic_reg_write(p, MAX8997_REG_LDO11CTRL, val);
+
+	/* LDO12 VTCAM: 1.8V */
+	val = max8997_reg_ldo(1800000) | DIS_LDO;	/* OFF */
+	ret |= pmic_reg_write(p, MAX8997_REG_LDO12CTRL, val);
+
+	/* LDO13 VCC_3.0_LCD: 3.0V */
+	val = max8997_reg_ldo(3000000) | DIS_LDO;	/* OFF */
+	ret |= pmic_reg_write(p, MAX8997_REG_LDO13CTRL, val);
+
+	/* LDO14 MOTOR: 3.0V */
+	val = max8997_reg_ldo(3000000) | DIS_LDO;	/* OFF */
+	ret |= pmic_reg_write(p, MAX8997_REG_LDO14CTRL, val);
+
+	/* LDO15 LED_A: 2.8V */
+	val = max8997_reg_ldo(2800000) | DIS_LDO;	/* OFF */
+	ret |= pmic_reg_write(p, MAX8997_REG_LDO15CTRL, val);
+
+	/* LDO16 CAM_SENSOR: 1.8V */
+	val = max8997_reg_ldo(1800000) | DIS_LDO;	/* OFF */
+	ret |= pmic_reg_write(p, MAX8997_REG_LDO16CTRL, val);
+
+	/* LDO17 VTF: 2.8V */
+	val = max8997_reg_ldo(2800000) | DIS_LDO;	/* OFF */
+	ret |= pmic_reg_write(p, MAX8997_REG_LDO17CTRL, val);
+
+	/* LDO18 TOUCH_LED 3.3V */
+	val = max8997_reg_ldo(3300000) | DIS_LDO;	/* OFF */
+	ret |= pmic_reg_write(p, MAX8997_REG_LDO18CTRL, val);
+
+	/* LDO21 VDDQ: 1.2V */
+	val = max8997_reg_ldo(1200000) | EN_LDO;
+	ret |= pmic_reg_write(p, MAX8997_REG_LDO21CTRL, val);
+
+	/* SAFEOUT for both 1 and 2: 4.9V, Active discharge, Enable */
+	val = (SAFEOUT_4_90V << 0) | (SAFEOUT_4_90V << 2) |
+		ACTDISSAFEO1 | ACTDISSAFEO2 | ENSAFEOUT1 | ENSAFEOUT2;
+	ret |= pmic_reg_write(p, MAX8997_REG_SAFEOUTCTRL, val);
+
+	if (ret) {
+		puts("MAX8997 PMIC setting error!\n");
+		return -1;
+	}
+	return 0;
+}
+
+int power_init_board(void)
+{
 	int chrg, ret;
 	struct power_battery *pb;
 	struct pmic *p_fg, *p_chrg, *p_muic, *p_bat;
@@ -125,8 +290,10 @@ int exynos_power_init(void)
 	 * The FUEL_GAUGE is marked as I2C9 on the schematic, but connected
 	 * to logical I2C adapter 1
 	 */
-	ret = power_fg_init(I2C_9);
-	ret |= power_muic_init(I2C_5);
+	ret = pmic_init(I2C_0);
+	ret |= pmic_init_max8997();
+	ret |= power_fg_init(I2C_1);
+	ret |= power_muic_init(I2C_0);
 	ret |= power_bat_init(0);
 	if (ret)
 		return ret;
@@ -168,38 +335,56 @@ int exynos_power_init(void)
 
 	if (!p_chrg->chrg->chrg_bat_present(p_chrg)) {
 		puts("No battery detected\n");
-		return 0;
+		return -1;
 	}
 
 	p_fg->fg->fg_battery_check(p_fg, p_bat);
 
 	if (pb->bat->state == CHARGE && chrg == CHARGER_USB)
 		puts("CHARGE Battery !\n");
-#endif
 
 	return 0;
 }
 
+int dram_init(void)
+{
+	gd->ram_size = get_ram_size((long *)PHYS_SDRAM_1, PHYS_SDRAM_1_SIZE) +
+		get_ram_size((long *)PHYS_SDRAM_2, PHYS_SDRAM_2_SIZE) +
+		get_ram_size((long *)PHYS_SDRAM_3, PHYS_SDRAM_3_SIZE) +
+		get_ram_size((long *)PHYS_SDRAM_4, PHYS_SDRAM_4_SIZE);
+
+	return 0;
+}
+
+void dram_init_banksize(void)
+{
+	gd->bd->bi_dram[0].start = PHYS_SDRAM_1;
+	gd->bd->bi_dram[0].size = PHYS_SDRAM_1_SIZE;
+	gd->bd->bi_dram[1].start = PHYS_SDRAM_2;
+	gd->bd->bi_dram[1].size = PHYS_SDRAM_2_SIZE;
+	gd->bd->bi_dram[2].start = PHYS_SDRAM_3;
+	gd->bd->bi_dram[2].size = PHYS_SDRAM_3_SIZE;
+	gd->bd->bi_dram[3].start = PHYS_SDRAM_4;
+	gd->bd->bi_dram[3].size = PHYS_SDRAM_4_SIZE;
+}
+
 static unsigned int get_hw_revision(void)
 {
+	struct exynos4_gpio_part1 *gpio =
+		(struct exynos4_gpio_part1 *)samsung_get_base_gpio_part1();
 	int hwrev = 0;
-	char str[10];
 	int i;
 
 	/* hw_rev[3:0] == GPE1[3:0] */
 	for (i = 0; i < 4; i++) {
-		int pin = i + EXYNOS4_GPIO_E10;
-
-		sprintf(str, "hw_rev%d", i);
-		gpio_request(pin, str);
-		gpio_cfg_pin(pin, S5P_GPIO_INPUT);
-		gpio_set_pull(pin, S5P_GPIO_PULL_NONE);
+		s5p_gpio_cfg_pin(&gpio->e1, i, GPIO_INPUT);
+		s5p_gpio_set_pull(&gpio->e1, i, GPIO_PULL_NONE);
 	}
 
 	udelay(1);
 
 	for (i = 0; i < 4; i++)
-		hwrev |= (gpio_get_value(EXYNOS4_GPIO_E10 + i) << i);
+		hwrev |= (s5p_gpio_get_value(&gpio->e1, i) << i);
 
 	debug("hwrev 0x%x\n", hwrev);
 
@@ -215,68 +400,95 @@ static void check_hw_revision(void)
 	board_rev |= hwrev;
 }
 
+#ifdef CONFIG_DISPLAY_BOARDINFO
+int checkboard(void)
+{
+	puts("Board:\tTRATS\n");
+	return 0;
+}
+#endif
+
+#ifdef CONFIG_GENERIC_MMC
+int board_mmc_init(bd_t *bis)
+{
+	struct exynos4_gpio_part2 *gpio =
+		(struct exynos4_gpio_part2 *)samsung_get_base_gpio_part2();
+	int err;
+
+	/* eMMC_EN: SD_0_CDn: GPK0[2] Output High */
+	s5p_gpio_direction_output(&gpio->k0, 2, 1);
+	s5p_gpio_set_pull(&gpio->k0, 2, GPIO_PULL_NONE);
+
+	/*
+	 * MMC device init
+	 * mmc0	 : eMMC (8-bit buswidth)
+	 * mmc2	 : SD card (4-bit buswidth)
+	 */
+	err = exynos_pinmux_config(PERIPH_ID_SDMMC0, PINMUX_FLAG_8BIT_MODE);
+	if (err)
+		debug("SDMMC0 not configured\n");
+	else
+		err = s5p_mmc_init(0, 8);
+
+	/* T-flash detect */
+	s5p_gpio_cfg_pin(&gpio->x3, 4, 0xf);
+	s5p_gpio_set_pull(&gpio->x3, 4, GPIO_PULL_UP);
+
+	/*
+	 * Check the T-flash  detect pin
+	 * GPX3[4] T-flash detect pin
+	 */
+	if (!s5p_gpio_get_value(&gpio->x3, 4)) {
+		err = exynos_pinmux_config(PERIPH_ID_SDMMC2, PINMUX_FLAG_NONE);
+		if (err)
+			debug("SDMMC2 not configured\n");
+		else
+			err = s5p_mmc_init(2, 4);
+	}
+
+	return err;
+}
+#endif
 
 #ifdef CONFIG_USB_GADGET
 static int s5pc210_phy_control(int on)
 {
-	struct udevice *dev;
-	int reg, ret;
+	int ret = 0;
+	u32 val = 0;
+	struct pmic *p = pmic_get("MAX8997_PMIC");
+	if (!p)
+		return -ENODEV;
 
-	ret = pmic_get("max8997-pmic", &dev);
-	if (ret)
-		return ret;
+	if (pmic_probe(p))
+		return -1;
 
 	if (on) {
-		reg = pmic_reg_read(dev, MAX8997_REG_SAFEOUTCTRL);
-		reg |= ENSAFEOUT1;
-		ret = pmic_reg_write(dev, MAX8997_REG_SAFEOUTCTRL, reg);
-		if (ret) {
-			puts("MAX8997 setting error!\n");
-			return ret;
-		}
-		reg = pmic_reg_read(dev, MAX8997_REG_LDO3CTRL);
-		reg |= EN_LDO;
-		ret = pmic_reg_write(dev, MAX8997_REG_LDO3CTRL, reg);
-		if (ret) {
-			puts("MAX8997 setting error!\n");
-			return ret;
-		}
-		reg = pmic_reg_read(dev, MAX8997_REG_LDO8CTRL);
-		reg |= EN_LDO;
-		ret = pmic_reg_write(dev, MAX8997_REG_LDO8CTRL, reg);
-		if (ret) {
-			puts("MAX8997 setting error!\n");
-			return ret;
-		}
-	} else {
-		reg = pmic_reg_read(dev, MAX8997_REG_LDO8CTRL);
-		reg &= DIS_LDO;
-		ret = pmic_reg_write(dev, MAX8997_REG_LDO8CTRL, reg);
-		if (ret) {
-			puts("MAX8997 setting error!\n");
-			return ret;
-		}
-		reg = pmic_reg_read(dev, MAX8997_REG_LDO3CTRL);
-		reg &= DIS_LDO;
-		ret = pmic_reg_write(dev, MAX8997_REG_LDO3CTRL, reg);
-		if (ret) {
-			puts("MAX8997 setting error!\n");
-			return ret;
-		}
-		reg = pmic_reg_read(dev, MAX8997_REG_SAFEOUTCTRL);
-		reg &= ~ENSAFEOUT1;
-		ret = pmic_reg_write(dev, MAX8997_REG_SAFEOUTCTRL, reg);
-		if (ret) {
-			puts("MAX8997 setting error!\n");
-			return ret;
-		}
+		ret |= pmic_set_output(p, MAX8997_REG_SAFEOUTCTRL,
+				      ENSAFEOUT1, LDO_ON);
+		ret |= pmic_reg_read(p, MAX8997_REG_LDO3CTRL, &val);
+		ret |= pmic_reg_write(p, MAX8997_REG_LDO3CTRL, EN_LDO | val);
 
+		ret |= pmic_reg_read(p, MAX8997_REG_LDO8CTRL, &val);
+		ret |= pmic_reg_write(p, MAX8997_REG_LDO8CTRL, EN_LDO | val);
+	} else {
+		ret |= pmic_reg_read(p, MAX8997_REG_LDO8CTRL, &val);
+		ret |= pmic_reg_write(p, MAX8997_REG_LDO8CTRL, DIS_LDO | val);
+
+		ret |= pmic_reg_read(p, MAX8997_REG_LDO3CTRL, &val);
+		ret |= pmic_reg_write(p, MAX8997_REG_LDO3CTRL, DIS_LDO | val);
+		ret |= pmic_set_output(p, MAX8997_REG_SAFEOUTCTRL,
+				      ENSAFEOUT1, LDO_OFF);
+	}
+
+	if (ret) {
+		puts("MAX8997 LDO setting error!\n");
+		return -1;
 	}
 
 	return 0;
 }
 
-struct dwc2_plat_otg_data s5pc210_otg_data = {
+struct s3c_plat_otg_data s5pc210_otg_data = {
 	.phy_control	= s5pc210_phy_control,
 	.regs_phy	= EXYNOS4_USBPHY_BASE,
 	.regs_otg	= EXYNOS4_USBOTG_BASE,
@@ -284,31 +496,20 @@ struct dwc2_plat_otg_data s5pc210_otg_data = {
 	.usb_flags	= PHY0_SLEEP,
 };
 
-int board_usb_init(int index, enum usb_init_type init)
+int board_usb_init(int index, enum board_usb_init_type init)
 {
 	debug("USB_udc_probe\n");
-	return dwc2_udc_probe(&s5pc210_otg_data);
-}
-
-int g_dnl_board_usb_cable_connected(void)
-{
-#if !CONFIG_IS_ENABLED(DM_I2C) /* TODO(maintainer): Convert to driver model */
-	struct pmic *muic = pmic_get("MAX8997_MUIC");
-	if (!muic)
-		return 0;
-
-	return !!muic->chrg->chrg_type(muic);
-#else
-	return false;
-#endif
-
+	return s3c_udc_probe(&s5pc210_otg_data);
 }
 #endif
 
 static void pmic_reset(void)
 {
-	gpio_direction_output(EXYNOS4_GPIO_X07, 1);
-	gpio_set_pull(EXYNOS4_GPIO_X27, S5P_GPIO_PULL_NONE);
+	struct exynos4_gpio_part2 *gpio =
+		(struct exynos4_gpio_part2 *)samsung_get_base_gpio_part2();
+
+	s5p_gpio_direction_output(&gpio->x0, 7, 1);
+	s5p_gpio_set_pull(&gpio->x2, 7, GPIO_PULL_NONE);
 }
 
 static void board_clock_init(void)
@@ -383,28 +584,57 @@ static void board_power_init(void)
 	writel(0, (unsigned int)&pwr->arm_core1_configuration);
 }
 
-static void exynos_uart_init(void)
+static void board_uart_init(void)
 {
+	struct exynos4_gpio_part1 *gpio1 =
+		(struct exynos4_gpio_part1 *)samsung_get_base_gpio_part1();
+	struct exynos4_gpio_part2 *gpio2 =
+		(struct exynos4_gpio_part2 *)samsung_get_base_gpio_part2();
+	int i;
+
+	/*
+	 * UART2 GPIOs
+	 * GPA1CON[0] = UART_2_RXD(2)
+	 * GPA1CON[1] = UART_2_TXD(2)
+	 * GPA1CON[2] = I2C_3_SDA (3)
+	 * GPA1CON[3] = I2C_3_SCL (3)
+	 */
+
+	for (i = 0; i < 4; i++) {
+		s5p_gpio_set_pull(&gpio1->a1, i, GPIO_PULL_NONE);
+		s5p_gpio_cfg_pin(&gpio1->a1, i, GPIO_FUNC((i > 1) ? 0x3 : 0x2));
+	}
+
 	/* UART_SEL GPY4[7] (part2) at EXYNOS4 */
-	gpio_request(EXYNOS4_GPIO_Y47, "uart_sel");
-	gpio_set_pull(EXYNOS4_GPIO_Y47, S5P_GPIO_PULL_UP);
-	gpio_direction_output(EXYNOS4_GPIO_Y47, 1);
+	s5p_gpio_set_pull(&gpio2->y4, 7, GPIO_PULL_UP);
+	s5p_gpio_direction_output(&gpio2->y4, 7, 1);
 }
 
-int exynos_early_init_f(void)
+int board_early_init_f(void)
 {
 	wdt_stop();
 	pmic_reset();
 	board_clock_init();
-	exynos_uart_init();
+	board_uart_init();
 	board_power_init();
 
 	return 0;
 }
 
-int lcd_power(void)
+void exynos_reset_lcd(void)
 {
-#if !CONFIG_IS_ENABLED(DM_I2C) /* TODO(maintainer): Convert to driver model */
+	struct exynos4_gpio_part2 *gpio2 =
+		(struct exynos4_gpio_part2 *)samsung_get_base_gpio_part2();
+
+	s5p_gpio_direction_output(&gpio2->y4, 5, 1);
+	udelay(10000);
+	s5p_gpio_direction_output(&gpio2->y4, 5, 0);
+	udelay(10000);
+	s5p_gpio_direction_output(&gpio2->y4, 5, 1);
+}
+
+static int lcd_power(void)
+{
 	int ret = 0;
 	struct pmic *p = pmic_get("MAX8997_PMIC");
 	if (!p)
@@ -422,13 +652,51 @@ int lcd_power(void)
 		puts("MAX8997 LDO setting error!\n");
 		return -1;
 	}
-#endif
+
 	return 0;
 }
 
-int mipi_power(void)
+static struct mipi_dsim_config dsim_config = {
+	.e_interface		= DSIM_VIDEO,
+	.e_virtual_ch		= DSIM_VIRTUAL_CH_0,
+	.e_pixel_format		= DSIM_24BPP_888,
+	.e_burst_mode		= DSIM_BURST_SYNC_EVENT,
+	.e_no_data_lane		= DSIM_DATA_LANE_4,
+	.e_byte_clk		= DSIM_PLL_OUT_DIV8,
+	.hfp			= 1,
+
+	.p			= 3,
+	.m			= 120,
+	.s			= 1,
+
+	/* D-PHY PLL stable time spec :min = 200usec ~ max 400usec */
+	.pll_stable_time	= 500,
+
+	/* escape clk : 10MHz */
+	.esc_clk		= 20 * 1000000,
+
+	/* stop state holding counter after bta change count 0 ~ 0xfff */
+	.stop_holding_cnt	= 0x7ff,
+	/* bta timeout 0 ~ 0xff */
+	.bta_timeout		= 0xff,
+	/* lp rx timeout 0 ~ 0xffff */
+	.rx_timeout		= 0xffff,
+};
+
+static struct exynos_platform_mipi_dsim s6e8ax0_platform_data = {
+	.lcd_panel_info = NULL,
+	.dsim_config = &dsim_config,
+};
+
+static struct mipi_dsim_lcd_device mipi_lcd_device = {
+	.name	= "s6e8ax0",
+	.id	= -1,
+	.bus_id	= 0,
+	.platform_data	= (void *)&s6e8ax0_platform_data,
+};
+
+static int mipi_power(void)
 {
-#if !CONFIG_IS_ENABLED(DM_I2C) /* TODO(maintainer): Convert to driver model */
 	int ret = 0;
 	struct pmic *p = pmic_get("MAX8997_PMIC");
 	if (!p)
@@ -446,6 +714,123 @@ int mipi_power(void)
 		puts("MAX8997 LDO setting error!\n");
 		return -1;
 	}
-#endif
+
 	return 0;
 }
+
+vidinfo_t panel_info = {
+	.vl_freq	= 60,
+	.vl_col		= 720,
+	.vl_row		= 1280,
+	.vl_width	= 720,
+	.vl_height	= 1280,
+	.vl_clkp	= CONFIG_SYS_HIGH,
+	.vl_hsp		= CONFIG_SYS_LOW,
+	.vl_vsp		= CONFIG_SYS_LOW,
+	.vl_dp		= CONFIG_SYS_LOW,
+	.vl_bpix	= 5,	/* Bits per pixel, 2^5 = 32 */
+
+	/* s6e8ax0 Panel infomation */
+	.vl_hspw	= 5,
+	.vl_hbpd	= 10,
+	.vl_hfpd	= 10,
+
+	.vl_vspw	= 2,
+	.vl_vbpd	= 1,
+	.vl_vfpd	= 13,
+	.vl_cmd_allow_len = 0xf,
+
+	.win_id		= 3,
+	.dual_lcd_enabled = 0,
+
+	.init_delay	= 0,
+	.power_on_delay = 0,
+	.reset_delay	= 0,
+	.interface_mode = FIMD_RGB_INTERFACE,
+	.mipi_enabled	= 1,
+};
+
+void init_panel_info(vidinfo_t *vid)
+{
+	vid->logo_on	= 1,
+	vid->resolution	= HD_RESOLUTION,
+	vid->rgb_mode	= MODE_RGB_P,
+
+#ifdef CONFIG_TIZEN
+	get_tizen_logo_info(vid);
+#endif
+	mipi_lcd_device.reverse_panel = 1;
+
+	strcpy(s6e8ax0_platform_data.lcd_panel_name, mipi_lcd_device.name);
+	s6e8ax0_platform_data.lcd_power = lcd_power;
+	s6e8ax0_platform_data.mipi_power = mipi_power;
+	s6e8ax0_platform_data.phy_enable = set_mipi_phy_ctrl;
+	s6e8ax0_platform_data.lcd_panel_info = (void *)vid;
+	exynos_mipi_dsi_register_lcd_device(&mipi_lcd_device);
+	s6e8ax0_init();
+	exynos_set_dsim_platform_data(&s6e8ax0_platform_data);
+
+	setenv("lcdinfo", "lcd=s6e8ax0");
+}
+
+#ifdef CONFIG_USB_GADGET_MASS_STORAGE
+static int ums_read_sector(struct ums_device *ums_dev,
+			   ulong start, lbaint_t blkcnt, void *buf)
+{
+	if (ums_dev->mmc->block_dev.block_read(ums_dev->dev_num,
+			start + ums_dev->offset, blkcnt, buf) != blkcnt)
+		return -1;
+
+	return 0;
+}
+
+static int ums_write_sector(struct ums_device *ums_dev,
+			    ulong start, lbaint_t blkcnt, const void *buf)
+{
+	if (ums_dev->mmc->block_dev.block_write(ums_dev->dev_num,
+			start + ums_dev->offset, blkcnt, buf) != blkcnt)
+		return -1;
+
+	return 0;
+}
+
+static void ums_get_capacity(struct ums_device *ums_dev,
+			     long long int *capacity)
+{
+	long long int tmp_capacity;
+
+	tmp_capacity = (long long int) ((ums_dev->offset + ums_dev->part_size)
+					* SECTOR_SIZE);
+	*capacity = ums_dev->mmc->capacity - tmp_capacity;
+}
+
+static struct ums_board_info ums_board = {
+	.read_sector = ums_read_sector,
+	.write_sector = ums_write_sector,
+	.get_capacity = ums_get_capacity,
+	.name = "TRATS UMS disk",
+	.ums_dev = {
+		.mmc = NULL,
+		.dev_num = 0,
+		.offset = 0,
+		.part_size = 0.
+	},
+};
+
+struct ums_board_info *board_ums_init(unsigned int dev_num, unsigned int offset,
+				      unsigned int part_size)
+{
+	struct mmc *mmc;
+
+	mmc = find_mmc_device(dev_num);
+	if (!mmc)
+		return NULL;
+
+	ums_board.ums_dev.mmc = mmc;
+	ums_board.ums_dev.dev_num = dev_num;
+	ums_board.ums_dev.offset = offset;
+	ums_board.ums_dev.part_size = part_size;
+
+	return &ums_board;
+}
+#endif

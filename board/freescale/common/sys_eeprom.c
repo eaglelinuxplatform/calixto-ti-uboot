@@ -1,19 +1,16 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright 2006, 2008-2009, 2011 Freescale Semiconductor
  * York Sun (yorksun@freescale.com)
  * Haiying Wang (haiying.wang@freescale.com)
  * Timur Tabi (timur@freescale.com)
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
 #include <command.h>
-#include <env.h>
 #include <i2c.h>
-#include <init.h>
 #include <linux/ctype.h>
-#include <linux/delay.h>
-#include <u-boot/crc.h>
 
 #ifdef CONFIG_SYS_I2C_EEPROM_CCID
 #include "../common/eeprom.h"
@@ -21,11 +18,7 @@
 #endif
 
 #ifdef CONFIG_SYS_I2C_EEPROM_NXID
-/* some boards with non-256-bytes EEPROM have special define */
-/* for MAX_NUM_PORTS in board-specific file */
-#ifndef MAX_NUM_PORTS
-#define MAX_NUM_PORTS	16
-#endif
+#define MAX_NUM_PORTS	23
 #define NXID_VERSION	1
 #endif
 
@@ -61,9 +54,8 @@ static struct __attribute__ ((__packed__)) eeprom {
 	u8 res_1[21];     /* 0x2b - 0x3f Reserved */
 	u8 mac_count;     /* 0x40        Number of MAC addresses */
 	u8 mac_flag;      /* 0x41        MAC table flags */
-	u8 mac[MAX_NUM_PORTS][6];     /* 0x42 - 0xa1 MAC addresses */
-	u8 res_2[90];     /* 0xa2 - 0xfb Reserved */
-	u32 crc;          /* 0xfc - 0xff CRC32 checksum */
+	u8 mac[MAX_NUM_PORTS][6];     /* 0x42 - x MAC addresses */
+	u32 crc;          /* x+1         CRC32 checksum */
 #endif
 } e;
 
@@ -93,7 +85,7 @@ static void show_eeprom(void)
 	/* EEPROM tag ID, either CCID or NXID */
 #ifdef CONFIG_SYS_I2C_EEPROM_NXID
 	printf("ID: %c%c%c%c v%u\n", e.id[0], e.id[1], e.id[2], e.id[3],
-	       be32_to_cpu(e.version));
+		be32_to_cpu(e.version));
 #else
 	printf("ID: %c%c%c%c\n", e.id[0], e.id[1], e.id[2], e.id[3]);
 #endif
@@ -117,7 +109,7 @@ static void show_eeprom(void)
 		e.date[3] & 0x80 ? "PM" : "");
 
 	/* Show MAC addresses  */
-	for (i = 0; i < min(e.mac_count, (u8)MAX_NUM_PORTS); i++) {
+	for (i = 0; i < min(e.mac_count, MAX_NUM_PORTS); i++) {
 
 		u8 *p = e.mac[i];
 
@@ -152,43 +144,22 @@ static int read_eeprom(void)
 {
 	int ret;
 #ifdef CONFIG_SYS_EEPROM_BUS_NUM
-#if !CONFIG_IS_ENABLED(DM_I2C)
 	unsigned int bus;
-#endif
 #endif
 
 	if (has_been_read)
 		return 0;
 
 #ifdef CONFIG_SYS_EEPROM_BUS_NUM
-#if !CONFIG_IS_ENABLED(DM_I2C)
 	bus = i2c_get_bus_num();
 	i2c_set_bus_num(CONFIG_SYS_EEPROM_BUS_NUM);
 #endif
-#endif
 
-#if !CONFIG_IS_ENABLED(DM_I2C)
-	ret = i2c_read(CONFIG_SYS_I2C_EEPROM_ADDR, 0,
-		       CONFIG_SYS_I2C_EEPROM_ADDR_LEN,
-		       (void *)&e, sizeof(e));
-#else
-	struct udevice *dev;
-#ifdef CONFIG_SYS_EEPROM_BUS_NUM
-	ret = i2c_get_chip_for_busnum(CONFIG_SYS_EEPROM_BUS_NUM,
-				      CONFIG_SYS_I2C_EEPROM_ADDR,
-				      CONFIG_SYS_I2C_EEPROM_ADDR_LEN, &dev);
-#else
-	ret = i2c_get_chip_for_busnum(0, CONFIG_SYS_I2C_EEPROM_ADDR,
-				      CONFIG_SYS_I2C_EEPROM_ADDR_LEN, &dev);
-#endif
-	if (!ret)
-		ret = dm_i2c_read(dev, 0, (void *)&e, sizeof(e));
-#endif
+	ret = i2c_read(CONFIG_SYS_I2C_EEPROM_ADDR, 0, CONFIG_SYS_I2C_EEPROM_ADDR_LEN,
+		(void *)&e, sizeof(e));
 
 #ifdef CONFIG_SYS_EEPROM_BUS_NUM
-#if !CONFIG_IS_ENABLED(DM_I2C)
 	i2c_set_bus_num(bus);
-#endif
 #endif
 
 #ifdef DEBUG
@@ -223,9 +194,7 @@ static int prog_eeprom(void)
 	int i;
 	void *p;
 #ifdef CONFIG_SYS_EEPROM_BUS_NUM
-#if !CONFIG_IS_ENABLED(DM_I2C)
 	unsigned int bus;
-#endif
 #endif
 
 	/* Set the reserved values to 0xFF   */
@@ -237,11 +206,9 @@ static int prog_eeprom(void)
 #endif
 	update_crc();
 
-#if !CONFIG_IS_ENABLED(DM_I2C)
 #ifdef CONFIG_SYS_EEPROM_BUS_NUM
 	bus = i2c_get_bus_num();
 	i2c_set_bus_num(CONFIG_SYS_EEPROM_BUS_NUM);
-#endif
 #endif
 
 	/*
@@ -250,26 +217,8 @@ static int prog_eeprom(void)
 	 * complete a given write.
 	 */
 	for (i = 0, p = &e; i < sizeof(e); i += 8, p += 8) {
-#if !CONFIG_IS_ENABLED(DM_I2C)
-		ret = i2c_write(CONFIG_SYS_I2C_EEPROM_ADDR, i,
-				CONFIG_SYS_I2C_EEPROM_ADDR_LEN,
-				p, min((int)(sizeof(e) - i), 8));
-#else
-		struct udevice *dev;
-#ifdef CONFIG_SYS_EEPROM_BUS_NUM
-		ret = i2c_get_chip_for_busnum(CONFIG_SYS_EEPROM_BUS_NUM,
-					      CONFIG_SYS_I2C_EEPROM_ADDR,
-					      CONFIG_SYS_I2C_EEPROM_ADDR_LEN,
-					      &dev);
-#else
-		ret = i2c_get_chip_for_busnum(0, CONFIG_SYS_I2C_EEPROM_ADDR,
-					      CONFIG_SYS_I2C_EEPROM_ADDR_LEN,
-					      &dev);
-#endif
-		if (!ret)
-			ret = dm_i2c_write(dev, i, p, min((int)(sizeof(e) - i),
-							  8));
-#endif
+		ret = i2c_write(CONFIG_SYS_I2C_EEPROM_ADDR, i, CONFIG_SYS_I2C_EEPROM_ADDR_LEN,
+			p, min((sizeof(e) - i), 8));
 		if (ret)
 			break;
 		udelay(5000);	/* 5ms write cycle timing */
@@ -279,33 +228,14 @@ static int prog_eeprom(void)
 		/* Verify the write by reading back the EEPROM and comparing */
 		struct eeprom e2;
 
-#if !CONFIG_IS_ENABLED(DM_I2C)
 		ret = i2c_read(CONFIG_SYS_I2C_EEPROM_ADDR, 0,
-			       CONFIG_SYS_I2C_EEPROM_ADDR_LEN,
-			       (void *)&e2, sizeof(e2));
-#else
-		struct udevice *dev;
-#ifdef CONFIG_SYS_EEPROM_BUS_NUM
-		ret = i2c_get_chip_for_busnum(CONFIG_SYS_EEPROM_BUS_NUM,
-					      CONFIG_SYS_I2C_EEPROM_ADDR,
-					      CONFIG_SYS_I2C_EEPROM_ADDR_LEN,
-					      &dev);
-#else
-		ret = i2c_get_chip_for_busnum(0, CONFIG_SYS_I2C_EEPROM_ADDR,
-					      CONFIG_SYS_I2C_EEPROM_ADDR_LEN,
-					      &dev);
-#endif
-		if (!ret)
-			ret = dm_i2c_read(dev, 0, (void *)&e2, sizeof(e2));
-#endif
+			CONFIG_SYS_I2C_EEPROM_ADDR_LEN, (void *)&e2, sizeof(e2));
 		if (!ret && memcmp(&e, &e2, sizeof(e)))
 			ret = -1;
 	}
 
-#if !CONFIG_IS_ENABLED(DM_I2C)
 #ifdef CONFIG_SYS_EEPROM_BUS_NUM
 	i2c_set_bus_num(bus);
-#endif
 #endif
 
 	if (ret) {
@@ -378,7 +308,7 @@ static void set_mac_address(unsigned int index, const char *string)
 	}
 
 	for (i = 0; *p && (i < 6); i++) {
-		e.mac[index][i] = hextoul(p, &p);
+		e.mac[index][i] = simple_strtoul(p, &p, 16);
 		if (*p == ':')
 			p++;
 	}
@@ -386,7 +316,7 @@ static void set_mac_address(unsigned int index, const char *string)
 	update_crc();
 }
 
-int do_mac(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
+int do_mac(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 {
 	char cmd;
 
@@ -405,7 +335,7 @@ int do_mac(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 	if (cmd == 'i') {
 #ifdef CONFIG_SYS_I2C_EEPROM_NXID
 		memcpy(e.id, "NXID", sizeof(e.id));
-		e.version = cpu_to_be32(NXID_VERSION);
+		e.version = NXID_VERSION;
 #else
 		memcpy(e.id, "CCID", sizeof(e.id));
 #endif
@@ -452,11 +382,11 @@ int do_mac(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 		set_date(argv[2]);
 		break;
 	case 'p':	/* MAC table size */
-		e.mac_count = hextoul(argv[2], NULL);
+		e.mac_count = simple_strtoul(argv[2], NULL, 16);
 		update_crc();
 		break;
 	case '0' ... '9':	/* "mac 0" through "mac 22" */
-		set_mac_address(dectoul(argv[1], NULL), argv[2]);
+		set_mac_address(simple_strtoul(argv[1], NULL, 10), argv[2]);
 		break;
 	case 'h':	/* help */
 	default:
@@ -491,13 +421,13 @@ int mac_read_from_eeprom(void)
 
 	if (read_eeprom()) {
 		printf("Read failed.\n");
-		return 0;
+		return -1;
 	}
 
 	if (!is_valid) {
 		printf("Invalid ID (%02x %02x %02x %02x)\n",
 		       e.id[0], e.id[1], e.id[2], e.id[3]);
-		return 0;
+		return -1;
 	}
 
 #ifdef CONFIG_SYS_I2C_EEPROM_NXID
@@ -513,7 +443,7 @@ int mac_read_from_eeprom(void)
 	crcp = (void *)&e + crc_offset;
 	if (crc != be32_to_cpu(*crcp)) {
 		printf("CRC mismatch (%08x != %08x)\n", crc, be32_to_cpu(e.crc));
-		return 0;
+		return -1;
 	}
 
 #ifdef CONFIG_SYS_I2C_EEPROM_NXID
@@ -526,7 +456,7 @@ int mac_read_from_eeprom(void)
 		memset(e.mac[8], 0xff, 6);
 #endif
 
-	for (i = 0; i < min(e.mac_count, (u8)MAX_NUM_PORTS); i++) {
+	for (i = 0; i < min(e.mac_count, MAX_NUM_PORTS); i++) {
 		if (memcmp(&e.mac[i], "\0\0\0\0\0\0", 6) &&
 		    memcmp(&e.mac[i], "\xFF\xFF\xFF\xFF\xFF\xFF", 6)) {
 			char ethaddr[18];
@@ -543,14 +473,14 @@ int mac_read_from_eeprom(void)
 			/* Only initialize environment variables that are blank
 			 * (i.e. have not yet been set)
 			 */
-			if (!env_get(enetvar))
-				env_set(enetvar, ethaddr);
+			if (!getenv(enetvar))
+				setenv(enetvar, ethaddr);
 		}
 	}
 
 #ifdef CONFIG_SYS_I2C_EEPROM_NXID
 	printf("%c%c%c%c v%u\n", e.id[0], e.id[1], e.id[2], e.id[3],
-	       be32_to_cpu(e.version));
+		be32_to_cpu(e.version));
 #else
 	printf("%c%c%c%c\n", e.id[0], e.id[1], e.id[2], e.id[3]);
 #endif
@@ -561,7 +491,7 @@ int mac_read_from_eeprom(void)
 	 * that at boot time, U-Boot will still say "NXID v0".
 	 */
 	if (e.version == 0) {
-		e.version = cpu_to_be32(NXID_VERSION);
+		e.version = NXID_VERSION;
 		update_crc();
 	}
 #endif
@@ -594,25 +524,8 @@ unsigned int get_cpu_board_revision(void)
 		u8 minor;         /* 0x05        Board revision, minor */
 	} be;
 
-#if !CONFIG_IS_ENABLED(DM_I2C)
 	i2c_read(CONFIG_SYS_I2C_EEPROM_ADDR, 0, CONFIG_SYS_I2C_EEPROM_ADDR_LEN,
 		(void *)&be, sizeof(be));
-#else
-	struct udevice *dev;
-	int ret;
-#ifdef CONFIG_SYS_EEPROM_BUS_NUM
-	ret = i2c_get_chip_for_busnum(CONFIG_SYS_EEPROM_BUS_NUM,
-				      CONFIG_SYS_I2C_EEPROM_ADDR,
-				      CONFIG_SYS_I2C_EEPROM_ADDR_LEN,
-				      &dev);
-#else
-	ret = i2c_get_chip_for_busnum(0, CONFIG_SYS_I2C_EEPROM_ADDR,
-				      CONFIG_SYS_I2C_EEPROM_ADDR_LEN,
-				      &dev);
-#endif
-	if (!ret)
-		dm_i2c_read(dev, 0, (void *)&be, sizeof(be));
-#endif
 
 	if (be.id != (('C' << 24) | ('C' << 16) | ('I' << 8) | 'D'))
 		return MPC85XX_CPU_BOARD_REV(0, 0);

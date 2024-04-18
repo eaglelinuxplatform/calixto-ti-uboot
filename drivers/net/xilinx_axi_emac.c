@@ -1,29 +1,22 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
- * Copyright (C) 2021 Waymo LLC
  * Copyright (C) 2011 Michal Simek <monstr@monstr.eu>
  * Copyright (C) 2011 PetaLogix
  * Copyright (C) 2010 Xilinx, Inc. All rights reserved.
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <config.h>
 #include <common.h>
-#include <cpu_func.h>
-#include <display_options.h>
-#include <dm.h>
-#include <dm/device_compat.h>
-#include <log.h>
 #include <net.h>
 #include <malloc.h>
-#include <asm/global_data.h>
 #include <asm/io.h>
 #include <phy.h>
 #include <miiphy.h>
-#include <wait_bit.h>
-#include <linux/delay.h>
-#include <eth_phy.h>
 
-DECLARE_GLOBAL_DATA_PTR;
+#if !defined(CONFIG_PHYLIB)
+# error AXI_ETHERNET requires PHYLIB
+#endif
 
 /* Link setup */
 #define XAE_EMMC_LINKSPEED_MASK	0xC0000000 /* Link speed */
@@ -58,8 +51,6 @@ DECLARE_GLOBAL_DATA_PTR;
 
 #define XAE_MDIO_DIV_DFT	29	/* Default MDIO clock divisor */
 
-#define XAXIDMA_BD_STS_ACTUAL_LEN_MASK	0x007FFFFF /* Actual len */
-
 /* DMA macros */
 /* Bitmasks of XAXIDMA_CR_OFFSET register */
 #define XAXIDMA_CR_RUNSTOP_MASK	0x00000001 /* Start/stop DMA channel */
@@ -77,66 +68,35 @@ DECLARE_GLOBAL_DATA_PTR;
 #define XAXIDMA_BD_CTRL_TXSOF_MASK	0x08000000 /* First tx packet */
 #define XAXIDMA_BD_CTRL_TXEOF_MASK	0x04000000 /* Last tx packet */
 
-/* Bitmasks for XXV Ethernet MAC */
-#define XXV_TC_TX_MASK		0x00000001
-#define XXV_TC_FCS_MASK		0x00000002
-#define XXV_RCW1_RX_MASK	0x00000001
-#define XXV_RCW1_FCS_MASK	0x00000002
-
-#define DMAALIGN		128
-#define XXV_MIN_PKT_SIZE	60
+#define DMAALIGN	128
 
 static u8 rxframe[PKTSIZE_ALIGN] __attribute((aligned(DMAALIGN)));
-static u8 txminframe[XXV_MIN_PKT_SIZE] __attribute((aligned(DMAALIGN)));
-
-enum emac_variant {
-	EMAC_1G = 0,
-	EMAC_10G_25G = 1,
-};
 
 /* Reflect dma offsets */
 struct axidma_reg {
 	u32 control; /* DMACR */
 	u32 status; /* DMASR */
-	u32 current; /* CURDESC low 32 bit */
-	u32 current_hi; /* CURDESC high 32 bit */
-	u32 tail; /* TAILDESC low 32 bit */
-	u32 tail_hi; /* TAILDESC high 32 bit */
-};
-
-/* Platform data structures */
-struct axidma_plat {
-	struct eth_pdata eth_pdata;
-	struct axidma_reg *dmatx;
-	struct axidma_reg *dmarx;
-	int pcsaddr;
-	int phyaddr;
-	u8 eth_hasnobuf;
-	int phy_of_handle;
-	enum emac_variant mactype;
+	u32 current; /* CURDESC */
+	u32 reserved;
+	u32 tail; /* TAILDESC */
 };
 
 /* Private driver structures */
 struct axidma_priv {
 	struct axidma_reg *dmatx;
 	struct axidma_reg *dmarx;
-	int pcsaddr;
 	int phyaddr;
-	struct axi_regs *iobase;
-	phy_interface_t interface;
+
 	struct phy_device *phydev;
 	struct mii_dev *bus;
-	u8 eth_hasnobuf;
-	int phy_of_handle;
-	enum emac_variant mactype;
 };
 
 /* BD descriptors */
 struct axidma_bd {
-	u32 next_desc;	/* Next descriptor pointer */
-	u32 next_desc_msb;
-	u32 buf_addr;	/* Buffer address */
-	u32 buf_addr_msb;
+	u32 next;	/* Next descriptor pointer */
+	u32 reserved1;
+	u32 phys;	/* Buffer address */
+	u32 reserved2;
 	u32 reserved3;
 	u32 reserved4;
 	u32 cntrl;	/* Control */
@@ -175,14 +135,6 @@ struct axi_regs {
 	u32 uaw1; /* 0x704: Unicast address word 1 */
 };
 
-struct xxv_axi_regs {
-	u32 gt_reset;	/* 0x0 */
-	u32 reserved[2];
-	u32 tc;		/* 0xC: Tx Configuration */
-	u32 reserved2;
-	u32 rcw1;	/* 0x14: Rx Configuration Word 1 */
-};
-
 /* Use MII register 1 (MII status register) to detect PHY */
 #define PHY_DETECT_REG  1
 
@@ -195,12 +147,13 @@ struct xxv_axi_regs {
  */
 #define PHY_DETECT_MASK 0x1808
 
-static inline int mdio_wait(struct axi_regs *regs)
+static inline int mdio_wait(struct eth_device *dev)
 {
+	struct axi_regs *regs = (struct axi_regs *)dev->iobase;
 	u32 timeout = 200;
 
 	/* Wait till MDIO interface is ready to accept a new transaction. */
-	while (timeout && (!(readl(&regs->mdio_mcr)
+	while (timeout && (!(in_be32(&regs->mdio_mcr)
 						& XAE_MDIO_MCR_READY_MASK))) {
 		timeout--;
 		udelay(1);
@@ -212,29 +165,13 @@ static inline int mdio_wait(struct axi_regs *regs)
 	return 0;
 }
 
-/**
- * axienet_dma_write -	Memory mapped Axi DMA register Buffer Descriptor write.
- * @bd:		pointer to BD descriptor structure
- * @desc:	Address offset of DMA descriptors
- *
- * This function writes the value into the corresponding Axi DMA register.
- */
-static inline void axienet_dma_write(struct axidma_bd *bd, u32 *desc)
+static u32 phyread(struct eth_device *dev, u32 phyaddress, u32 registernum,
+								u16 *val)
 {
-#if defined(CONFIG_PHYS_64BIT)
-	writeq((unsigned long)bd, desc);
-#else
-	writel((u32)bd, desc);
-#endif
-}
-
-static u32 phyread(struct axidma_priv *priv, u32 phyaddress, u32 registernum,
-		   u16 *val)
-{
-	struct axi_regs *regs = priv->iobase;
+	struct axi_regs *regs = (struct axi_regs *)dev->iobase;
 	u32 mdioctrlreg = 0;
 
-	if (mdio_wait(regs))
+	if (mdio_wait(dev))
 		return 1;
 
 	mdioctrlreg = ((phyaddress << XAE_MDIO_MCR_PHYAD_SHIFT) &
@@ -244,23 +181,23 @@ static u32 phyread(struct axidma_priv *priv, u32 phyaddress, u32 registernum,
 			XAE_MDIO_MCR_INITIATE_MASK |
 			XAE_MDIO_MCR_OP_READ_MASK;
 
-	writel(mdioctrlreg, &regs->mdio_mcr);
+	out_be32(&regs->mdio_mcr, mdioctrlreg);
 
-	if (mdio_wait(regs))
+	if (mdio_wait(dev))
 		return 1;
 
 	/* Read data */
-	*val = readl(&regs->mdio_mrd);
+	*val = in_be32(&regs->mdio_mrd);
 	return 0;
 }
 
-static u32 phywrite(struct axidma_priv *priv, u32 phyaddress, u32 registernum,
-		    u32 data)
+static u32 phywrite(struct eth_device *dev, u32 phyaddress, u32 registernum,
+								u32 data)
 {
-	struct axi_regs *regs = priv->iobase;
+	struct axi_regs *regs = (struct axi_regs *)dev->iobase;
 	u32 mdioctrlreg = 0;
 
-	if (mdio_wait(regs))
+	if (mdio_wait(dev))
 		return 1;
 
 	mdioctrlreg = ((phyaddress << XAE_MDIO_MCR_PHYAD_SHIFT) &
@@ -271,23 +208,23 @@ static u32 phywrite(struct axidma_priv *priv, u32 phyaddress, u32 registernum,
 			XAE_MDIO_MCR_OP_WRITE_MASK;
 
 	/* Write data */
-	writel(data, &regs->mdio_mwd);
+	out_be32(&regs->mdio_mwd, data);
 
-	writel(mdioctrlreg, &regs->mdio_mcr);
+	out_be32(&regs->mdio_mcr, mdioctrlreg);
 
-	if (mdio_wait(regs))
+	if (mdio_wait(dev))
 		return 1;
 
 	return 0;
 }
 
-static int axiemac_phy_init(struct udevice *dev)
+/* Setting axi emac and phy to proper setting */
+static int setup_phy(struct eth_device *dev)
 {
 	u16 phyreg;
-	int i;
-	u32 ret;
-	struct axidma_priv *priv = dev_get_priv(dev);
-	struct axi_regs *regs = priv->iobase;
+	u32 i, speed, emmc_reg, ret;
+	struct axidma_priv *priv = dev->priv;
+	struct axi_regs *regs = (struct axi_regs *)dev->iobase;
 	struct phy_device *phydev;
 
 	u32 supported = SUPPORTED_10baseT_Half |
@@ -297,128 +234,31 @@ static int axiemac_phy_init(struct udevice *dev)
 			SUPPORTED_1000baseT_Half |
 			SUPPORTED_1000baseT_Full;
 
-	/* Set default MDIO divisor */
-	writel(XAE_MDIO_DIV_DFT | XAE_MDIO_MC_MDIOEN_MASK, &regs->mdio_mc);
-
-	if (IS_ENABLED(CONFIG_DM_ETH_PHY))
-		priv->phyaddr = eth_phy_get_addr(dev);
-
-	/*
-	 * Set address of PCS/PMA PHY to the one pointed by phy-handle for
-	 * backward compatibility.
-	 */
-	if (priv->phyaddr != -1 && priv->pcsaddr == 0)
-		priv->pcsaddr = priv->phyaddr;
-
 	if (priv->phyaddr == -1) {
 		/* Detect the PHY address */
 		for (i = 31; i >= 0; i--) {
-			ret = phyread(priv, i, PHY_DETECT_REG, &phyreg);
+			ret = phyread(dev, i, PHY_DETECT_REG, &phyreg);
 			if (!ret && (phyreg != 0xFFFF) &&
 			((phyreg & PHY_DETECT_MASK) == PHY_DETECT_MASK)) {
 				/* Found a valid PHY address */
 				priv->phyaddr = i;
 				debug("axiemac: Found valid phy address, %x\n",
-				      i);
+									phyreg);
 				break;
 			}
 		}
 	}
 
 	/* Interface - look at tsec */
-	phydev = phy_connect(priv->bus, priv->phyaddr, dev, priv->interface);
-	if (IS_ERR_OR_NULL(phydev)) {
-		dev_err(dev, "phy_connect() failed\n");
-		return -ENODEV;
-	}
+	phydev = phy_connect(priv->bus, priv->phyaddr, dev, 0);
 
 	phydev->supported &= supported;
 	phydev->advertising = phydev->supported;
 	priv->phydev = phydev;
-	if (priv->phy_of_handle)
-		priv->phydev->node = offset_to_ofnode(priv->phy_of_handle);
 	phy_config(phydev);
-
-	return 0;
-}
-
-static int pcs_pma_startup(struct axidma_priv *priv)
-{
-	u32 rc, retry_cnt = 0;
-	u16 mii_reg;
-
-	rc = phyread(priv, priv->pcsaddr, MII_BMCR, &mii_reg);
-	if (rc)
-		goto failed_mdio;
-
-	if (!(mii_reg & BMCR_ANENABLE)) {
-		mii_reg |= BMCR_ANENABLE;
-		if (phywrite(priv, priv->pcsaddr, MII_BMCR, mii_reg))
-			goto failed_mdio;
-	}
-
-	/*
-	 * Check the internal PHY status and warn user if the link between it
-	 * and the external PHY is not obtained.
-	 */
-	debug("axiemac: waiting for link status of the PCS/PMA PHY");
-	while (retry_cnt * 10 < PHY_ANEG_TIMEOUT) {
-		rc = phyread(priv, priv->pcsaddr, MII_BMSR, &mii_reg);
-		if ((mii_reg & BMSR_LSTATUS) && mii_reg != 0xffff && !rc) {
-			debug(".Done\n");
-			return 0;
-		}
-		if ((retry_cnt++ % 10) == 0)
-			debug(".");
-		mdelay(10);
-	}
-	debug("\n");
-	printf("axiemac: Warning, PCS/PMA PHY@%d is not ready, link is down\n",
-	       priv->pcsaddr);
-	return 1;
-failed_mdio:
-	printf("axiemac: MDIO to the PCS/PMA PHY has failed\n");
-	return 1;
-}
-
-/* Setting axi emac and phy to proper setting */
-static int setup_phy(struct udevice *dev)
-{
-	u16 temp;
-	u32 speed, emmc_reg, ret;
-	struct axidma_priv *priv = dev_get_priv(dev);
-	struct axi_regs *regs = priv->iobase;
-	struct phy_device *phydev = priv->phydev;
-
-	if (priv->interface == PHY_INTERFACE_MODE_SGMII) {
-		/*
-		 * In SGMII cases the isolate bit might set
-		 * after DMA and ethernet resets and hence
-		 * check and clear if set.
-		 */
-		ret = phyread(priv, priv->pcsaddr, MII_BMCR, &temp);
-		if (ret)
-			return 0;
-		if (temp & BMCR_ISOLATE) {
-			temp &= ~BMCR_ISOLATE;
-			ret = phywrite(priv, priv->pcsaddr, MII_BMCR, temp);
-			if (ret)
-				return 0;
-		}
-	}
-
 	if (phy_startup(phydev)) {
 		printf("axiemac: could not initialize PHY %s\n",
 		       phydev->dev->name);
-		return 0;
-	}
-	if (priv->interface == PHY_INTERFACE_MODE_SGMII ||
-	    priv->interface == PHY_INTERFACE_MODE_1000BASEX) {
-		if (pcs_pma_startup(priv))
-			return 0;
-	}
-	if (!phydev->link) {
-		printf("%s: No link.\n", phydev->dev->name);
 		return 0;
 	}
 
@@ -437,12 +277,12 @@ static int setup_phy(struct udevice *dev)
 	}
 
 	/* Setup the emac for the phy speed */
-	emmc_reg = readl(&regs->emmc);
+	emmc_reg = in_be32(&regs->emmc);
 	emmc_reg &= ~XAE_EMMC_LINKSPEED_MASK;
 	emmc_reg |= speed;
 
 	/* Write new speed setting out to Axi Ethernet */
-	writel(emmc_reg, &regs->emmc);
+	out_be32(&regs->emmc, emmc_reg);
 
 	/*
 	* Setting the operating speed of the MAC needs a delay. There
@@ -455,39 +295,27 @@ static int setup_phy(struct udevice *dev)
 }
 
 /* STOP DMA transfers */
-static void axiemac_stop(struct udevice *dev)
+static void axiemac_halt(struct eth_device *dev)
 {
-	struct axidma_priv *priv = dev_get_priv(dev);
+	struct axidma_priv *priv = dev->priv;
 	u32 temp;
 
 	/* Stop the hardware */
-	temp = readl(&priv->dmatx->control);
+	temp = in_be32(&priv->dmatx->control);
 	temp &= ~XAXIDMA_CR_RUNSTOP_MASK;
-	writel(temp, &priv->dmatx->control);
+	out_be32(&priv->dmatx->control, temp);
 
-	temp = readl(&priv->dmarx->control);
+	temp = in_be32(&priv->dmarx->control);
 	temp &= ~XAXIDMA_CR_RUNSTOP_MASK;
-	writel(temp, &priv->dmarx->control);
+	out_be32(&priv->dmarx->control, temp);
 
 	debug("axiemac: Halted\n");
 }
 
-static int xxv_axi_ethernet_init(struct axidma_priv *priv)
+static int axi_ethernet_init(struct eth_device *dev)
 {
-	struct xxv_axi_regs *regs = (struct xxv_axi_regs *)priv->iobase;
-
-	writel(readl(&regs->rcw1) | XXV_RCW1_FCS_MASK, &regs->rcw1);
-	writel(readl(&regs->tc) | XXV_TC_FCS_MASK, &regs->tc);
-	writel(readl(&regs->tc) | XXV_TC_TX_MASK, &regs->tc);
-	writel(readl(&regs->rcw1) | XXV_RCW1_RX_MASK, &regs->rcw1);
-
-	return 0;
-}
-
-static int axi_ethernet_init(struct axidma_priv *priv)
-{
-	struct axi_regs *regs = priv->iobase;
-	int err;
+	struct axi_regs *regs = (struct axi_regs *)dev->iobase;
+	u32 timeout = 200;
 
 	/*
 	 * Check the status of the MgtRdy bit in the interrupt status
@@ -495,80 +323,70 @@ static int axi_ethernet_init(struct axidma_priv *priv)
 	 * for the Sgmii and 1000BaseX PHY interfaces. No other register reads
 	 * will be valid until this bit is valid.
 	 * The bit is always a 1 for all other PHY interfaces.
-	 * Interrupt status and enable registers are not available in non
-	 * processor mode and hence bypass in this mode
 	 */
-	if (!priv->eth_hasnobuf) {
-		err = wait_for_bit_le32(&regs->is, XAE_INT_MGTRDY_MASK,
-					true, 200, false);
-		if (err) {
-			printf("%s: Timeout\n", __func__);
-			return 1;
-		}
-
-		/*
-		 * Stop the device and reset HW
-		 * Disable interrupts
-		 */
-		writel(0, &regs->ie);
+	while (timeout && (!(in_be32(&regs->is) & XAE_INT_MGTRDY_MASK))) {
+		timeout--;
+		udelay(1);
+	}
+	if (!timeout) {
+		printf("%s: Timeout\n", __func__);
+		return 1;
 	}
 
+	/* Stop the device and reset HW */
+	/* Disable interrupts */
+	out_be32(&regs->ie, 0);
+
 	/* Disable the receiver */
-	writel(readl(&regs->rcw1) & ~XAE_RCW1_RX_MASK, &regs->rcw1);
+	out_be32(&regs->rcw1, in_be32(&regs->rcw1) & ~XAE_RCW1_RX_MASK);
 
 	/*
 	 * Stopping the receiver in mid-packet causes a dropped packet
 	 * indication from HW. Clear it.
 	 */
-	if (!priv->eth_hasnobuf) {
-		/* Set the interrupt status register to clear the interrupt */
-		writel(XAE_INT_RXRJECT_MASK, &regs->is);
-	}
+	/* Set the interrupt status register to clear the interrupt */
+	out_be32(&regs->is, XAE_INT_RXRJECT_MASK);
 
 	/* Setup HW */
 	/* Set default MDIO divisor */
-	writel(XAE_MDIO_DIV_DFT | XAE_MDIO_MC_MDIOEN_MASK, &regs->mdio_mc);
+	out_be32(&regs->mdio_mc, XAE_MDIO_DIV_DFT | XAE_MDIO_MC_MDIOEN_MASK);
 
 	debug("axiemac: InitHw done\n");
 	return 0;
 }
 
-static int axiemac_write_hwaddr(struct udevice *dev)
+static int axiemac_setup_mac(struct eth_device *dev)
 {
-	struct eth_pdata *pdata = dev_get_plat(dev);
-	struct axidma_priv *priv = dev_get_priv(dev);
-	struct axi_regs *regs = priv->iobase;
-
-	if (priv->mactype != EMAC_1G)
-		return 0;
+	struct axi_regs *regs = (struct axi_regs *)dev->iobase;
 
 	/* Set the MAC address */
-	int val = ((pdata->enetaddr[3] << 24) | (pdata->enetaddr[2] << 16) |
-		(pdata->enetaddr[1] << 8) | (pdata->enetaddr[0]));
-	writel(val, &regs->uaw0);
+	int val = ((dev->enetaddr[3] << 24) | (dev->enetaddr[2] << 16) |
+		(dev->enetaddr[1] << 8) | (dev->enetaddr[0]));
+	out_be32(&regs->uaw0, val);
 
-	val = (pdata->enetaddr[5] << 8) | pdata->enetaddr[4];
-	val |= readl(&regs->uaw1) & ~XAE_UAW1_UNICASTADDR_MASK;
-	writel(val, &regs->uaw1);
+	val = (dev->enetaddr[5] << 8) | dev->enetaddr[4] ;
+	val |= in_be32(&regs->uaw1) & ~XAE_UAW1_UNICASTADDR_MASK;
+	out_be32(&regs->uaw1, val);
 	return 0;
 }
 
 /* Reset DMA engine */
-static void axi_dma_init(struct axidma_priv *priv)
+static void axi_dma_init(struct eth_device *dev)
 {
+	struct axidma_priv *priv = dev->priv;
 	u32 timeout = 500;
 
 	/* Reset the engine so the hardware starts from a known state */
-	writel(XAXIDMA_CR_RESET_MASK, &priv->dmatx->control);
-	writel(XAXIDMA_CR_RESET_MASK, &priv->dmarx->control);
+	out_be32(&priv->dmatx->control, XAXIDMA_CR_RESET_MASK);
+	out_be32(&priv->dmarx->control, XAXIDMA_CR_RESET_MASK);
 
 	/* At the initialization time, hardware should finish reset quickly */
 	while (timeout--) {
 		/* Check transmit/receive channel */
 		/* Reset is done when the reset bit is low */
-		if (!((readl(&priv->dmatx->control) |
-				readl(&priv->dmarx->control))
-						& XAXIDMA_CR_RESET_MASK)) {
+		if (!(in_be32(&priv->dmatx->control) |
+				in_be32(&priv->dmarx->control))
+						& XAXIDMA_CR_RESET_MASK) {
 			break;
 		}
 	}
@@ -576,9 +394,10 @@ static void axi_dma_init(struct axidma_priv *priv)
 		printf("%s: Timeout\n", __func__);
 }
 
-static int axiemac_start(struct udevice *dev)
+static int axiemac_init(struct eth_device *dev, bd_t * bis)
 {
-	struct axidma_priv *priv = dev_get_priv(dev);
+	struct axidma_priv *priv = dev->priv;
+	struct axi_regs *regs = (struct axi_regs *)dev->iobase;
 	u32 temp;
 
 	debug("axiemac: Init started\n");
@@ -588,126 +407,95 @@ static int axiemac_start(struct udevice *dev)
 	 * reset, and since AXIDMA reset line is connected to AxiEthernet, this
 	 * would ensure a reset of AxiEthernet.
 	 */
-	axi_dma_init(priv);
+	axi_dma_init(dev);
 
 	/* Initialize AxiEthernet hardware. */
-	if (priv->mactype == EMAC_1G) {
-		if (axi_ethernet_init(priv))
-			return -1;
-	} else {
-		if (xxv_axi_ethernet_init(priv))
-			return -1;
-	}
+	if (axi_ethernet_init(dev))
+		return -1;
 
 	/* Disable all RX interrupts before RxBD space setup */
-	temp = readl(&priv->dmarx->control);
+	temp = in_be32(&priv->dmarx->control);
 	temp &= ~XAXIDMA_IRQ_ALL_MASK;
-	writel(temp, &priv->dmarx->control);
+	out_be32(&priv->dmarx->control, temp);
 
 	/* Start DMA RX channel. Now it's ready to receive data.*/
-	axienet_dma_write(&rx_bd, &priv->dmarx->current);
+	out_be32(&priv->dmarx->current, (u32)&rx_bd);
 
 	/* Setup the BD. */
 	memset(&rx_bd, 0, sizeof(rx_bd));
-	rx_bd.next_desc = lower_32_bits((unsigned long)&rx_bd);
-	rx_bd.buf_addr = lower_32_bits((unsigned long)&rxframe);
-#if defined(CONFIG_PHYS_64BIT)
-	rx_bd.next_desc_msb = upper_32_bits((unsigned long)&rx_bd);
-	rx_bd.buf_addr_msb = upper_32_bits((unsigned long)&rxframe);
-#endif
+	rx_bd.next = (u32)&rx_bd;
+	rx_bd.phys = (u32)&rxframe;
 	rx_bd.cntrl = sizeof(rxframe);
 	/* Flush the last BD so DMA core could see the updates */
-	flush_cache((phys_addr_t)&rx_bd, sizeof(rx_bd));
+	flush_cache((u32)&rx_bd, sizeof(rx_bd));
 
 	/* It is necessary to flush rxframe because if you don't do it
 	 * then cache can contain uninitialized data */
-	flush_cache((phys_addr_t)&rxframe, sizeof(rxframe));
+	flush_cache((u32)&rxframe, sizeof(rxframe));
 
 	/* Start the hardware */
-	temp = readl(&priv->dmarx->control);
+	temp = in_be32(&priv->dmarx->control);
 	temp |= XAXIDMA_CR_RUNSTOP_MASK;
-	writel(temp, &priv->dmarx->control);
+	out_be32(&priv->dmarx->control, temp);
 
 	/* Rx BD is ready - start */
-	axienet_dma_write(&rx_bd, &priv->dmarx->tail);
+	out_be32(&priv->dmarx->tail, (u32)&rx_bd);
 
-	if (priv->mactype == EMAC_1G) {
-		struct axi_regs *regs = priv->iobase;
-		/* Enable TX */
-		writel(XAE_TC_TX_MASK, &regs->tc);
-		/* Enable RX */
-		writel(XAE_RCW1_RX_MASK, &regs->rcw1);
+	/* Enable TX */
+	out_be32(&regs->tc, XAE_TC_TX_MASK);
+	/* Enable RX */
+	out_be32(&regs->rcw1, XAE_RCW1_RX_MASK);
 
-		/* PHY setup */
-		if (!setup_phy(dev)) {
-			axiemac_stop(dev);
-			return -1;
-		}
-	} else {
-		struct xxv_axi_regs *regs = (struct xxv_axi_regs *)priv->iobase;
-		/* Enable TX */
-		writel(readl(&regs->tc) | XXV_TC_TX_MASK, &regs->tc);
-
-		/* Enable RX */
-		writel(readl(&regs->rcw1) | XXV_RCW1_RX_MASK, &regs->rcw1);
+	/* PHY setup */
+	if (!setup_phy(dev)) {
+		axiemac_halt(dev);
+		return -1;
 	}
 
 	debug("axiemac: Init complete\n");
 	return 0;
 }
 
-static int axiemac_send(struct udevice *dev, void *ptr, int len)
+static int axiemac_send(struct eth_device *dev, void *ptr, int len)
 {
-	struct axidma_priv *priv = dev_get_priv(dev);
+	struct axidma_priv *priv = dev->priv;
 	u32 timeout;
 
 	if (len > PKTSIZE_ALIGN)
 		len = PKTSIZE_ALIGN;
 
-	/* If size is less than min packet size, pad to min size */
-	if (priv->mactype == EMAC_10G_25G && len < XXV_MIN_PKT_SIZE) {
-		memset(txminframe, 0, XXV_MIN_PKT_SIZE);
-		memcpy(txminframe, ptr, len);
-		len = XXV_MIN_PKT_SIZE;
-		ptr = txminframe;
-	}
-
 	/* Flush packet to main memory to be trasfered by DMA */
-	flush_cache((phys_addr_t)ptr, len);
+	flush_cache((u32)ptr, len);
 
 	/* Setup Tx BD */
 	memset(&tx_bd, 0, sizeof(tx_bd));
 	/* At the end of the ring, link the last BD back to the top */
-	tx_bd.next_desc = lower_32_bits((unsigned long)&tx_bd);
-	tx_bd.buf_addr = lower_32_bits((unsigned long)ptr);
-#if defined(CONFIG_PHYS_64BIT)
-	tx_bd.next_desc_msb = upper_32_bits((unsigned long)&tx_bd);
-	tx_bd.buf_addr_msb = upper_32_bits((unsigned long)ptr);
-#endif
+	tx_bd.next = (u32)&tx_bd;
+	tx_bd.phys = (u32)ptr;
 	/* Save len */
 	tx_bd.cntrl = len | XAXIDMA_BD_CTRL_TXSOF_MASK |
 						XAXIDMA_BD_CTRL_TXEOF_MASK;
 
 	/* Flush the last BD so DMA core could see the updates */
-	flush_cache((phys_addr_t)&tx_bd, sizeof(tx_bd));
+	flush_cache((u32)&tx_bd, sizeof(tx_bd));
 
-	if (readl(&priv->dmatx->status) & XAXIDMA_HALTED_MASK) {
+	if (in_be32(&priv->dmatx->status) & XAXIDMA_HALTED_MASK) {
 		u32 temp;
-		axienet_dma_write(&tx_bd, &priv->dmatx->current);
+		out_be32(&priv->dmatx->current, (u32)&tx_bd);
 		/* Start the hardware */
-		temp = readl(&priv->dmatx->control);
+		temp = in_be32(&priv->dmatx->control);
 		temp |= XAXIDMA_CR_RUNSTOP_MASK;
-		writel(temp, &priv->dmatx->control);
+		out_be32(&priv->dmatx->control, temp);
 	}
 
 	/* Start transfer */
-	axienet_dma_write(&tx_bd, &priv->dmatx->tail);
+	out_be32(&priv->dmatx->tail, (u32)&tx_bd);
 
 	/* Wait for transmission to complete */
 	debug("axiemac: Waiting for tx to be done\n");
 	timeout = 200;
-	while (timeout && (!(readl(&priv->dmatx->status) &
-			(XAXIDMA_IRQ_DELAY_MASK | XAXIDMA_IRQ_IOC_MASK)))) {
+	while (timeout && (!in_be32(&priv->dmatx->status) &
+			(XAXIDMA_IRQ_DELAY_MASK | XAXIDMA_IRQ_IOC_MASK))) {
 		timeout--;
 		udelay(1);
 	}
@@ -720,15 +508,16 @@ static int axiemac_send(struct udevice *dev, void *ptr, int len)
 	return 0;
 }
 
-static int isrxready(struct axidma_priv *priv)
+static int isrxready(struct eth_device *dev)
 {
 	u32 status;
+	struct axidma_priv *priv = dev->priv;
 
 	/* Read pending interrupts */
-	status = readl(&priv->dmarx->status);
+	status = in_be32(&priv->dmarx->status);
 
 	/* Acknowledge pending interrupts */
-	writel(status & XAXIDMA_IRQ_ALL_MASK, &priv->dmarx->status);
+	out_be32(&priv->dmarx->status, status & XAXIDMA_IRQ_ALL_MASK);
 
 	/*
 	 * If Reception done interrupt is asserted, call RX call back function
@@ -740,38 +529,30 @@ static int isrxready(struct axidma_priv *priv)
 	return 0;
 }
 
-static int axiemac_recv(struct udevice *dev, int flags, uchar **packetp)
+static int axiemac_recv(struct eth_device *dev)
 {
 	u32 length;
-	struct axidma_priv *priv = dev_get_priv(dev);
+	struct axidma_priv *priv = dev->priv;
 	u32 temp;
 
 	/* Wait for an incoming packet */
-	if (!isrxready(priv))
-		return -1;
+	if (!isrxready(dev))
+		return 0;
 
 	debug("axiemac: RX data ready\n");
 
 	/* Disable IRQ for a moment till packet is handled */
-	temp = readl(&priv->dmarx->control);
+	temp = in_be32(&priv->dmarx->control);
 	temp &= ~XAXIDMA_IRQ_ALL_MASK;
-	writel(temp, &priv->dmarx->control);
-	if (!priv->eth_hasnobuf  && priv->mactype == EMAC_1G)
-		length = rx_bd.app4 & 0xFFFF; /* max length mask */
-	else
-		length = rx_bd.status & XAXIDMA_BD_STS_ACTUAL_LEN_MASK;
+	out_be32(&priv->dmarx->control, temp);
 
+	length = rx_bd.app4 & 0xFFFF; /* max length mask */
 #ifdef DEBUG
 	print_buffer(&rxframe, &rxframe[0], 1, length, 16);
 #endif
-
-	*packetp = rxframe;
-	return length;
-}
-
-static int axiemac_free_pkt(struct udevice *dev, uchar *packet, int length)
-{
-	struct axidma_priv *priv = dev_get_priv(dev);
+	/* Pass the received frame up for processing */
+	if (length)
+		NetReceive(rxframe, length);
 
 #ifdef DEBUG
 	/* It is useful to clear buffer to be sure that it is consistent */
@@ -780,189 +561,92 @@ static int axiemac_free_pkt(struct udevice *dev, uchar *packet, int length)
 	/* Setup RxBD */
 	/* Clear the whole buffer and setup it again - all flags are cleared */
 	memset(&rx_bd, 0, sizeof(rx_bd));
-	rx_bd.next_desc = lower_32_bits((unsigned long)&rx_bd);
-	rx_bd.buf_addr = lower_32_bits((unsigned long)&rxframe);
-#if defined(CONFIG_PHYS_64BIT)
-	rx_bd.next_desc_msb = upper_32_bits((unsigned long)&rx_bd);
-	rx_bd.buf_addr_msb = upper_32_bits((unsigned long)&rxframe);
-#endif
+	rx_bd.next = (u32)&rx_bd;
+	rx_bd.phys = (u32)&rxframe;
 	rx_bd.cntrl = sizeof(rxframe);
 
 	/* Write bd to HW */
-	flush_cache((phys_addr_t)&rx_bd, sizeof(rx_bd));
+	flush_cache((u32)&rx_bd, sizeof(rx_bd));
 
 	/* It is necessary to flush rxframe because if you don't do it
 	 * then cache will contain previous packet */
-	flush_cache((phys_addr_t)&rxframe, sizeof(rxframe));
+	flush_cache((u32)&rxframe, sizeof(rxframe));
 
 	/* Rx BD is ready - start again */
-	axienet_dma_write(&rx_bd, &priv->dmarx->tail);
+	out_be32(&priv->dmarx->tail, (u32)&rx_bd);
 
 	debug("axiemac: RX completed, framelength = %d\n", length);
 
+	return length;
+}
+
+static int axiemac_miiphy_read(const char *devname, uchar addr,
+							uchar reg, ushort *val)
+{
+	struct eth_device *dev = eth_get_dev();
+	u32 ret;
+
+	ret = phyread(dev, addr, reg, val);
+	debug("axiemac: Read MII 0x%x, 0x%x, 0x%x\n", addr, reg, *val);
+	return ret;
+}
+
+static int axiemac_miiphy_write(const char *devname, uchar addr,
+							uchar reg, ushort val)
+{
+	struct eth_device *dev = eth_get_dev();
+
+	debug("axiemac: Write MII 0x%x, 0x%x, 0x%x\n", addr, reg, val);
+	return phywrite(dev, addr, reg, val);
+}
+
+static int axiemac_bus_reset(struct mii_dev *bus)
+{
+	debug("axiemac: Bus reset\n");
 	return 0;
 }
 
-static int axiemac_miiphy_read(struct mii_dev *bus, int addr,
-			       int devad, int reg)
+int xilinx_axiemac_initialize(bd_t *bis, unsigned long base_addr,
+							unsigned long dma_addr)
 {
-	int ret;
-	u16 value;
+	struct eth_device *dev;
+	struct axidma_priv *priv;
 
-	ret = phyread(bus->priv, addr, reg, &value);
-	debug("axiemac: Read MII 0x%x, 0x%x, 0x%x, %d\n", addr, reg,
-	      value, ret);
-	return value;
-}
+	dev = calloc(1, sizeof(struct eth_device));
+	if (dev == NULL)
+		return -1;
 
-static int axiemac_miiphy_write(struct mii_dev *bus, int addr, int devad,
-				int reg, u16 value)
-{
-	debug("axiemac: Write MII 0x%x, 0x%x, 0x%x\n", addr, reg, value);
-	return phywrite(bus->priv, addr, reg, value);
-}
+	dev->priv = calloc(1, sizeof(struct axidma_priv));
+	if (dev->priv == NULL) {
+		free(dev);
+		return -1;
+	}
+	priv = dev->priv;
 
-static int axi_emac_probe(struct udevice *dev)
-{
-	struct axidma_plat *plat = dev_get_plat(dev);
-	struct eth_pdata *pdata = &plat->eth_pdata;
-	struct axidma_priv *priv = dev_get_priv(dev);
-	int ret;
+	sprintf(dev->name, "aximac.%lx", base_addr);
 
-	priv->iobase = (struct axi_regs *)pdata->iobase;
-	priv->dmatx = plat->dmatx;
+	dev->iobase = base_addr;
+	priv->dmatx = (struct axidma_reg *)dma_addr;
 	/* RX channel offset is 0x30 */
-	priv->dmarx = (struct axidma_reg *)((phys_addr_t)priv->dmatx + 0x30);
-	priv->mactype = plat->mactype;
+	priv->dmarx = (struct axidma_reg *)(dma_addr + 0x30);
+	dev->init = axiemac_init;
+	dev->halt = axiemac_halt;
+	dev->send = axiemac_send;
+	dev->recv = axiemac_recv;
+	dev->write_hwaddr = axiemac_setup_mac;
 
-	if (priv->mactype == EMAC_1G) {
-		priv->eth_hasnobuf = plat->eth_hasnobuf;
-		priv->pcsaddr = plat->pcsaddr;
-		priv->phyaddr = plat->phyaddr;
-		priv->phy_of_handle = plat->phy_of_handle;
-		priv->interface = pdata->phy_interface;
+#ifdef CONFIG_PHY_ADDR
+	priv->phyaddr = CONFIG_PHY_ADDR;
+#else
+	priv->phyaddr = -1;
+#endif
 
-		if (IS_ENABLED(CONFIG_DM_ETH_PHY))
-			priv->bus = eth_phy_get_mdio_bus(dev);
+	eth_register(dev);
 
-		if (!priv->bus) {
-			priv->bus = mdio_alloc();
-			priv->bus->read = axiemac_miiphy_read;
-			priv->bus->write = axiemac_miiphy_write;
-			priv->bus->priv = priv;
-
-			ret = mdio_register_seq(priv->bus, dev_seq(dev));
-			if (ret)
-				return ret;
-		}
-
-		if (IS_ENABLED(CONFIG_DM_ETH_PHY))
-			eth_phy_set_mdio_bus(dev, priv->bus);
-
-		axiemac_phy_init(dev);
-	}
-
-	printf("AXI EMAC: %lx, phyaddr %d, interface %s\n", (ulong)pdata->iobase,
-	       priv->phyaddr, phy_string_for_interface(pdata->phy_interface));
-
-	return 0;
+#if defined(CONFIG_MII) || defined(CONFIG_CMD_MII) || defined(CONFIG_PHYLIB)
+	miiphy_register(dev->name, axiemac_miiphy_read, axiemac_miiphy_write);
+	priv->bus = miiphy_get_dev_by_name(dev->name);
+	priv->bus->reset = axiemac_bus_reset;
+#endif
+	return 1;
 }
-
-static int axi_emac_remove(struct udevice *dev)
-{
-	struct axidma_priv *priv = dev_get_priv(dev);
-
-	if (priv->mactype == EMAC_1G) {
-		free(priv->phydev);
-		mdio_unregister(priv->bus);
-		mdio_free(priv->bus);
-	}
-
-	return 0;
-}
-
-static const struct eth_ops axi_emac_ops = {
-	.start			= axiemac_start,
-	.send			= axiemac_send,
-	.recv			= axiemac_recv,
-	.free_pkt		= axiemac_free_pkt,
-	.stop			= axiemac_stop,
-	.write_hwaddr		= axiemac_write_hwaddr,
-};
-
-static int axi_emac_of_to_plat(struct udevice *dev)
-{
-	struct axidma_plat *plat = dev_get_plat(dev);
-	struct eth_pdata *pdata = &plat->eth_pdata;
-	int node = dev_of_offset(dev);
-	int offset = 0;
-
-	pdata->iobase = dev_read_addr(dev);
-	plat->mactype = dev_get_driver_data(dev);
-
-	offset = fdtdec_lookup_phandle(gd->fdt_blob, node,
-				       "axistream-connected");
-	if (offset <= 0) {
-		printf("%s: axistream is not found\n", __func__);
-		return -EINVAL;
-	}
-	plat->dmatx = (struct axidma_reg *)fdtdec_get_addr_size_auto_parent
-		      (gd->fdt_blob, 0, offset, "reg", 0, NULL, false);
-	if (!plat->dmatx) {
-		printf("%s: axi_dma register space not found\n", __func__);
-		return -EINVAL;
-	}
-
-	if (plat->mactype == EMAC_1G) {
-		plat->phyaddr = -1;
-		/* PHYAD 0 always redirects to the PCS/PMA PHY */
-		plat->pcsaddr = 0;
-
-		offset = fdtdec_lookup_phandle(gd->fdt_blob, node,
-					       "phy-handle");
-		if (offset > 0) {
-			if (!(IS_ENABLED(CONFIG_DM_ETH_PHY)))
-				plat->phyaddr = fdtdec_get_int(gd->fdt_blob,
-							       offset,
-							       "reg", -1);
-			plat->phy_of_handle = offset;
-		}
-
-		pdata->phy_interface = dev_read_phy_mode(dev);
-		if (pdata->phy_interface == PHY_INTERFACE_MODE_NA)
-			return -EINVAL;
-
-		plat->eth_hasnobuf = fdtdec_get_bool(gd->fdt_blob, node,
-						     "xlnx,eth-hasnobuf");
-
-		if (pdata->phy_interface == PHY_INTERFACE_MODE_SGMII ||
-		    pdata->phy_interface == PHY_INTERFACE_MODE_1000BASEX) {
-			offset = fdtdec_lookup_phandle(gd->fdt_blob, node,
-						       "pcs-handle");
-			if (offset > 0) {
-				plat->pcsaddr = fdtdec_get_int(gd->fdt_blob,
-							       offset, "reg", -1);
-			}
-		}
-	}
-
-	return 0;
-}
-
-static const struct udevice_id axi_emac_ids[] = {
-	{ .compatible = "xlnx,axi-ethernet-1.00.a", .data = (uintptr_t)EMAC_1G },
-	{ .compatible = "xlnx,xxv-ethernet-1.0", .data = (uintptr_t)EMAC_10G_25G },
-	{ }
-};
-
-U_BOOT_DRIVER(axi_emac) = {
-	.name	= "axi_emac",
-	.id	= UCLASS_ETH,
-	.of_match = axi_emac_ids,
-	.of_to_plat = axi_emac_of_to_plat,
-	.probe	= axi_emac_probe,
-	.remove	= axi_emac_remove,
-	.ops	= &axi_emac_ops,
-	.priv_auto	= sizeof(struct axidma_priv),
-	.plat_auto	= sizeof(struct axidma_plat),
-};

@@ -1,12 +1,12 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright 2008,2010 Freescale Semiconductor, Inc.
  *	Dave Liu <daveliu@freescale.com>
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <config.h>
 #include <common.h>
-#include <log.h>
 #include <asm/io.h>
 #include <asm/immap_85xx.h>
 #include <asm/fsl_serdes.h>
@@ -71,34 +71,22 @@ static u8 serdes2_cfg_tbl[][SRDS2_MAX_LANES] = {
 
 int is_serdes_configured(enum srds_prtcl device)
 {
-	int ret;
-
-	if (!(serdes1_prtcl_map & (1 << NONE)))
-		fsl_serdes_init();
-
-	ret = (1 << device) & serdes1_prtcl_map;
+	int ret = (1 << device) & serdes1_prtcl_map;
 
 	if (ret)
 		return ret;
-
-	if (!(serdes2_prtcl_map & (1 << NONE)))
-		fsl_serdes_init();
 
 	return (1 << device) & serdes2_prtcl_map;
 }
 
 void fsl_serdes_init(void)
 {
-	void *guts = (void *)(CFG_SYS_MPC85xx_GUTS_ADDR);
-	void *sd = (void *)CFG_SYS_MPC85xx_SERDES2_ADDR;
+	void *guts = (void *)(CONFIG_SYS_MPC85xx_GUTS_ADDR);
+	void *sd = (void *)CONFIG_SYS_MPC85xx_SERDES2_ADDR;
 	u32 pordevsr = in_be32(guts + GUTS_PORDEVSR_OFFS);
 	u32 srds1_io_sel, srds2_io_sel;
 	u32 tmp;
 	int lane;
-
-	if (serdes1_prtcl_map & (1 << NONE) &&
-	    serdes2_prtcl_map & (1 << NONE))
-		return;
 
 	srds1_io_sel = (pordevsr & MPC85xx_PORDEVSR_IO_SEL) >>
 				MPC85xx_PORDEVSR_IO_SEL_SHIFT;
@@ -233,9 +221,6 @@ void fsl_serdes_init(void)
 		serdes1_prtcl_map |= (1 << lane_prtcl);
 	}
 
-	/* Set the first bit to indicate serdes has been initialized */
-	serdes1_prtcl_map |= (1 << NONE);
-
 	if (srds2_io_sel >= ARRAY_SIZE(serdes2_cfg_tbl)) {
 		printf("Invalid PORDEVSR[SRDS2_IO_SEL] = %d\n", srds2_io_sel);
 		return;
@@ -245,7 +230,4 @@ void fsl_serdes_init(void)
 		enum srds_prtcl lane_prtcl = serdes2_cfg_tbl[srds2_io_sel][lane];
 		serdes2_prtcl_map |= (1 << lane_prtcl);
 	}
-
-	/* Set the first bit to indicate serdes has been initialized */
-	serdes2_prtcl_map |= (1 << NONE);
 }

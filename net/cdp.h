@@ -1,4 +1,3 @@
-/* SPDX-License-Identifier: GPL-2.0 */
 /*
  *	Copied from Linux Monitor (LiMon) - Networking.
  *
@@ -14,7 +13,7 @@
 #ifndef __CDP_H__
 #define __CDP_H__
 
-void cdp_start(void);
+void CDPStart(void);
 /* Process a received CDP packet */
 void cdp_receive(const uchar *pkt, unsigned len);
 

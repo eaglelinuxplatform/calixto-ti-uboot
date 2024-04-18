@@ -1,44 +1,58 @@
-# SPDX-License-Identifier: GPL-2.0+
 #
 # (C) Copyright 2006
 # Wolfgang Denk, DENX Software Engineering, wd@denx.de.
 #
 # (C) Copyright 2000
 # Murray Jensen <Murray.Jensen@csiro.au>
+#
+# SPDX-License-Identifier:	GPL-2.0+
+#
 
-ifneq ($(HOSTOS),cygwin)
+include $(TOPDIR)/config.mk
 
-# Location of a usable BFD library, where we define "usable" as
-# "built for ${HOST}, supports ${TARGET}".  Sensible values are
-# - When cross-compiling: the root of the cross-environment
-# - Linux/ppc (native): /usr
-# - NetBSD/ppc (native): you lose ... (must extract these from the
-#   binutils build directory, plus the native and U-Boot include
-#   files don't like each other)
+BINS	= gdbsend gdbcont
 
-ifeq ($(HOSTOS),darwin)
-BFD_ROOT_DIR =		/usr/local/tools
-else
-ifeq ($(HOSTARCH),$(ARCH))
-# native
-BFD_ROOT_DIR =		/usr
-else
-#BFD_ROOT_DIR =		/LinuxPPC/CDK		# Linux/i386
-#BFD_ROOT_DIR =		/usr/pkg/cross		# NetBSD/i386
-BFD_ROOT_DIR =		/opt/powerpc
-endif
-endif
+COBJS	= gdbsend.o gdbcont.o error.o remote.o serial.o
+
+HOSTOBJS := $(addprefix $(obj),$(COBJS))
+HOSTSRCS := $(COBJS:.o=.c)
+BINS	:= $(addprefix $(obj),$(BINS))
 
 #
 # Use native tools and options
 #
-HOST_EXTRACFLAGS := -I$(BFD_ROOT_DIR)/include -pedantic
+HOSTCPPFLAGS = -I$(BFD_ROOT_DIR)/include
 
-hostprogs-y := gdbsend gdbcont
+HOSTOS := $(shell uname -s | sed -e 's/\([Cc][Yy][Gg][Ww][Ii][Nn]\).*/cygwin/')
 
-gdbsend-objs := gdbsend.o error.o remote.o serial.o
-gdbcont-objs := gdbcont.o error.o remote.o serial.o
+ifeq ($(HOSTOS),cygwin)
 
-always := $(hostprogs-y)
+all:
+$(obj).depend:
+
+else	# ! CYGWIN
+
+all:	$(obj).depend $(BINS)
+
+$(obj)gdbsend:	$(obj)gdbsend.o $(obj)error.o $(obj)remote.o $(obj)serial.o
+		$(HOSTCC) $(HOSTCFLAGS) $(HOSTLDFLAGS) -o $@ $^
+
+$(obj)gdbcont:	$(obj)gdbcont.o $(obj)error.o $(obj)remote.o $(obj)serial.o
+		$(HOSTCC) $(HOSTCFLAGS) $(HOSTLDFLAGS) -o $@ $^
+
+clean:
+	rm -f $(HOSTOBJS)
+
+distclean:	clean
+	rm -f $(BINS) $(obj)core $(obj)*.bak $(obj).depend
+
+#########################################################################
+
+# defines $(obj).depend target
+include $(SRCTREE)/rules.mk
+
+sinclude $(obj).depend
+
+#########################################################################
 
 endif	# cygwin

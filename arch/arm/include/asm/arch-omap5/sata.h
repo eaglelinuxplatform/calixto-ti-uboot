@@ -1,9 +1,10 @@
-/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * SATA Wrapper Register map
  *
  * (C) Copyright 2013
  * Texas Instruments, <www.ti.com>
+ *
+ * SPDX-License-Identifier:     GPL-2.0+
  */
 
 #ifndef _TI_SATA_H
@@ -34,5 +35,14 @@
 #define TI_SATA_IDLE_NO				(0x1 << 2)
 #define TI_SATA_IDLE_SMART_WAKE			(0x3 << 2)
 #define TI_SATA_IDLE_SMART			(0x2 << 2)
+
+#ifdef CONFIG_SCSI_AHCI_PLAT
+int omap_sata_init(void);
+#else
+static inline int omap_sata_init(void)
+{
+	return 0;
+}
+#endif /* CONFIG_SCSI_AHCI_PLAT */
 
 #endif /* _TI_SATA_H */

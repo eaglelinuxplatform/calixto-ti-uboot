@@ -1,4 +1,3 @@
-/* SPDX-License-Identifier: GPL-2.0 */
 /*
  * Generic ULPI interface.
  *
@@ -13,6 +12,10 @@
  *
  * Original Copyrights follow:
  * Copyright (C) 2010 Nokia Corporation
+ *
+ * This software is distributed under the terms of the GNU General
+ * Public License ("GPL") as published by the Free Software Foundation,
+ * version 2 of that License.
  */
 
 #ifndef __USB_ULPI_H__
@@ -20,8 +23,8 @@
 
 #define ULPI_ERROR	(1 << 8) /* overflow from any register value */
 
-#ifndef CFG_USB_ULPI_TIMEOUT
-#define CFG_USB_ULPI_TIMEOUT 1000	/* timeout in us */
+#ifndef CONFIG_USB_ULPI_TIMEOUT
+#define CONFIG_USB_ULPI_TIMEOUT 1000	/* timeout in us */
 #endif
 
 /*
@@ -31,7 +34,7 @@
  * be extended from this structure
  */
 struct ulpi_viewport {
-	uintptr_t viewport_addr;
+	u32 viewport_addr;
 	u32 port_num;
 };
 
@@ -122,7 +125,6 @@ int ulpi_reset(struct ulpi_viewport *ulpi_vp);
 /*
  * Write to the ULPI PHY register via the viewport.
  * @reg		- the ULPI register (one of the fields in struct ulpi_regs).
- *		  Due to ULPI design, only 8 lsb of address are used.
  * @value	- the value - only 8 lower bits are used, others ignored.
  *
  * returns 0 on success, ULPI_ERROR on failure.
@@ -132,7 +134,6 @@ int ulpi_write(struct ulpi_viewport *ulpi_vp, u8 *reg, u32 value);
 /*
  * Read the ULPI PHY register content via the viewport.
  * @reg		- the ULPI register (one of the fields in struct ulpi_regs).
- *		  Due to ULPI design, only 8 lsb of address are used.
  *
  * returns register content on success, ULPI_ERROR on failure.
  */

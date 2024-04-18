@@ -1,15 +1,14 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright 2010-2011 Freescale Semiconductor, Inc.
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <config.h>
 #include <common.h>
-#include <log.h>
 #include <asm/io.h>
 #include <asm/immap_85xx.h>
 #include <asm/fsl_serdes.h>
-#include <linux/delay.h>
 
 typedef struct serdes_85xx {
 	u32	srdscr0;	/* 0x00 - SRDS Control Register 0 */
@@ -42,25 +41,19 @@ static u8 serdes1_cfg_tbl[][SRDS1_MAX_LANES] = {
 
 int is_serdes_configured(enum srds_prtcl prtcl)
 {
-	if (!(serdes1_prtcl_map & (1 << NONE)))
-		fsl_serdes_init();
-
 	return (1 << prtcl) & serdes1_prtcl_map;
 }
 
 void fsl_serdes_init(void)
 {
-	ccsr_gur_t *gur = (void *)(CFG_SYS_MPC85xx_GUTS_ADDR);
-	serdes_85xx_t *serdes = (void *)CFG_SYS_MPC85xx_SERDES1_ADDR;
+	ccsr_gur_t *gur = (void *)(CONFIG_SYS_MPC85xx_GUTS_ADDR);
+	serdes_85xx_t *serdes = (void *)CONFIG_SYS_MPC85xx_SERDES1_ADDR;
 
 	u32 pordevsr = in_be32(&gur->pordevsr);
 	u32 srds_cfg = (pordevsr & MPC85xx_PORDEVSR_IO_SEL) >>
 				MPC85xx_PORDEVSR_IO_SEL_SHIFT;
 	int lane;
 	u32 mask, val;
-
-	if (serdes1_prtcl_map & (1 << NONE))
-		return;
 
 	debug("PORDEVSR[IO_SEL_SRDS] = %x\n", srds_cfg);
 
@@ -73,9 +66,6 @@ void fsl_serdes_init(void)
 		enum srds_prtcl lane_prtcl = serdes1_cfg_tbl[srds_cfg][lane];
 		serdes1_prtcl_map |= (1 << lane_prtcl);
 	}
-
-	/* Set the first bit to indicate serdes has been initialized */
-	serdes1_prtcl_map |= (1 << NONE);
 
 	/* Init SERDES Receiver electrical idle detection control for PCIe */
 

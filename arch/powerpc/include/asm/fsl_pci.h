@@ -1,6 +1,7 @@
-/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Copyright 2007,2009-2012 Freescale Semiconductor, Inc.
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef __FSL_PCI_H_
@@ -17,8 +18,25 @@
 /* Freescale-specific PCI config registers */
 #define FSL_PCI_PBFR		0x44
 
+#ifdef CONFIG_SYS_FSL_PCI_VER_3_X
+/* Currently only the PCIe capability is used, so hardcode the offset.
+ * if more capabilities need to be justified, the capability link method
+ * should be applied here
+ */
+#define FSL_PCIE_CAP_ID		0x70
+#define PCI_DCR		0x78    /* PCIe Device Control Register */
+#define PCI_DSR		0x7a    /* PCIe Device Status Register */
+#define PCI_LSR		0x82    /* PCIe Link Status Register */
+#define PCI_LCR		0x80    /* PCIe Link Control Register */
+#else
+#define FSL_PCIE_CAP_ID		0x4c
+#define PCI_DCR		0x54    /* PCIe Device Control Register */
+#define PCI_DSR		0x56    /* PCIe Device Status Register */
+#define PCI_LSR		0x5e    /* PCIe Link Status Register */
+#define PCI_LCR		0x5c    /* PCIe Link Control Register */
+#endif
+
 #define FSL_PCIE_CFG_RDY	0x4b0
-#define FSL_PCIE_V3_CFG_RDY	0x1
 #define FSL_PROG_IF_AGENT	0x1
 
 #define PCI_LTSSM	0x404   /* PCIe Link Training, Status State Machine */
@@ -30,7 +48,7 @@ void fsl_pci_config_unlock(struct pci_controller *hose);
 void ft_fsl_pci_setup(void *blob, const char *compat, unsigned long ctrl_addr);
 
 /*
- * Common PCI/PCIE Register structure for mpc85xx
+ * Common PCI/PCIE Register structure for mpc85xx and mpc86xx
  */
 
 /*
@@ -78,9 +96,7 @@ typedef struct ccsr_pci {
 	u32	pme_msg_dis;	/* 0x024 - PCIE PME & message disable register */
 	u32	pme_msg_int_en;	/* 0x028 - PCIE PME & message interrupt enable register */
 	u32	pm_command;	/* 0x02c - PCIE PM Command register */
-	char	res3[2188];	/*     (0x8bc - 0x30 = 2188) */
-	u32	dbi_ro_wr_en;	/* 0x8bc - DBI read only write enable reg */
-	char	res4[824];	/*     (0xbf8 - 0x8c0 = 824) */
+	char	res4[3016];	/*     (- #xbf8	 #x30)3016 */
 	u32	block_rev1;	/* 0xbf8 - PCIE Block Revision register 1 */
 	u32	block_rev2;	/* 0xbfc - PCIE Block Revision register 2 */
 
@@ -193,35 +209,35 @@ int fsl_pcie_init_board(int busno);
 
 #define SET_STD_PCI_INFO(x, num) \
 {			\
-	x.regs = CFG_SYS_PCI##num##_ADDR;	\
-	x.mem_bus = CFG_SYS_PCI##num##_MEM_BUS; \
-	x.mem_phys = CFG_SYS_PCI##num##_MEM_PHYS; \
-	x.mem_size = CFG_SYS_PCI##num##_MEM_SIZE; \
-	x.io_bus = CFG_SYS_PCI##num##_IO_BUS; \
-	x.io_phys = CFG_SYS_PCI##num##_IO_PHYS; \
-	x.io_size = CFG_SYS_PCI##num##_IO_SIZE; \
+	x.regs = CONFIG_SYS_PCI##num##_ADDR;	\
+	x.mem_bus = CONFIG_SYS_PCI##num##_MEM_BUS; \
+	x.mem_phys = CONFIG_SYS_PCI##num##_MEM_PHYS; \
+	x.mem_size = CONFIG_SYS_PCI##num##_MEM_SIZE; \
+	x.io_bus = CONFIG_SYS_PCI##num##_IO_BUS; \
+	x.io_phys = CONFIG_SYS_PCI##num##_IO_PHYS; \
+	x.io_size = CONFIG_SYS_PCI##num##_IO_SIZE; \
 	x.law = LAW_TRGT_IF_PCI_##num; \
 	x.pci_num = num; \
 }
 
 #define SET_STD_PCIE_INFO(x, num) \
 {			\
-	x.regs = CFG_SYS_PCIE##num##_ADDR;	\
-	x.mem_bus = CFG_SYS_PCIE##num##_MEM_BUS; \
-	x.mem_phys = CFG_SYS_PCIE##num##_MEM_PHYS; \
-	x.mem_size = CFG_SYS_PCIE##num##_MEM_SIZE; \
-	x.io_bus = CFG_SYS_PCIE##num##_IO_BUS; \
-	x.io_phys = CFG_SYS_PCIE##num##_IO_PHYS; \
-	x.io_size = CFG_SYS_PCIE##num##_IO_SIZE; \
+	x.regs = CONFIG_SYS_PCIE##num##_ADDR;	\
+	x.mem_bus = CONFIG_SYS_PCIE##num##_MEM_BUS; \
+	x.mem_phys = CONFIG_SYS_PCIE##num##_MEM_PHYS; \
+	x.mem_size = CONFIG_SYS_PCIE##num##_MEM_SIZE; \
+	x.io_bus = CONFIG_SYS_PCIE##num##_IO_BUS; \
+	x.io_phys = CONFIG_SYS_PCIE##num##_IO_PHYS; \
+	x.io_size = CONFIG_SYS_PCIE##num##_IO_SIZE; \
 	x.law = LAW_TRGT_IF_PCIE_##num; \
 	x.pci_num = num; \
 }
 
 #define __FT_FSL_PCI_SETUP(blob, compat, num) \
-	ft_fsl_pci_setup(blob, compat, CFG_SYS_PCI##num##_ADDR)
+	ft_fsl_pci_setup(blob, compat, CONFIG_SYS_PCI##num##_ADDR)
 
 #define __FT_FSL_PCIE_SETUP(blob, compat, num) \
-	ft_fsl_pci_setup(blob, compat, CFG_SYS_PCIE##num##_ADDR)
+	ft_fsl_pci_setup(blob, compat, CONFIG_SYS_PCIE##num##_ADDR)
 
 #define FT_FSL_PCI1_SETUP __FT_FSL_PCI_SETUP(blob, FSL_PCI_COMPAT, 1)
 #define FT_FSL_PCI2_SETUP __FT_FSL_PCI_SETUP(blob, FSL_PCI_COMPAT, 2)

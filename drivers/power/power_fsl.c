@@ -1,7 +1,8 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  *  Copyright (C) 2011 Samsung Electronics
  *  Lukasz Majewski <l.majewski@samsung.com>
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -10,9 +11,9 @@
 #include <fsl_pmic.h>
 #include <errno.h>
 
-#if defined(CONFIG_POWER_FSL_MC13892)
+#if defined(CONFIG_PMIC_FSL_MC13892)
 #define FSL_PMIC_I2C_LENGTH	3
-#elif defined(CONFIG_POWER_FSL_MC34704)
+#elif defined(CONFIG_PMIC_FSL_MC34704)
 #define FSL_PMIC_I2C_LENGTH	1
 #endif
 
@@ -35,20 +36,23 @@ int pmic_init(unsigned char bus)
 
 	p->name = name;
 	p->number_of_regs = PMIC_NUM_OF_REGS;
-	p->bus = bus;
 
 #if defined(CONFIG_POWER_SPI)
 	p->interface = PMIC_SPI;
-	p->hw.spi.cs = CFG_FSL_PMIC_CS;
-	p->hw.spi.clk = CFG_FSL_PMIC_CLK;
-	p->hw.spi.mode = CFG_FSL_PMIC_MODE;
-	p->hw.spi.bitlen = CFG_FSL_PMIC_BITLEN;
+	p->bus = CONFIG_FSL_PMIC_BUS;
+	p->hw.spi.cs = CONFIG_FSL_PMIC_CS;
+	p->hw.spi.clk = CONFIG_FSL_PMIC_CLK;
+	p->hw.spi.mode = CONFIG_FSL_PMIC_MODE;
+	p->hw.spi.bitlen = CONFIG_FSL_PMIC_BITLEN;
 	p->hw.spi.flags = SPI_XFER_BEGIN | SPI_XFER_END;
 	p->hw.spi.prepare_tx = pmic_spi_prepare_tx;
 #elif defined(CONFIG_POWER_I2C)
 	p->interface = PMIC_I2C;
-	p->hw.i2c.addr = CFG_SYS_FSL_PMIC_I2C_ADDR;
+	p->hw.i2c.addr = CONFIG_SYS_FSL_PMIC_I2C_ADDR;
 	p->hw.i2c.tx_num = FSL_PMIC_I2C_LENGTH;
+	p->bus = bus;
+#else
+#error "You must select CONFIG_POWER_SPI or CONFIG_PMIC_I2C"
 #endif
 
 	return 0;

@@ -1,4 +1,3 @@
-/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Copyright (C) 2011 Marek Vasut <marek.vasut@gmail.com>
  * on behalf of DENX Software Engineering GmbH
@@ -8,6 +7,8 @@
  *
  * (C) Copyright 2002
  * Gary Jennejohn, DENX Software Engineering, <garyj@denx.de>
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 OUTPUT_FORMAT("elf32-littlearm", "elf32-littlearm", "elf32-littlearm")
@@ -15,12 +16,11 @@ OUTPUT_ARCH(arm)
 ENTRY(_start)
 SECTIONS
 {
-	. = IMAGE_TEXT_BASE;
+	. = 0x00000000;
 
 	. = ALIGN(4);
 	.text	:
 	{
-		*(.vectors)
 		arch/arm/cpu/arm926ejs/mxs/start.o	(.text*)
 		*(.text*)
 	}
@@ -49,20 +49,13 @@ SECTIONS
 		__bss_end = .;
 	}
 
-	.end :
-	{
-		*(.__end)
-	}
+	_end = .;
 
-	_image_binary_end = .;
-
-	.dynsym _image_binary_end : { *(.dynsym) }
-	.dynbss : { *(.dynbss) }
-	.dynstr : { *(.dynstr*) }
-	.dynamic : { *(.dynamic*) }
-	.hash : { *(.hash*) }
-	.plt : { *(.plt*) }
-	.interp : { *(.interp*) }
-	.gnu : { *(.gnu*) }
-	.ARM.exidx : { *(.ARM.exidx*) }
+	/DISCARD/ : { *(.dynstr*) }
+	/DISCARD/ : { *(.dynsym*) }
+	/DISCARD/ : { *(.dynamic*) }
+	/DISCARD/ : { *(.hash*) }
+	/DISCARD/ : { *(.plt*) }
+	/DISCARD/ : { *(.interp*) }
+	/DISCARD/ : { *(.gnu*) }
 }

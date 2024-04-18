@@ -1,19 +1,16 @@
-/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * (C) Copyright 2004-2008 Texas Instruments, <www.ti.com>
  * Rohit Choraria <rohitkc@ti.com>
  *
- * (C) Copyright 2013 Andreas Bießmann <andreas@biessmann.org>
+ * (C) Copyright 2013 Andreas Bießmann <andreas.devel@googlemail.com>
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 #ifndef __ASM_OMAP_GPMC_H
 #define __ASM_OMAP_GPMC_H
 
-/* Maximum Number of Chip Selects */
-#define GPMC_CS_NUM	8
-
 #define GPMC_BUF_EMPTY	0
 #define GPMC_BUF_FULL	1
-#define GPMC_MAX_SECTORS	8
 
 enum omap_ecc {
 	/* 1-bit  ECC calculation by Software, Error detection by Software */
@@ -48,11 +45,16 @@ struct gpmc_cs {
 };
 
 struct bch_res_0_3 {
-	u32 bch_result_x[4];
+	u32 bch_result0;
+	u32 bch_result1;
+	u32 bch_result2;
+	u32 bch_result3;
 };
 
 struct bch_res_4_6 {
-	u32 bch_result_x[3];
+	u32 bch_result4;
+	u32 bch_result5;
+	u32 bch_result6;
 };
 
 struct gpmc {
@@ -68,11 +70,7 @@ struct gpmc {
 	u32 status;		/* 0x54 */
 	u8 res5[0x8];		/* 0x58 */
 	struct gpmc_cs cs[8];	/* 0x60, 0x90, .. */
-	u32 prefetch_config1;	/* 0x1E0 */
-	u32 prefetch_config2;	/* 0x1E4 */
-	u32 res6;		/* 0x1E8 */
-	u32 prefetch_control;	/* 0x1EC */
-	u32 prefetch_status;	/* 0x1F0 */
+	u8 res6[0x14];		/* 0x1E0 */
 	u32 ecc_config;		/* 0x1F4 */
 	u32 ecc_control;	/* 0x1F8 */
 	u32 ecc_size_config;	/* 0x1FC */
@@ -88,13 +86,12 @@ struct gpmc {
 	u8 res7[12];		/* 0x224 */
 	u32 testmomde_ctrl;	/* 0x230 */
 	u8 res8[12];		/* 0x234 */
-	struct bch_res_0_3 bch_result_0_3[GPMC_MAX_SECTORS]; /* 0x240,0x250, */
+	struct bch_res_0_3 bch_result_0_3[8];	/* 0x240 - 0x2BF */
 	u8 res9[16 * 4];	/* 0x2C0 - 0x2FF */
-	struct bch_res_4_6 bch_result_4_6[GPMC_MAX_SECTORS]; /* 0x300,0x310, */
+	struct bch_res_4_6 bch_result_4_6[8];	/* 0x300 - 0x37F */
 };
 
 /* Used for board specific gpmc initialization */
-extern const struct gpmc *gpmc_cfg;
-extern char gpmc_cs0_flash;
+extern struct gpmc *gpmc_cfg;
 
 #endif /* __ASM_OMAP_GPMC_H */

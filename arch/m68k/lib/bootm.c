@@ -1,20 +1,17 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2003
  * Wolfgang Denk, DENX Software Engineering, wd@denx.de.
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
-#include <bootstage.h>
 #include <command.h>
-#include <env.h>
 #include <image.h>
-#include <lmb.h>
-#include <log.h>
-#include <asm/global_data.h>
 #include <u-boot/zlib.h>
 #include <bzlib.h>
 #include <watchdog.h>
+#include <environment.h>
 #include <asm/byteorder.h>
 #ifdef CONFIG_SHOW_BOOT_PROGRESS
 # include <status_led.h>
@@ -28,19 +25,38 @@ DECLARE_GLOBAL_DATA_PTR;
 #define LINUX_MAX_ARGS		256
 
 static ulong get_sp (void);
-static void set_clocks_in_mhz (struct bd_info *kbd);
+static void set_clocks_in_mhz (bd_t *kbd);
 
 void arch_lmb_reserve(struct lmb *lmb)
 {
-	arch_lmb_reserve_generic(lmb, get_sp(), gd->ram_top, 1024);
+	ulong sp;
+
+	/*
+	 * Booting a (Linux) kernel image
+	 *
+	 * Allocate space for command line and board info - the
+	 * address should be as high as possible within the reach of
+	 * the kernel (see CONFIG_SYS_BOOTMAPSZ settings), but in unused
+	 * memory, which means far enough below the current stack
+	 * pointer.
+	 */
+	sp = get_sp();
+	debug ("## Current stack ends at 0x%08lx ", sp);
+
+	/* adjust sp by 1K to be safe */
+	sp -= 1024;
+	lmb_reserve(lmb, sp, (CONFIG_SYS_SDRAM_BASE + gd->ram_size - sp));
 }
 
-int do_bootm_linux(int flag, int argc, char *const argv[],
-		   struct bootm_headers *images)
+int do_bootm_linux(int flag, int argc, char * const argv[], bootm_headers_t *images)
 {
+	ulong rd_len;
+	ulong initrd_start, initrd_end;
 	int ret;
-	struct bd_info  *kbd;
-	void  (*kernel) (struct bd_info *, ulong, ulong, ulong, ulong);
+
+	ulong cmd_start, cmd_end;
+	bd_t  *kbd;
+	void  (*kernel) (bd_t *, ulong, ulong, ulong, ulong);
 	struct lmb *lmb = &images->lmb;
 
 	/*
@@ -60,13 +76,11 @@ int do_bootm_linux(int flag, int argc, char *const argv[],
 	}
 	set_clocks_in_mhz(kbd);
 
-	if (IS_ENABLED(CONFIG_LMB)) {
-		ret = image_setup_linux(images);
-		if (ret)
-			goto error;
-	}
+	ret = image_setup_linux(images);
+	if (ret)
+		goto error;
 
-	kernel = (void (*)(struct bd_info *, ulong, ulong, ulong, ulong))images->ep;
+	kernel = (void (*)(bd_t *, ulong, ulong, ulong, ulong))images->ep;
 
 	debug("## Transferring control to Linux (at address %08lx) ...\n",
 	      (ulong) kernel);
@@ -82,8 +96,7 @@ int do_bootm_linux(int flag, int argc, char *const argv[],
 	 *   sp+16: Start of command line string
 	 *   sp+20: End   of command line string
 	 */
-	(*kernel)(kbd, images->initrd_start, images->initrd_end,
-		  images->cmdline_start, images->cmdline_end);
+	(*kernel) (kbd, initrd_start, initrd_end, cmd_start, cmd_end);
 	/* does not return */
 error:
 	return 1;
@@ -99,12 +112,11 @@ static ulong get_sp (void)
 	return sp;
 }
 
-static void set_clocks_in_mhz (struct bd_info *kbd)
+static void set_clocks_in_mhz (bd_t *kbd)
 {
 	char *s;
 
-	s = env_get("clocks_in_mhz");
-	if (s) {
+	if ((s = getenv("clocks_in_mhz")) != NULL) {
 		/* convert all clock information to MHz */
 		kbd->bi_intfreq /= 1000000L;
 		kbd->bi_busfreq /= 1000000L;

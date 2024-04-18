@@ -1,6 +1,7 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * SMSC PHY drivers
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  *
  * Base code from drivers/net/phy/davicom.c
  *   Copyright 2010-2011 Freescale Semiconductor, Inc.
@@ -9,10 +10,8 @@
  * Some code copied from linux kernel
  * Copyright (c) 2006 Herbert Valerio Riedel <hvr@gnu.org>
  */
-#include <common.h>
 #include <miiphy.h>
 
-/* This code does not check the partner abilities. */
 static int smsc_parse_status(struct phy_device *phydev)
 {
 	int mii_reg;
@@ -34,13 +33,9 @@ static int smsc_parse_status(struct phy_device *phydev)
 
 static int smsc_startup(struct phy_device *phydev)
 {
-	int ret;
-
-	ret = genphy_update_link(phydev);
-	if (ret)
-		return ret;
-
-	return smsc_parse_status(phydev);
+	genphy_update_link(phydev);
+	smsc_parse_status(phydev);
+	return 0;
 }
 
 static struct phy_driver lan8700_driver = {
@@ -69,37 +64,7 @@ static struct phy_driver lan8710_driver = {
 	.mask = 0xffff0,
 	.features = PHY_BASIC_FEATURES,
 	.config = &genphy_config_aneg,
-	.startup = &genphy_startup,
-	.shutdown = &genphy_shutdown,
-};
-
-static struct phy_driver lan8740_driver = {
-	.name = "SMSC LAN8740",
-	.uid = 0x0007c110,
-	.mask = 0xffff0,
-	.features = PHY_BASIC_FEATURES,
-	.config = &genphy_config_aneg,
-	.startup = &genphy_startup,
-	.shutdown = &genphy_shutdown,
-};
-
-static struct phy_driver lan8741_driver = {
-	.name = "SMSC LAN8741",
-	.uid = 0x0007c120,
-	.mask = 0xffff0,
-	.features = PHY_BASIC_FEATURES,
-	.config = &genphy_config_aneg,
-	.startup = &genphy_startup,
-	.shutdown = &genphy_shutdown,
-};
-
-static struct phy_driver lan8742_driver = {
-	.name = "SMSC LAN8742",
-	.uid = 0x0007c130,
-	.mask = 0xffff0,
-	.features = PHY_BASIC_FEATURES,
-	.config = &genphy_config_aneg,
-	.startup = &genphy_startup,
+	.startup = &smsc_startup,
 	.shutdown = &genphy_shutdown,
 };
 
@@ -108,9 +73,6 @@ int phy_smsc_init(void)
 	phy_register(&lan8710_driver);
 	phy_register(&lan911x_driver);
 	phy_register(&lan8700_driver);
-	phy_register(&lan8740_driver);
-	phy_register(&lan8741_driver);
-	phy_register(&lan8742_driver);
 
 	return 0;
 }

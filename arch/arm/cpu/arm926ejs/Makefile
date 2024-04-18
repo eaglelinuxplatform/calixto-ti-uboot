@@ -1,30 +1,37 @@
-# SPDX-License-Identifier: GPL-2.0+
 #
 # (C) Copyright 2000-2006
 # Wolfgang Denk, DENX Software Engineering, wd@denx.de.
+#
+# SPDX-License-Identifier:	GPL-2.0+
+#
 
-extra-y	= start.o
-obj-y	= cpu.o cache.o
+include $(TOPDIR)/config.mk
+
+LIB	= $(obj)lib$(CPU).o
+
+START	= start.o
+COBJS	= cpu.o cache.o
 
 ifdef	CONFIG_SPL_BUILD
-ifdef	CONFIG_SPL_NO_CPU_SUPPORT
-extra-y	:=
+ifdef	CONFIG_SPL_NO_CPU_SUPPORT_CODE
+START	:=
 endif
 endif
 
-obj-$(if $(filter mxs,$(SOC)),y) += mxs/
-obj-$(if $(filter spear,$(SOC)),y) += spear/
-obj-$(CONFIG_ARCH_SUNXI) += sunxi/
+SRCS	:= $(START:.o=.S) $(SOBJS:.o=.S) $(COBJS:.o=.c)
+OBJS	:= $(addprefix $(obj),$(COBJS) $(SOBJS))
+START	:= $(addprefix $(obj),$(START))
 
-# some files can only build in ARM or THUMB2, not THUMB1
+all:	$(obj).depend $(START) $(LIB)
 
-ifdef CONFIG_$(SPL_)SYS_THUMB_BUILD
-ifndef CONFIG_HAS_THUMB2
+$(LIB):	$(OBJS)
+	$(call cmd_link_o_target, $(OBJS))
 
-CFLAGS_cpu.o := -marm
-CFLAGS_cache.o := -marm
-CFLAGS_REMOVE_cpu.o := $(LTO_CFLAGS)
-CFLAGS_REMOVE_cache.o := $(LTO_CFLAGS)
+#########################################################################
 
-endif
-endif
+# defines $(obj).depend target
+include $(SRCTREE)/rules.mk
+
+sinclude $(obj).depend
+
+#########################################################################

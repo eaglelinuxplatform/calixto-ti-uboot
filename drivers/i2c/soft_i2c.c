@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2009
  * Heiko Schocher, DENX Software Engineering, hs@denx.de.
@@ -7,26 +6,36 @@
  * (C) Copyright 2001, 2002
  * Wolfgang Denk, DENX Software Engineering, wd@denx.de.
  *
+ * SPDX-License-Identifier:	GPL-2.0+
+ *
  * This has been changed substantially by Gerald Van Baren, Custom IDEAS,
  * vanbaren@cideas.com.  It was heavily influenced by LiMon, written by
  * Neil Russell.
- *
- * NOTE: This driver should be converted to driver model before June 2017.
- * Please see doc/driver-model/i2c-howto.rst for instructions.
  */
 
 #include <common.h>
+#ifdef	CONFIG_MPC8260			/* only valid for MPC8260 */
+#include <ioports.h>
+#include <asm/io.h>
+#endif
+#if defined(CONFIG_AVR32)
+#include <asm/arch/portmux.h>
+#endif
 #if defined(CONFIG_AT91FAMILY)
 #include <asm/io.h>
 #include <asm/arch/hardware.h>
 #include <asm/arch/at91_pio.h>
-#ifdef CONFIG_ATMEL_LEGACY
+#ifdef CONFIG_AT91_LEGACY
 #include <asm/arch/gpio.h>
 #endif
 #endif
+#ifdef	CONFIG_IXP425			/* only valid for IXP425 */
+#include <asm/arch/ixp425.h>
+#endif
+#if defined(CONFIG_MPC852T) || defined(CONFIG_MPC866)
+#include <asm/io.h>
+#endif
 #include <i2c.h>
-#include <asm/global_data.h>
-#include <linux/delay.h>
 
 #if defined(CONFIG_SOFT_I2C_GPIO_SCL)
 # include <asm/gpio.h>
@@ -85,7 +94,22 @@
 DECLARE_GLOBAL_DATA_PTR;
 
 #ifndef	I2C_SOFT_DECLARATIONS
+# if defined(CONFIG_MPC8260)
+#  define I2C_SOFT_DECLARATIONS volatile ioport_t *iop = \
+		ioport_addr((immap_t *)CONFIG_SYS_IMMR, I2C_PORT);
+# elif defined(CONFIG_8xx)
+#  define I2C_SOFT_DECLARATIONS	volatile immap_t *immr = \
+		(immap_t *)CONFIG_SYS_IMMR;
+# else
 #  define I2C_SOFT_DECLARATIONS
+# endif
+#endif
+
+#if !defined(CONFIG_SYS_I2C_SOFT_SPEED)
+#define CONFIG_SYS_I2C_SOFT_SPEED CONFIG_SYS_I2C_SPEED
+#endif
+#if !defined(CONFIG_SYS_I2C_SOFT_SLAVE)
+#define CONFIG_SYS_I2C_SOFT_SLAVE CONFIG_SYS_I2C_SLAVE
 #endif
 
 /*-----------------------------------------------------------------------
@@ -427,7 +451,28 @@ static int  soft_i2c_write(struct i2c_adapter *adap, uchar chip, uint addr,
 /*
  * Register soft i2c adapters
  */
-U_BOOT_I2C_ADAP_COMPLETE(soft00, soft_i2c_init, soft_i2c_probe,
+U_BOOT_I2C_ADAP_COMPLETE(soft0, soft_i2c_init, soft_i2c_probe,
 			 soft_i2c_read, soft_i2c_write, NULL,
 			 CONFIG_SYS_I2C_SOFT_SPEED, CONFIG_SYS_I2C_SOFT_SLAVE,
 			 0)
+#if defined(I2C_SOFT_DECLARATIONS2)
+U_BOOT_I2C_ADAP_COMPLETE(soft1, soft_i2c_init, soft_i2c_probe,
+			 soft_i2c_read, soft_i2c_write, NULL,
+			 CONFIG_SYS_I2C_SOFT_SPEED_2,
+			 CONFIG_SYS_I2C_SOFT_SLAVE_2,
+			 1)
+#endif
+#if defined(I2C_SOFT_DECLARATIONS3)
+U_BOOT_I2C_ADAP_COMPLETE(soft2, soft_i2c_init, soft_i2c_probe,
+			 soft_i2c_read, soft_i2c_write, NULL,
+			 CONFIG_SYS_I2C_SOFT_SPEED_3,
+			 CONFIG_SYS_I2C_SOFT_SLAVE_3,
+			 2)
+#endif
+#if defined(I2C_SOFT_DECLARATIONS4)
+U_BOOT_I2C_ADAP_COMPLETE(soft3, soft_i2c_init, soft_i2c_probe,
+			 soft_i2c_read, soft_i2c_write, NULL,
+			 CONFIG_SYS_I2C_SOFT_SPEED_4,
+			 CONFIG_SYS_I2C_SOFT_SLAVE_4,
+			 3)
+#endif

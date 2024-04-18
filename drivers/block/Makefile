@@ -1,20 +1,44 @@
-# SPDX-License-Identifier: GPL-2.0+
 #
 # (C) Copyright 2000-2007
 # Wolfgang Denk, DENX Software Engineering, wd@denx.de.
+#
+# SPDX-License-Identifier:	GPL-2.0+
+#
 
-obj-$(CONFIG_$(SPL_TPL_)BLK) += blk-uclass.o
+include $(TOPDIR)/config.mk
 
-ifndef CONFIG_$(SPL_)BLK
-obj-$(CONFIG_SPL_LEGACY_BLOCK) += blk_legacy.o
-endif
+LIB	:= $(obj)libblock.o
 
-ifndef CONFIG_SPL_BUILD
-obj-$(CONFIG_IDE) += ide.o
-endif
-obj-$(CONFIG_SANDBOX) += sandbox.o host-uclass.o host_dev.o
-obj-$(CONFIG_$(SPL_TPL_)BLOCK_CACHE) += blkcache.o
+COBJS-$(CONFIG_SCSI_AHCI) += ahci.o
+COBJS-$(CONFIG_ATA_PIIX) += ata_piix.o
+COBJS-$(CONFIG_DWC_AHSATA) += dwc_ahsata.o
+COBJS-$(CONFIG_FSL_SATA) += fsl_sata.o
+COBJS-$(CONFIG_IDE_FTIDE020) += ftide020.o
+COBJS-$(CONFIG_LIBATA) += libata.o
+COBJS-$(CONFIG_MVSATA_IDE) += mvsata_ide.o
+COBJS-$(CONFIG_MX51_PATA) += mxc_ata.o
+COBJS-$(CONFIG_PATA_BFIN) += pata_bfin.o
+COBJS-$(CONFIG_SATA_DWC) += sata_dwc.o
+COBJS-$(CONFIG_SATA_SIL3114) += sata_sil3114.o
+COBJS-$(CONFIG_SATA_SIL) += sata_sil.o
+COBJS-$(CONFIG_IDE_SIL680) += sil680.o
+COBJS-$(CONFIG_SCSI_SYM53C8XX) += sym53c8xx.o
+COBJS-$(CONFIG_SYSTEMACE) += systemace.o
 
-obj-$(CONFIG_EFI_MEDIA) += efi-media-uclass.o
-obj-$(CONFIG_EFI_MEDIA_SANDBOX) += sb_efi_media.o
-obj-$(CONFIG_EFI_MEDIA_BLK) += efi_blk.o
+COBJS	:= $(COBJS-y)
+SRCS	:= $(COBJS:.o=.c)
+OBJS	:= $(addprefix $(obj),$(COBJS))
+
+all:	$(LIB)
+
+$(LIB):	$(obj).depend $(OBJS)
+	$(call cmd_link_o_target, $(OBJS))
+
+#########################################################################
+
+# defines $(obj).depend target
+include $(SRCTREE)/rules.mk
+
+sinclude $(obj).depend
+
+#########################################################################

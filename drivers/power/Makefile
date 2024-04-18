@@ -1,28 +1,42 @@
-# SPDX-License-Identifier: GPL-2.0+
 #
 # Copyright (c) 2009 Wind River Systems, Inc.
 # Tom Rix <Tom.Rix at windriver.com>
+#
+# SPDX-License-Identifier:	GPL-2.0+
+#
 
-obj-$(CONFIG_$(SPL_TPL_)ACPI_PMC) += acpi_pmc/
-obj-$(CONFIG_$(SPL_TPL_)POWER_DOMAIN) += domain/
-obj-y += pmic/
-obj-y += regulator/
+include $(TOPDIR)/config.mk
 
-obj-$(CONFIG_AXP152_POWER)	+= axp152.o
-obj-$(CONFIG_AXP209_POWER)	+= axp209.o
-obj-$(CONFIG_AXP221_POWER)	+= axp221.o
-obj-$(CONFIG_AXP305_POWER)	+= axp305.o
-obj-$(CONFIG_AXP809_POWER)	+= axp809.o
-obj-$(CONFIG_AXP818_POWER)	+= axp818.o
-obj-$(CONFIG_EXYNOS_TMU)	+= exynos-tmu.o
-obj-$(CONFIG_SY8106A_POWER)	+= sy8106a.o
-obj-$(CONFIG_TPS6586X_POWER)	+= tps6586x.o
-obj-$(CONFIG_TWL4030_POWER)	+= twl4030.o
-obj-$(CONFIG_TWL6030_POWER)	+= twl6030.o
-obj-$(CONFIG_PALMAS_POWER)	+= palmas.o
-obj-$(CONFIG_$(SPL_TPL_)POWER_LEGACY) += power_core.o
-obj-$(CONFIG_DIALOG_POWER) += power_dialog.o
-obj-$(CONFIG_POWER_FSL) += power_fsl.o
-obj-$(CONFIG_$(SPL_TPL_)POWER_I2C) += power_i2c.o
-obj-$(CONFIG_POWER_SPI) += power_spi.o
-obj-$(CONFIG_POWER_MT6323) += mt6323.o
+LIB	:= $(obj)libpower.o
+
+COBJS-$(CONFIG_EXYNOS_TMU)	+= exynos-tmu.o
+COBJS-$(CONFIG_FTPMU010_POWER)	+= ftpmu010.o
+COBJS-$(CONFIG_TPS6586X_POWER)	+= tps6586x.o
+COBJS-$(CONFIG_TWL4030_POWER)	+= twl4030.o
+COBJS-$(CONFIG_TWL6030_POWER)	+= twl6030.o
+COBJS-$(CONFIG_PALMAS_POWER)	+= palmas.o
+
+COBJS-$(CONFIG_POWER) += power_core.o
+COBJS-$(CONFIG_DIALOG_POWER) += power_dialog.o
+COBJS-$(CONFIG_POWER_FSL) += power_fsl.o
+COBJS-$(CONFIG_POWER_I2C) += power_i2c.o
+COBJS-$(CONFIG_POWER_SPI) += power_spi.o
+
+COBJS	:= $(COBJS-y)
+SRCS	:= $(COBJS:.o=.c)
+OBJS	:= $(addprefix $(obj),$(COBJS))
+
+all:	$(LIB)
+
+$(LIB):	$(obj).depend $(OBJS)
+	$(call cmd_link_o_target, $(OBJS))
+
+
+#########################################################################
+
+# defines $(obj).depend target
+include $(SRCTREE)/rules.mk
+
+sinclude $(obj).depend
+
+########################################################################

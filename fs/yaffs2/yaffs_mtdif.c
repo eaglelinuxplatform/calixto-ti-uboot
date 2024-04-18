@@ -19,10 +19,10 @@
 
 #include "yaffs_mtdif.h"
 
-#include <linux/mtd/mtd.h>
-#include <linux/types.h>
-#include <linux/time.h>
-#include <linux/mtd/rawnand.h>
+#include "linux/mtd/mtd.h"
+#include "linux/types.h"
+#include "linux/time.h"
+#include "linux/mtd/nand.h"
 
 
 static inline void translate_spare2oob(const struct yaffs_spare *spare, u8 *oob)
@@ -145,6 +145,7 @@ int nandmtd_EraseBlockInNAND(struct yaffs_dev *dev, int blockNumber)
 	ei.len = dev->data_bytes_per_chunk * dev->param.chunks_per_block;
 	ei.time = 1000;
 	ei.retries = 2;
+	ei.callback = NULL;
 	ei.priv = (u_long) dev;
 
 	/* Todo finish off the ei if required */

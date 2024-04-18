@@ -1,7 +1,8 @@
-/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * (C) Copyright 2002
  * Rich Ireland, Enterasys Networks, rireland@enterasys.com.
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <fpga.h>
@@ -11,7 +12,7 @@
 
 /* Xilinx types
  *********************************************************************/
-typedef enum {			/* typedef xilinx_iface */
+typedef enum {			/* typedef Xilinx_iface */
 	min_xilinx_iface_type,	/* low range check value */
 	slave_serial,		/* serial data and external clock */
 	master_serial,		/* serial data w/ internal clock (not used) */
@@ -20,79 +21,49 @@ typedef enum {			/* typedef xilinx_iface */
 	master_selectmap,	/* master SelectMap (virtex2)           */
 	slave_selectmap,	/* slave SelectMap (virtex2)            */
 	devcfg,			/* devcfg interface (zynq) */
-	csu_dma,		/* csu_dma interface (zynqmp) */
-	cfi,			/* CFI interface(versal) */
 	max_xilinx_iface_type	/* insert all new types before this */
-} xilinx_iface;			/* end, typedef xilinx_iface */
+} Xilinx_iface;			/* end, typedef Xilinx_iface */
 
-typedef enum {			/* typedef xilinx_family */
+typedef enum {			/* typedef Xilinx_Family */
 	min_xilinx_type,	/* low range check value */
-	xilinx_spartan2,	/* Spartan-II Family */
-	xilinx_virtexE,		/* Virtex-E Family */
-	xilinx_virtex2,		/* Virtex2 Family */
-	xilinx_spartan3,	/* Spartan-III Family */
+	Xilinx_Spartan2,	/* Spartan-II Family */
+	Xilinx_VirtexE,		/* Virtex-E Family */
+	Xilinx_Virtex2,		/* Virtex2 Family */
+	Xilinx_Spartan3,	/* Spartan-III Family */
 	xilinx_zynq,		/* Zynq Family */
-	xilinx_zynqmp,		/* ZynqMP Family */
-	xilinx_versal,		/* Versal Family */
 	max_xilinx_type		/* insert all new types before this */
-} xilinx_family;		/* end, typedef xilinx_family */
+} Xilinx_Family;		/* end, typedef Xilinx_Family */
 
-/* FPGA bitstream supported types */
-#define FPGA_LEGACY			BIT(0)
-#define FPGA_XILINX_ZYNQMP_DDRAUTH	BIT(1)
-#define FPGA_XILINX_ZYNQMP_ENC		BIT(2)
-
-typedef struct {		/* typedef xilinx_desc */
-	xilinx_family family;	/* part type */
-	xilinx_iface iface;	/* interface type */
+typedef struct {		/* typedef Xilinx_desc */
+	Xilinx_Family family;	/* part type */
+	Xilinx_iface iface;	/* interface type */
 	size_t size;		/* bytes of data part can accept */
 	void *iface_fns;	/* interface function table */
 	int cookie;		/* implementation specific cookie */
-	struct xilinx_fpga_op *operations; /* operations */
 	char *name;		/* device name in bitstream */
-	int flags;		/* compatible flags */
-} xilinx_desc;			/* end, typedef xilinx_desc */
-
-struct xilinx_fpga_op {
-	int (*load)(xilinx_desc *desc, const void *buf, size_t bsize,
-		    bitstream_type bstype, int flags);
-	int (*loadfs)(xilinx_desc *desc, const void *buf, size_t bsize,
-		      fpga_fs_info *fpga_fsinfo);
-	int (*loads)(xilinx_desc *desc, const void *buf, size_t bsize,
-		     struct fpga_secure_info *fpga_sec_info);
-	int (*dump)(xilinx_desc *desc, const void *buf, size_t bsize);
-	int (*info)(xilinx_desc *desc);
-#if CONFIG_IS_ENABLED(FPGA_LOAD_SECURE)
-	int (*str2flag)(xilinx_desc *desc, const char *string);
-#endif
-};
+} Xilinx_desc;			/* end, typedef Xilinx_desc */
 
 /* Generic Xilinx Functions
  *********************************************************************/
-int xilinx_load(xilinx_desc *desc, const void *image, size_t size,
-		bitstream_type bstype, int flags);
-int xilinx_dump(xilinx_desc *desc, const void *buf, size_t bsize);
-int xilinx_info(xilinx_desc *desc);
-int xilinx_loadfs(xilinx_desc *desc, const void *buf, size_t bsize,
-		  fpga_fs_info *fpga_fsinfo);
-int xilinx_loads(xilinx_desc *desc, const void *buf, size_t bsize,
-		 struct fpga_secure_info *fpga_sec_info);
+extern int xilinx_load(Xilinx_desc *desc, const void *image, size_t size);
+extern int xilinx_dump(Xilinx_desc *desc, const void *buf, size_t bsize);
+extern int xilinx_info(Xilinx_desc *desc);
 
 /* Board specific implementation specific function types
  *********************************************************************/
-typedef int (*xilinx_pgm_fn)(int assert_pgm, int flush, int cookie);
-typedef int (*xilinx_init_fn)(int cookie);
-typedef int (*xilinx_err_fn)(int cookie);
-typedef int (*xilinx_done_fn)(int cookie);
-typedef int (*xilinx_clk_fn)(int assert_clk, int flush, int cookie);
-typedef int (*xilinx_cs_fn)(int assert_cs, int flush, int cookie);
-typedef int (*xilinx_wr_fn)(int assert_write, int flush, int cookie);
-typedef int (*xilinx_rdata_fn)(unsigned char *data, int cookie);
-typedef int (*xilinx_wdata_fn)(unsigned char data, int flush, int cookie);
-typedef int (*xilinx_busy_fn)(int cookie);
-typedef int (*xilinx_abort_fn)(int cookie);
-typedef int (*xilinx_pre_fn)(int cookie);
-typedef int (*xilinx_post_fn)(int cookie);
-typedef int (*xilinx_bwr_fn)(void *buf, size_t len, int flush, int cookie);
+typedef int (*Xilinx_pgm_fn)( int assert_pgm, int flush, int cookie );
+typedef int (*Xilinx_init_fn)( int cookie );
+typedef int (*Xilinx_err_fn)( int cookie );
+typedef int (*Xilinx_done_fn)( int cookie );
+typedef int (*Xilinx_clk_fn)( int assert_clk, int flush, int cookie );
+typedef int (*Xilinx_cs_fn)( int assert_cs, int flush, int cookie );
+typedef int (*Xilinx_wr_fn)( int assert_write, int flush, int cookie );
+typedef int (*Xilinx_rdata_fn)( unsigned char *data, int cookie );
+typedef int (*Xilinx_wdata_fn)( unsigned char data, int flush, int cookie );
+typedef int (*Xilinx_busy_fn)( int cookie );
+typedef int (*Xilinx_abort_fn)( int cookie );
+typedef int (*Xilinx_pre_fn)( int cookie );
+typedef int (*Xilinx_post_fn)( int cookie );
+typedef int (*Xilinx_bwr_fn)( void *buf, size_t len, int flush, int cookie );
 
 #endif  /* _XILINX_H_ */

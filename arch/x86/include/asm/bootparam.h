@@ -10,11 +10,8 @@
 #include <asm/video/edid.h>
 
 /* setup data types */
-enum {
-	SETUP_NONE = 0,
-	SETUP_E820_EXT,
-	SETUP_DTB,
-};
+#define SETUP_NONE			0
+#define SETUP_E820_EXT			1
 
 /* extensible setup data list node */
 struct setup_data {
@@ -24,11 +21,6 @@ struct setup_data {
 	__u8 data[0];
 };
 
-/**
- * struct setup_header - Information needed by Linux to boot
- *
- * See https://www.kernel.org/doc/html/latest/x86/boot.html
- */
 struct setup_header {
 	__u8	setup_sects;
 	__u16	root_flags;
@@ -48,16 +40,15 @@ struct setup_header {
 	__u16	kernel_version;
 	__u8	type_of_loader;
 	__u8	loadflags;
-#define LOADED_HIGH	BIT(0)
-#define KASLR_FLAG	BIT(1)
-#define QUIET_FLAG	BIT(5)
-#define KEEP_SEGMENTS	BIT(6)		/* Obsolete */
-#define CAN_USE_HEAP	BIT(7)
+#define LOADED_HIGH	(1<<0)
+#define QUIET_FLAG	(1<<5)
+#define KEEP_SEGMENTS	(1<<6)
+#define CAN_USE_HEAP	(1<<7)
 	__u16	setup_move_size;
 	__u32	code32_start;
 	__u32	ramdisk_image;
 	__u32	ramdisk_size;
-	__u32	bootsect_kludge;	/* Obsolete */
+	__u32	bootsect_kludge;
 	__u16	heap_end_ptr;
 	__u8	ext_loader_ver;
 	__u8	ext_loader_type;
@@ -65,23 +56,13 @@ struct setup_header {
 	__u32	initrd_addr_max;
 	__u32	kernel_alignment;
 	__u8	relocatable_kernel;
-	u8	min_alignment;
-#define XLF_KERNEL_64			BIT(0)
-#define XLF_CAN_BE_LOADED_ABOVE_4G	BIT(1)
-#define XLF_EFI_HANDOVER_32		BIT(2)
-#define XLF_EFI_HANDOVER_64		BIT(3)
-#define XLF_EFI_KEXEC			BIT(4)
-	u16	xloadflags;
+	__u8	_pad2[3];
 	__u32	cmdline_size;
 	__u32	hardware_subarch;
 	__u64	hardware_subarch_data;
 	__u32	payload_offset;
 	__u32	payload_length;
 	__u64	setup_data;
-	__u64	pref_address;
-	__u32	init_size;
-	__u32	handover_offset;
-	u32	kernel_info_offset;
 } __attribute__((packed));
 
 struct sys_desc_table {
@@ -107,8 +88,7 @@ struct boot_params {
 	__u8  _pad2[4];					/* 0x054 */
 	__u64  tboot_addr;				/* 0x058 */
 	struct ist_info ist_info;			/* 0x060 */
-	__u64 acpi_rsdp_addr;				/* 0x070 */
-	__u8  _pad3[8];					/* 0x078 */
+	__u8  _pad3[16];				/* 0x070 */
 	__u8  hd0_info[16];	/* obsolete! */		/* 0x080 */
 	__u8  hd1_info[16];	/* obsolete! */		/* 0x090 */
 	struct sys_desc_table sys_desc_table;		/* 0x0a0 */
@@ -124,7 +104,7 @@ struct boot_params {
 	struct setup_header hdr;    /* setup header */	/* 0x1f1 */
 	__u8  _pad7[0x290-0x1f1-sizeof(struct setup_header)];
 	__u32 edd_mbr_sig_buffer[EDD_MBR_SIG_MAX];	/* 0x290 */
-	struct e820_entry e820_map[E820MAX];		/* 0x2d0 */
+	struct e820entry e820_map[E820MAX];		/* 0x2d0 */
 	__u8  _pad8[48];				/* 0xcd0 */
 	struct edd_info eddbuf[EDDMAXNR];		/* 0xd00 */
 	__u8  _pad9[276];				/* 0xeec */
@@ -134,8 +114,7 @@ enum {
 	X86_SUBARCH_PC = 0,
 	X86_SUBARCH_LGUEST,
 	X86_SUBARCH_XEN,
-	X86_SUBARCH_INTEL_MID,
-	X86_SUBARCH_CE4100,
+	X86_SUBARCH_MRST,
 	X86_NR_SUBARCHS,
 };
 #endif /* _ASM_X86_BOOTPARAM_H */

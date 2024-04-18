@@ -1,7 +1,8 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2001
  * Gerald Van Baren, Custom IDEAS, vanbaren@cideas.com.
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 /*
@@ -10,11 +11,8 @@
  */
 
 #include <common.h>
-#include <dm.h>
-#include <log.h>
 #include <miiphy.h>
 #include <phy.h>
-#include <linux/delay.h>
 
 #include <asm/types.h>
 #include <linux/list.h>
@@ -66,6 +64,77 @@ void miiphy_init(void)
 	current_mii = NULL;
 }
 
+static int legacy_miiphy_read(struct mii_dev *bus, int addr, int devad, int reg)
+{
+	unsigned short val;
+	int ret;
+	struct legacy_mii_dev *ldev = bus->priv;
+
+	ret = ldev->read(bus->name, addr, reg, &val);
+
+	return ret ? -1 : (int)val;
+}
+
+static int legacy_miiphy_write(struct mii_dev *bus, int addr, int devad,
+				int reg, u16 val)
+{
+	struct legacy_mii_dev *ldev = bus->priv;
+
+	return ldev->write(bus->name, addr, reg, val);
+}
+
+/*****************************************************************************
+ *
+ * Register read and write MII access routines for the device <name>.
+ * This API is now deprecated. Please use mdio_alloc and mdio_register, instead.
+ */
+void miiphy_register(const char *name,
+		      int (*read)(const char *devname, unsigned char addr,
+				   unsigned char reg, unsigned short *value),
+		      int (*write)(const char *devname, unsigned char addr,
+				    unsigned char reg, unsigned short value))
+{
+	struct mii_dev *new_dev;
+	struct legacy_mii_dev *ldev;
+
+	BUG_ON(strlen(name) >= MDIO_NAME_LEN);
+
+	/* check if we have unique name */
+	new_dev = miiphy_get_dev_by_name(name);
+	if (new_dev) {
+		printf("miiphy_register: non unique device name '%s'\n", name);
+		return;
+	}
+
+	/* allocate memory */
+	new_dev = mdio_alloc();
+	ldev = malloc(sizeof(*ldev));
+
+	if (new_dev == NULL || ldev == NULL) {
+		printf("miiphy_register: cannot allocate memory for '%s'\n",
+			name);
+		return;
+	}
+
+	/* initalize mii_dev struct fields */
+	new_dev->read = legacy_miiphy_read;
+	new_dev->write = legacy_miiphy_write;
+	strncpy(new_dev->name, name, MDIO_NAME_LEN);
+	new_dev->name[MDIO_NAME_LEN - 1] = 0;
+	ldev->read = read;
+	ldev->write = write;
+	new_dev->priv = ldev;
+
+	debug("miiphy_register: added '%s', read=0x%08lx, write=0x%08lx\n",
+	       new_dev->name, ldev->read, ldev->write);
+
+	/* add it to the list */
+	list_add_tail(&new_dev->link, &mii_devs);
+
+	if (!current_mii)
+		current_mii = new_dev;
+}
+
 struct mii_dev *mdio_alloc(void)
 {
 	struct mii_dev *bus;
@@ -82,14 +151,9 @@ struct mii_dev *mdio_alloc(void)
 	return bus;
 }
 
-void mdio_free(struct mii_dev *bus)
-{
-	free(bus);
-}
-
 int mdio_register(struct mii_dev *bus)
 {
-	if (!bus || !bus->read || !bus->write)
+	if (!bus || !bus->name || !bus->read || !bus->write)
 		return -1;
 
 	/* check if we have unique name */
@@ -108,32 +172,6 @@ int mdio_register(struct mii_dev *bus)
 	return 0;
 }
 
-int mdio_register_seq(struct mii_dev *bus, int seq)
-{
-	int ret;
-
-	/* Setup a unique name for each mdio bus */
-	ret = snprintf(bus->name, MDIO_NAME_LEN, "eth%d", seq);
-	if (ret < 0)
-		return ret;
-
-	return mdio_register(bus);
-}
-
-int mdio_unregister(struct mii_dev *bus)
-{
-	if (!bus)
-		return 0;
-
-	/* delete it from the list */
-	list_del(&bus->link);
-
-	if (current_mii == bus)
-		current_mii = NULL;
-
-	return 0;
-}
-
 void mdio_list_devices(void)
 {
 	struct list_head *entry;
@@ -148,7 +186,7 @@ void mdio_list_devices(void)
 			struct phy_device *phydev = bus->phymap[i];
 
 			if (phydev) {
-				printf("%x - %s", i, phydev->drv->name);
+				printf("%d - %s", i, phydev->drv->name);
 
 				if (phydev->dev)
 					printf(" <--> %s\n", phydev->dev->name);
@@ -177,11 +215,6 @@ int miiphy_set_current_dev(const char *devname)
 struct mii_dev *mdio_get_current_dev(void)
 {
 	return current_mii;
-}
-
-struct list_head *mdio_get_list_head(void)
-{
-	return &mii_devs;
 }
 
 struct phy_device *mdio_phydev_for_ethname(const char *ethname)
@@ -366,7 +399,7 @@ int miiphy_reset(const char *devname, unsigned char addr)
 		debug("PHY reset failed\n");
 		return -1;
 	}
-#if CONFIG_PHY_RESET_DELAY > 0
+#ifdef CONFIG_PHY_RESET_DELAY
 	udelay(CONFIG_PHY_RESET_DELAY);	/* Intel LXT971A needs this */
 #endif
 	/*
@@ -398,7 +431,7 @@ int miiphy_reset(const char *devname, unsigned char addr)
  */
 int miiphy_speed(const char *devname, unsigned char addr)
 {
-	u16 bmcr, anlpar, adv;
+	u16 bmcr, anlpar;
 
 #if defined(CONFIG_PHY_GIGE)
 	u16 btsr;
@@ -435,12 +468,7 @@ int miiphy_speed(const char *devname, unsigned char addr)
 			printf("PHY AN speed");
 			goto miiphy_read_failed;
 		}
-
-		if (miiphy_read(devname, addr, MII_ADVERTISE, &adv)) {
-			puts("PHY AN adv speed");
-			goto miiphy_read_failed;
-		}
-		return ((anlpar & adv) & LPA_100) ? _100BASET : _10BASET;
+		return (anlpar & LPA_100) ? _100BASET : _10BASET;
 	}
 	/* Get speed from basic control settings. */
 	return (bmcr & BMCR_SPEED100) ? _100BASET : _10BASET;
@@ -456,7 +484,7 @@ miiphy_read_failed:
  */
 int miiphy_duplex(const char *devname, unsigned char addr)
 {
-	u16 bmcr, anlpar, adv;
+	u16 bmcr, anlpar;
 
 #if defined(CONFIG_PHY_GIGE)
 	u16 btsr;
@@ -498,12 +526,7 @@ int miiphy_duplex(const char *devname, unsigned char addr)
 			puts("PHY AN duplex");
 			goto miiphy_read_failed;
 		}
-
-		if (miiphy_read(devname, addr, MII_ADVERTISE, &adv)) {
-			puts("PHY AN adv duplex");
-			goto miiphy_read_failed;
-		}
-		return ((anlpar & adv) & (LPA_10FULL | LPA_100FULL)) ?
+		return (anlpar & (LPA_10FULL | LPA_100FULL)) ?
 		    FULL : HALF;
 	}
 	/* Get speed from basic control settings. */

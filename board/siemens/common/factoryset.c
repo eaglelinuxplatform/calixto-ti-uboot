@@ -1,27 +1,21 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  *
  * Read FactorySet information from EEPROM into global structure.
  * (C) Copyright 2013 Siemens Schweiz AG
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #if !defined(CONFIG_SPL_BUILD)
 
 #include <common.h>
-#include <env.h>
-#include <dm.h>
-#include <env_internal.h>
 #include <i2c.h>
-#include <log.h>
 #include <asm/io.h>
-#if !CONFIG_IS_ENABLED(TARGET_GIEDI) && !CONFIG_IS_ENABLED(TARGET_DENEB)
 #include <asm/arch/cpu.h>
-#endif
 #include <asm/arch/sys_proto.h>
 #include <asm/unaligned.h>
 #include <net.h>
-#include <errno.h>
-#include <g_dnl.h>
+#include <usbdescriptors.h>
 #include "factoryset.h"
 
 #define EEPR_PG_SZ		0x80
@@ -91,7 +85,6 @@ int get_factory_record_val(unsigned char *eeprom_buf, int size,	uchar *record,
 	int i, nxt = 0;
 	int c;
 	unsigned char end = 0xff;
-	unsigned char tmp;
 
 	for (i = 0; fact_get_char(i) != end; i = nxt) {
 		nxt = i + 1;
@@ -99,7 +92,6 @@ int get_factory_record_val(unsigned char *eeprom_buf, int size,	uchar *record,
 			int pos;
 			int endpos;
 			int z;
-			int level = 0;
 
 			c = strncmp((char *)&eeprom_buf[i + 1], (char *)record,
 				    strlen((char *)record));
@@ -110,30 +102,22 @@ int get_factory_record_val(unsigned char *eeprom_buf, int size,	uchar *record,
 				/* search for "<" */
 				c = -1;
 				for (z = pos; fact_get_char(z) != end; z++) {
-					if (fact_get_char(z) == '<') {
-						if (level == 0) {
-							endpos = z;
-							nxt = endpos;
-							c = 0;
-							break;
-						} else {
-							level--;
-						}
+					if ((fact_get_char(z) == '<')  ||
+					    (fact_get_char(z) == '>')) {
+						endpos = z;
+						nxt = endpos;
+						c = 0;
+						break;
 					}
-					if (fact_get_char(z) == '>')
-						level++;
 				}
-			} else {
-				continue;
 			}
 			if (c == 0) {
 				/* end found -> call get_factory_val */
-				tmp = eeprom_buf[endpos];
 				eeprom_buf[endpos] = end;
 				ret = get_factory_val(&eeprom_buf[pos],
-					endpos - pos, name, buf, len);
+					size - pos, name, buf, len);
 				/* fix buffer */
-				eeprom_buf[endpos] = tmp;
+				eeprom_buf[endpos] = '<';
 				debug("%s: %s.%s = %s\n",
 				      __func__, record, name, buf);
 				return ret;
@@ -148,39 +132,16 @@ int factoryset_read_eeprom(int i2c_addr)
 	int i, pages = 0, size = 0;
 	unsigned char eeprom_buf[0x3c00], hdr[4], buf[MAX_STRING_LENGTH];
 	unsigned char *cp, *cp1;
-#if CONFIG_IS_ENABLED(DM_I2C)
-	struct udevice *bus, *dev;
-	int ret;
+
+#if defined(CONFIG_DFU_FUNCTION)
+	factory_dat.usb_vendor_id = CONFIG_G_DNL_VENDOR_NUM;
+	factory_dat.usb_product_id = CONFIG_G_DNL_PRODUCT_NUM;
 #endif
-
-#if defined(CONFIG_DFU_OVER_USB)
-	factory_dat.usb_vendor_id = CONFIG_USB_GADGET_VENDOR_NUM;
-	factory_dat.usb_product_id = CONFIG_USB_GADGET_PRODUCT_NUM;
-#endif
-
-#if CONFIG_IS_ENABLED(DM_I2C)
-	ret = uclass_get_device_by_seq(UCLASS_I2C, EEPROM_I2C_BUS, &bus);
-	if (ret)
-		goto err;
-
-	ret = dm_i2c_probe(bus, i2c_addr, 0, &dev);
-	if (ret)
-		goto err;
-
-	ret = i2c_set_chip_offset_len(dev, 2);
-	if (ret)
-		goto err;
-
-	ret = dm_i2c_read(dev, EEPROM_FATORYSET_OFFSET, hdr, sizeof(hdr));
-	if (ret)
-		goto err;
-#else
 	if (i2c_probe(i2c_addr))
 		goto err;
 
 	if (i2c_read(i2c_addr, EEPROM_FATORYSET_OFFSET, 2, hdr, sizeof(hdr)))
 		goto err;
-#endif
 
 	if ((hdr[0] != 0x99) || (hdr[1] != 0x80)) {
 		printf("FactorySet is not right in eeprom.\n");
@@ -201,33 +162,16 @@ int factoryset_read_eeprom(int i2c_addr)
 	 * data after every time we got a record from eeprom
 	 */
 	debug("Read eeprom page :\n");
-	for (i = 0; i < pages; i++) {
-#if CONFIG_IS_ENABLED(DM_I2C)
-		ret = dm_i2c_read(dev, (OFF_PG + i) * EEPR_PG_SZ,
-				  eeprom_buf + (i * EEPR_PG_SZ), EEPR_PG_SZ);
-		if (ret)
-			goto err;
-#else
+	for (i = 0; i < pages; i++)
 		if (i2c_read(i2c_addr, (OFF_PG + i) * EEPR_PG_SZ, 2,
 			     eeprom_buf + (i * EEPR_PG_SZ), EEPR_PG_SZ))
 			goto err;
-#endif
-	}
 
-	if (size % EEPR_PG_SZ) {
-#if CONFIG_IS_ENABLED(DM_I2C)
-		ret = dm_i2c_read(dev, (OFF_PG + pages) * EEPR_PG_SZ,
-				  eeprom_buf + (pages * EEPR_PG_SZ),
-				  size % EEPR_PG_SZ);
-		if (ret)
-			goto err;
-#else
+	if (size % EEPR_PG_SZ)
 		if (i2c_read(i2c_addr, (OFF_PG + pages) * EEPR_PG_SZ, 2,
 			     eeprom_buf + (pages * EEPR_PG_SZ),
 			     (size % EEPR_PG_SZ)))
 			goto err;
-#endif
-	}
 
 	/* we do below just for eeprom align */
 	for (i = 0; i < size; i++)
@@ -243,68 +187,45 @@ int factoryset_read_eeprom(int i2c_addr)
 			       buf, MAX_STRING_LENGTH);
 	cp1 = buf;
 	for (i = 0; i < 6; i++) {
-		factory_dat.mac[i] = hextoul((char *)cp1, NULL);
+		factory_dat.mac[i] = simple_strtoul((char *)cp1, NULL, 16);
 		cp1 += 3;
 	}
 
-#if CONFIG_IS_ENABLED(TARGET_GIEDI) || CONFIG_IS_ENABLED(TARGET_DENEB)
-	/* get mac address for WLAN */
-	ret = get_factory_record_val(cp, size, (uchar *)"WLAN1", (uchar *)"mac",
-				     buf, MAX_STRING_LENGTH);
-	if (ret > 0) {
-		cp1 = buf;
-		for (i = 0; i < 6; i++) {
-			factory_dat.mac_wlan[i] = hextoul((char *)cp1, NULL);
-			cp1 += 3;
-		}
-	}
-#endif
-
-#if defined(CONFIG_DFU_OVER_USB)
+#if defined(CONFIG_DFU_FUNCTION)
 	/* read vid and pid for dfu mode */
 	if (0 <= get_factory_record_val(cp, size, (uchar *)"USBD1",
 					(uchar *)"vid", buf,
 					MAX_STRING_LENGTH)) {
-		factory_dat.usb_vendor_id = hextoul((char *)buf, NULL);
+		factory_dat.usb_vendor_id = simple_strtoul((char *)buf,
+							   NULL, 16);
 	}
 
 	if (0 <= get_factory_record_val(cp, size, (uchar *)"USBD1",
 					(uchar *)"pid", buf,
 					MAX_STRING_LENGTH)) {
-		factory_dat.usb_product_id = hextoul((char *)buf, NULL);
+		factory_dat.usb_product_id = simple_strtoul((char *)buf,
+							    NULL, 16);
 	}
 	printf("DFU USB: VID = 0x%4x, PID = 0x%4x\n", factory_dat.usb_vendor_id,
 	       factory_dat.usb_product_id);
 #endif
 	if (0 <= get_factory_record_val(cp, size, (uchar *)"DEV",
-					(uchar *)"num", factory_dat.serial,
+					(uchar *)"id", buf,
 					MAX_STRING_LENGTH)) {
-		debug("serial number: %s\n", factory_dat.serial);
+		if (strncmp((const char *)buf, "PXM50", 5) == 0)
+			factory_dat.pxm50 = 1;
+		else
+			factory_dat.pxm50 = 0;
 	}
-	if (0 <= get_factory_record_val(cp, size, (uchar *)"DEV",
-					(uchar *)"ver", buf,
+	debug("PXM50: %d\n", factory_dat.pxm50);
+#if defined(CONFIG_VIDEO)
+	if (0 <= get_factory_record_val(cp, size, (uchar *)"DISP1",
+					(uchar *)"name", factory_dat.disp_name,
 					MAX_STRING_LENGTH)) {
-		factory_dat.version = hextoul((char *)buf, NULL);
-		debug("version number: %d\n", factory_dat.version);
-	}
-	/* Get ASN from factory set if available */
-	if (0 <= get_factory_record_val(cp, size, (uchar *)"DEV",
-					(uchar *)"id", factory_dat.asn,
-					MAX_STRING_LENGTH)) {
-		debug("factoryset asn: %s\n", factory_dat.asn);
-	} else {
-		factory_dat.asn[0] = 0;
-	}
-	/* Get COMP/ver from factory set if available */
-	if (0 <= get_factory_record_val(cp, size, (uchar *)"COMP",
-					(uchar *)"ver",
-					factory_dat.comp_version,
-					MAX_STRING_LENGTH)) {
-		debug("factoryset COMP/ver: %s\n", factory_dat.comp_version);
-	} else {
-		strcpy((char *)factory_dat.comp_version, "1.0");
+		debug("display name: %s\n", factory_dat.disp_name);
 	}
 
+#endif
 	return 0;
 
 err:
@@ -312,77 +233,43 @@ err:
 	return 1;
 }
 
-static int get_mac_from_efuse(uint8_t mac[6])
-{
-#ifdef CONFIG_AM33XX
-	struct ctrl_dev *cdev = (struct ctrl_dev *)CTRL_DEVICE_BASE;
-	uint32_t mac_hi, mac_lo;
+static struct ctrl_dev *cdev = (struct ctrl_dev *)CTRL_DEVICE_BASE;
 
-	mac_lo = readl(&cdev->macid0l);
-	mac_hi = readl(&cdev->macid0h);
-
-	mac[0] = mac_hi & 0xFF;
-	mac[1] = (mac_hi & 0xFF00) >> 8;
-	mac[2] = (mac_hi & 0xFF0000) >> 16;
-	mac[3] = (mac_hi & 0xFF000000) >> 24;
-	mac[4] = mac_lo & 0xFF;
-	mac[5] = (mac_lo & 0xFF00) >> 8;
-#else
-	/* unhandled */
-	memset(mac, 0, 6);
-#endif
-	if (!is_valid_ethaddr(mac)) {
-		puts("Warning: ethaddr not set by FactorySet or E-fuse. ");
-		puts("Set <ethaddr> variable to overcome this.\n");
-		return -1;
-	}
-	return 0;
-}
-
-static int factoryset_mac_env_set(void)
+static int factoryset_mac_setenv(void)
 {
 	uint8_t mac_addr[6];
 
-	/* Set mac from factoryset or try reading E-fuse */
 	debug("FactorySet: Set mac address\n");
-	if (is_valid_ethaddr(factory_dat.mac)) {
+	if (is_valid_ether_addr(factory_dat.mac)) {
 		memcpy(mac_addr, factory_dat.mac, 6);
 	} else {
+		uint32_t mac_hi, mac_lo;
+
 		debug("Warning: FactorySet: <ethaddr> not set. Fallback to E-fuse\n");
-		if (get_mac_from_efuse(mac_addr) < 0)
+		mac_lo = readl(&cdev->macid0l);
+		mac_hi = readl(&cdev->macid0h);
+
+		mac_addr[0] = mac_hi & 0xFF;
+		mac_addr[1] = (mac_hi & 0xFF00) >> 8;
+		mac_addr[2] = (mac_hi & 0xFF0000) >> 16;
+		mac_addr[3] = (mac_hi & 0xFF000000) >> 24;
+		mac_addr[4] = mac_lo & 0xFF;
+		mac_addr[5] = (mac_lo & 0xFF00) >> 8;
+		if (!is_valid_ether_addr(mac_addr)) {
+			printf("Warning: ethaddr not set by FactorySet or E-fuse. Set <ethaddr> variable to overcome this.\n");
 			return -1;
+		}
 	}
 
-	eth_env_set_enetaddr("ethaddr", mac_addr);
-
-#if CONFIG_IS_ENABLED(TARGET_GIEDI) || CONFIG_IS_ENABLED(TARGET_DENEB)
-	eth_env_set_enetaddr("eth1addr", mac_addr);
-
-	/* wlan mac */
-	if (is_valid_ethaddr(factory_dat.mac_wlan))
-		eth_env_set_enetaddr("eth2addr", factory_dat.mac_wlan);
-#endif
+	eth_setenv_enetaddr("ethaddr", mac_addr);
 	return 0;
 }
 
-static void factoryset_dtb_env_set(void)
-{
-	/* Set ASN in environment*/
-	if (factory_dat.asn[0] != 0) {
-		env_set("dtb_name", (char *)factory_dat.asn);
-	} else {
-		/* dtb suffix gets added in load script */
-		env_set("dtb_name", "default");
-	}
-}
-
-int factoryset_env_set(void)
+int factoryset_setenv(void)
 {
 	int ret = 0;
 
-	factoryset_dtb_env_set();
-
-	if (factoryset_mac_env_set() < 0)
+	if (factoryset_mac_setenv() < 0)
 		ret = -1;
 
 	return ret;
@@ -392,13 +279,6 @@ int g_dnl_bind_fixup(struct usb_device_descriptor *dev, const char *name)
 {
 	put_unaligned(factory_dat.usb_vendor_id, &dev->idVendor);
 	put_unaligned(factory_dat.usb_product_id, &dev->idProduct);
-	g_dnl_set_serialnumber((char *)factory_dat.serial);
-
 	return 0;
-}
-
-int g_dnl_get_board_bcd_device_number(int gcnum)
-{
-	return factory_dat.version;
 }
 #endif /* defined(CONFIG_SPL_BUILD) */

@@ -1,13 +1,14 @@
-/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Board specific setup info
  *
  * (C) Copyright 2004, ARM Ltd.
  * Philippe Robin, <philippe.robin@arm.com>
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <config.h>
-#include <armcoremodule.h>
+#include <version.h>
 
 	/* Reset using CM control register */
 .global reset_cpu
@@ -42,6 +43,10 @@ lowlevel_init:
 	/* set the desired CM specific value */
 	mov	r2,#CMMASK_LOWVEC	/* Vectors at 0x00000000 for all */
 
+#if defined (CONFIG_CM10200E) || defined (CONFIG_CM10220E)
+	orr	r2,r2,#CMMASK_INIT_102
+#else
+
 #if !defined (CONFIG_CM920T) && !defined (CONFIG_CM920T_ETM) && \
      !defined (CONFIG_CM940T)
 
@@ -65,6 +70,8 @@ lowlevel_init:
 	orr	r2,r2,#CMMASK_CMxx6_COMMON
 
 #endif /* CMxx6 code */
+
+#endif /* ARM102xxE value */
 
 	/* read CM_INIT		 */
 	mov	r0, #CM_BASE
@@ -176,7 +183,7 @@ cm_remap:
 
 	/* Now 0x00000000 is writeable, replace the vectors	*/
 	ldr	r0, =_start	/* r0 <- start of vectors	*/
-	add	r2, r0, #64	/* r2 <- past vectors	*/
+	ldr	r2, =_TEXT_BASE	/* r2 <- past vectors	*/
 	sub	r1,r1,r1		/* destination 0x00000000	*/
 
 copy_vec:

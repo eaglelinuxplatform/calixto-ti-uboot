@@ -1,23 +1,18 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright 2008-2011 Freescale Semiconductor, Inc.
  *
  * (C) Copyright 2000
  * Wolfgang Denk, DENX Software Engineering, wd@denx.de.
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
-#include <display_options.h>
-#include <init.h>
-#include <asm/bitops.h>
-#include <asm/global_data.h>
 #include <asm/processor.h>
 #include <asm/mmu.h>
 #ifdef CONFIG_ADDR_MAP
 #include <addr_map.h>
 #endif
-
-#include <linux/log2.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -29,7 +24,7 @@ void invalidate_tlb(u8 tlb)
 		mtspr(MMUCSR0, 0x2);
 }
 
-__weak void init_tlbs(void)
+void init_tlbs(void)
 {
 	int i;
 
@@ -41,11 +36,11 @@ __weak void init_tlbs(void)
 			  tlb_table[i].mas7);
 	}
 
-	return;
+	return ;
 }
 
 #if !defined(CONFIG_NAND_SPL) && \
-	(!defined(CONFIG_SPL_BUILD) || !CONFIG_IS_ENABLED(INIT_MINIMAL))
+	(!defined(CONFIG_SPL_BUILD) || !defined(CONFIG_SPL_INIT_MINIMAL))
 void read_tlbcam_entry(int idx, u32 *valid, u32 *tsize, unsigned long *epn,
 		       phys_addr_t *rpn)
 {
@@ -221,7 +216,7 @@ int find_tlb_idx(void *addr, u8 tlbsel)
 }
 
 #ifdef CONFIG_ADDR_MAP
-int init_addr_map(void)
+void init_addr_map(void)
 {
 	int i;
 	unsigned int num_cam = mfspr(SPRN_TLB1CFG) & 0xfff;
@@ -237,30 +232,24 @@ int init_addr_map(void)
 			addrmap_set_entry(epn, rpn, TSIZE_TO_BYTES(tsize), i);
 	}
 
-	return 0;
+	return ;
 }
 #endif
 
-uint64_t tlb_map_range(ulong v_addr, phys_addr_t p_addr, uint64_t size,
-		       enum tlb_map_type map_type)
+unsigned int
+setup_ddr_tlbs_phys(phys_addr_t p_addr, unsigned int memsize_in_meg)
 {
 	int i;
 	unsigned int tlb_size;
-	unsigned int wimge;
-	unsigned int perm;
+	unsigned int wimge = MAS2_M;
+	unsigned int ram_tlb_address = (unsigned int)CONFIG_SYS_DDR_SDRAM_BASE;
 	unsigned int max_cam, tsize_mask;
+	u64 size, memsize = (u64)memsize_in_meg << 20;
 
-	if (map_type == TLB_MAP_RAM) {
-		perm = MAS3_SX|MAS3_SW|MAS3_SR;
-		wimge = MAS2_M;
 #ifdef CONFIG_SYS_PPC_DDR_WIMGE
-		wimge = CONFIG_SYS_PPC_DDR_WIMGE;
+	wimge = CONFIG_SYS_PPC_DDR_WIMGE;
 #endif
-	} else {
-		perm = MAS3_SW|MAS3_SR;
-		wimge = MAS2_I|MAS2_G;
-	}
-
+	size = min(memsize, CONFIG_MAX_MEM_MAPPED);
 	if ((mfspr(SPRN_MMUCFG) & MMUCFG_MAVN) == MMUCFG_MAVN_V1) {
 		/* Convert (4^max) kB to (2^max) bytes */
 		max_cam = ((mfspr(SPRN_TLB1CFG) >> 16) & 0xf) * 2 + 10;
@@ -272,11 +261,11 @@ uint64_t tlb_map_range(ulong v_addr, phys_addr_t p_addr, uint64_t size,
 	}
 
 	for (i = 0; size && i < 8; i++) {
-		int tlb_index = find_free_tlbcam();
+		int ram_tlb_index = find_free_tlbcam();
 		u32 camsize = __ilog2_u64(size) & tsize_mask;
-		u32 align = __ilog2(v_addr) & tsize_mask;
+		u32 align = __ilog2(ram_tlb_address) & tsize_mask;
 
-		if (tlb_index == -1)
+		if (ram_tlb_index == -1)
 			break;
 
 		if (align == -2) align = max_cam;
@@ -288,49 +277,31 @@ uint64_t tlb_map_range(ulong v_addr, phys_addr_t p_addr, uint64_t size,
 
 		tlb_size = camsize - 10;
 
-		set_tlb(1, v_addr, p_addr, perm, wimge,
-			0, tlb_index, tlb_size, 1);
+		set_tlb(1, ram_tlb_address, p_addr,
+			MAS3_SX|MAS3_SW|MAS3_SR, wimge,
+			0, ram_tlb_index, tlb_size, 1);
 
 		size -= 1ULL << camsize;
-		v_addr += 1UL << camsize;
+		memsize -= 1ULL << camsize;
+		ram_tlb_address += 1UL << camsize;
 		p_addr += 1UL << camsize;
 	}
 
-	return size;
-}
-
-unsigned int setup_ddr_tlbs_phys(phys_addr_t p_addr,
-				 unsigned int memsize_in_meg)
-{
-	unsigned int ram_tlb_address = (unsigned int)CFG_SYS_DDR_SDRAM_BASE;
-	u64 memsize = (u64)memsize_in_meg << 20;
-	u64 size;
-
-	size = min(memsize, (u64)CFG_MAX_MEM_MAPPED);
-	size = tlb_map_range(ram_tlb_address, p_addr, size, TLB_MAP_RAM);
-
-	if (size || memsize > CFG_MAX_MEM_MAPPED) {
-		print_size(memsize > CFG_MAX_MEM_MAPPED ?
-			   memsize - CFG_MAX_MEM_MAPPED + size : size,
-			   " of DDR memory left unmapped in U-Boot\n");
-#ifndef CONFIG_SPL_BUILD
-		puts("       ");
-#endif
-	}
-
+	if (memsize)
+		print_size(memsize, " left unmapped\n");
 	return memsize_in_meg;
 }
 
 unsigned int setup_ddr_tlbs(unsigned int memsize_in_meg)
 {
 	return
-		setup_ddr_tlbs_phys(CFG_SYS_DDR_SDRAM_BASE, memsize_in_meg);
+		setup_ddr_tlbs_phys(CONFIG_SYS_DDR_SDRAM_BASE, memsize_in_meg);
 }
 
 /* Invalidate the DDR TLBs for the requested size */
 void clear_ddr_tlbs_phys(phys_addr_t p_addr, unsigned int memsize_in_meg)
 {
-	u32 vstart = CFG_SYS_DDR_SDRAM_BASE;
+	u32 vstart = CONFIG_SYS_DDR_SDRAM_BASE;
 	unsigned long epn;
 	u32 tsize, valid, ptr;
 	phys_addr_t rpn = 0;
@@ -351,7 +322,7 @@ void clear_ddr_tlbs_phys(phys_addr_t p_addr, unsigned int memsize_in_meg)
 
 void clear_ddr_tlbs(unsigned int memsize_in_meg)
 {
-	clear_ddr_tlbs_phys(CFG_SYS_DDR_SDRAM_BASE, memsize_in_meg);
+	clear_ddr_tlbs_phys(CONFIG_SYS_DDR_SDRAM_BASE, memsize_in_meg);
 }
 
 

@@ -1,24 +1,40 @@
-# SPDX-License-Identifier: GPL-2.0+
 #
 # (C) Copyright 2006
 # Wolfgang Denk, DENX Software Engineering, wd@denx.de.
+#
+# SPDX-License-Identifier:	GPL-2.0+
+#
 
-obj-$(CONFIG_$(SPL_TPL_)DM_SPI_FLASH) += sf-uclass.o
-spi-nor-y := sf_probe.o spi-nor-ids.o
+include $(TOPDIR)/config.mk
+
+LIB	:= $(obj)libspi_flash.o
 
 ifdef CONFIG_SPL_BUILD
-obj-$(CONFIG_SPL_SPI_BOOT)	+= fsl_espi_spl.o
-ifeq ($(CONFIG_$(SPL_TPL_)SPI_FLASH_TINY),y)
-spi-nor-y += spi-nor-tiny.o
-else
-spi-nor-y += spi-nor-core.o
-endif
-else
-spi-nor-y += spi-nor-core.o
+COBJS-$(CONFIG_SPL_SPI_LOAD)	+= spi_spl_load.o
+COBJS-$(CONFIG_SPL_SPI_BOOT)	+= fsl_espi_spl.o
 endif
 
-obj-$(CONFIG_SPI_FLASH) += spi-nor.o
-obj-$(CONFIG_SPI_FLASH_DATAFLASH) += sf_dataflash.o
-obj-$(CONFIG_$(SPL_TPL_)SPI_FLASH_MTD) += sf_mtd.o
-obj-$(CONFIG_SPI_FLASH_SANDBOX) += sandbox.o
-obj-$(CONFIG_$(SPL_TPL_)BOOTDEV_SPI_FLASH) += sf_bootdev.o
+ifdef CONFIG_CMD_SF
+COBJS-y        += sf.o
+endif
+COBJS-$(CONFIG_SPI_FLASH) += sf_probe.o sf_ops.o
+COBJS-$(CONFIG_SPI_FRAM_RAMTRON) += ramtron.o
+COBJS-$(CONFIG_SPI_M95XXX) += eeprom_m95xxx.o
+
+COBJS	:= $(COBJS-y)
+SRCS	:= $(COBJS:.o=.c)
+OBJS	:= $(addprefix $(obj),$(COBJS))
+
+all:	$(LIB)
+
+$(LIB): $(obj).depend $(OBJS)
+	$(call cmd_link_o_target, $(OBJS))
+
+#########################################################################
+
+# defines $(obj).depend target
+include $(SRCTREE)/rules.mk
+
+sinclude $(obj).depend
+
+#########################################################################

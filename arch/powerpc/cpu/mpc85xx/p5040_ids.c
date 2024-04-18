@@ -1,6 +1,7 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright 2010-2011 Freescale Semiconductor, Inc.
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -8,7 +9,7 @@
 #include <asm/fsl_liodn.h>
 
 #ifdef CONFIG_SYS_DPAA_QBMAN
-struct qportal_info qp_info[CFG_SYS_QMAN_NUM_PORTALS] = {
+struct qportal_info qp_info[CONFIG_SYS_QMAN_NUM_PORTALS] = {
 	/* dqrr liodn, frame data liodn, liodn off, sdest */
 	SET_QP_INFO(1, 2, 1, 0),
 	SET_QP_INFO(3, 4, 2, 1),
@@ -41,30 +42,30 @@ struct liodn_id_table liodn_tbl[] = {
 	SET_PCI_LIODN_BASE(CONFIG_SYS_FSL_PCIE_COMPAT, 2, 196),
 	SET_PCI_LIODN_BASE(CONFIG_SYS_FSL_PCIE_COMPAT, 3, 197),
 
-	SET_DMA_LIODN(1, "fsl,eloplus-dma", 193),
-	SET_DMA_LIODN(2, "fsl,eloplus-dma", 194),
+	SET_DMA_LIODN(1, 193),
+	SET_DMA_LIODN(2, 194),
 };
 int liodn_tbl_sz = ARRAY_SIZE(liodn_tbl);
 
 #ifdef CONFIG_SYS_DPAA_FMAN
-struct fman_liodn_id_table fman1_liodn_tbl[] = {
-	SET_FMAN_RX_1G_LIODN(1, 0, 11),
-	SET_FMAN_RX_1G_LIODN(1, 1, 12),
-	SET_FMAN_RX_1G_LIODN(1, 2, 13),
-	SET_FMAN_RX_1G_LIODN(1, 3, 14),
-	SET_FMAN_RX_1G_LIODN(1, 4, 15),
-	SET_FMAN_RX_10G_LIODN(1, 0, 16),
+struct liodn_id_table fman1_liodn_tbl[] = {
+	SET_FMAN_RX_1G_LIODN(1, 0, 6),
+	SET_FMAN_RX_1G_LIODN(1, 1, 7),
+	SET_FMAN_RX_1G_LIODN(1, 2, 8),
+	SET_FMAN_RX_1G_LIODN(1, 3, 9),
+	SET_FMAN_RX_1G_LIODN(1, 4, 10),
+	SET_FMAN_RX_10G_LIODN(1, 0, 11),
 };
 int fman1_liodn_tbl_sz = ARRAY_SIZE(fman1_liodn_tbl);
 
-#if (CFG_SYS_NUM_FMAN == 2)
-struct fman_liodn_id_table fman2_liodn_tbl[] = {
-	SET_FMAN_RX_1G_LIODN(2, 0, 17),
-	SET_FMAN_RX_1G_LIODN(2, 1, 18),
-	SET_FMAN_RX_1G_LIODN(2, 2, 19),
-	SET_FMAN_RX_1G_LIODN(2, 3, 20),
-	SET_FMAN_RX_1G_LIODN(2, 4, 21),
-	SET_FMAN_RX_10G_LIODN(2, 0, 22),
+#if (CONFIG_SYS_NUM_FMAN == 2)
+struct liodn_id_table fman2_liodn_tbl[] = {
+	SET_FMAN_RX_1G_LIODN(2, 0, 12),
+	SET_FMAN_RX_1G_LIODN(2, 1, 13),
+	SET_FMAN_RX_1G_LIODN(2, 2, 14),
+	SET_FMAN_RX_1G_LIODN(2, 3, 15),
+	SET_FMAN_RX_1G_LIODN(2, 4, 16),
+	SET_FMAN_RX_10G_LIODN(2, 0, 17),
 };
 int fman2_liodn_tbl_sz = ARRAY_SIZE(fman2_liodn_tbl);
 #endif
@@ -101,7 +102,7 @@ struct liodn_id_table liodn_bases[] = {
 #ifdef CONFIG_SYS_DPAA_FMAN
 	[FSL_HW_PORTAL_FMAN1] = SET_LIODN_BASE_1(32),
 #endif
-#if (CFG_SYS_NUM_FMAN == 2)
+#if (CONFIG_SYS_NUM_FMAN == 2)
 	[FSL_HW_PORTAL_FMAN2] = SET_LIODN_BASE_1(160),
 #endif
 #ifdef CONFIG_SYS_FSL_RAID_ENGINE

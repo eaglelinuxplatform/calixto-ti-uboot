@@ -1,6 +1,10 @@
-# SPDX-License-Identifier: GPL-2.0+
 #
 # Copyright 2004 Freescale Semiconductor, Inc.
+#
+# SPDX-License-Identifier:	GPL-2.0+
+#
 
-PLATFORM_CPPFLAGS += -DCONFIG_E300 -msoft-float
-PLATFORM_RELFLAGS += -msingle-pic-base -fno-jump-tables
+PLATFORM_RELFLAGS += -meabi
+
+PLATFORM_CPPFLAGS += -DCONFIG_MPC83xx -DCONFIG_E300 \
+			-ffixed-r2 -msoft-float

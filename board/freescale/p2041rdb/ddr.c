@@ -1,20 +1,18 @@
-// SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright 2011 Freescale Semiconductor, Inc.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * Version 2 as published by the Free Software Foundation.
  */
 
 #include <common.h>
 #include <i2c.h>
 #include <hwconfig.h>
-#include <init.h>
-#include <log.h>
-#include <asm/global_data.h>
 #include <asm/mmu.h>
-#include <fsl_ddr_sdram.h>
-#include <fsl_ddr_dimm_params.h>
+#include <asm/fsl_ddr_sdram.h>
+#include <asm/fsl_ddr_dimm_params.h>
 #include <asm/fsl_law.h>
-
-DECLARE_GLOBAL_DATA_PTR;
 
 struct board_specific_parameters {
 	u32 n_ranks;
@@ -23,7 +21,7 @@ struct board_specific_parameters {
 	u32 wrlvl_start;
 	u32 cpo;
 	u32 write_data_delay;
-	u32 force_2t;
+	u32 force_2T;
 };
 
 /*
@@ -78,7 +76,7 @@ void fsl_ddr_board_options(memctl_options_t *popts,
 					pbsp->write_data_delay;
 				popts->clk_adjust = pbsp->clk_adjust;
 				popts->wrlvl_start = pbsp->wrlvl_start;
-				popts->twot_en = pbsp->force_2t;
+				popts->twoT_en = pbsp->force_2T;
 				goto found;
 			}
 			pbsp_highest = pbsp;
@@ -95,7 +93,7 @@ void fsl_ddr_board_options(memctl_options_t *popts,
 		popts->write_data_delay = pbsp_highest->write_data_delay;
 		popts->clk_adjust = pbsp_highest->clk_adjust;
 		popts->wrlvl_start = pbsp_highest->wrlvl_start;
-		popts->twot_en = pbsp_highest->force_2t;
+		popts->twoT_en = pbsp_highest->force_2T;
 	} else {
 		panic("DIMM is not supported by this board");
 	}
@@ -120,7 +118,7 @@ found:
 	popts->ddr_cdr1 = DDR_CDR1_DHC_EN;
 }
 
-int dram_init(void)
+phys_size_t initdram(int board_type)
 {
 	phys_size_t dram_size = 0;
 
@@ -131,14 +129,12 @@ int dram_init(void)
 		dram_size = fsl_ddr_sdram();
 	} else {
 		puts("no SPD and fixed parameters\n");
-		return -ENXIO;
+		return dram_size;
 	}
 
 	dram_size = setup_ddr_tlbs(dram_size / 0x100000);
 	dram_size *= 0x100000;
 
 	debug("    DDR: ");
-	gd->ram_size = dram_size;
-
-	return 0;
+	return dram_size;
 }

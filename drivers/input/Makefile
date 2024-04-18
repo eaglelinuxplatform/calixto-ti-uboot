@@ -1,18 +1,38 @@
-# SPDX-License-Identifier: GPL-2.0+
 #
 # (C) Copyright 2000-2007
 # Wolfgang Denk, DENX Software Engineering, wd@denx.de.
+#
+# SPDX-License-Identifier:	GPL-2.0+
+#
 
-obj-$(CONFIG_$(SPL_TPL_)CROS_EC_KEYB) += cros_ec_keyb.o
-obj-$(CONFIG_$(SPL_TPL_)OF_CONTROL) += key_matrix.o
-obj-$(CONFIG_$(SPL_TPL_)DM_KEYBOARD) += input.o keyboard-uclass.o
-obj-$(CONFIG_BUTTON_KEYBOARD) += button_kbd.o
+include $(TOPDIR)/config.mk
 
-ifndef CONFIG_SPL_BUILD
+LIB	:= $(obj)libinput.o
 
-obj-$(CONFIG_APPLE_SPI_KEYB) += apple_spi_kbd.o
-obj-$(CONFIG_I8042_KEYB) += i8042.o
-obj-$(CONFIG_TEGRA_KEYBOARD) += input.o tegra-kbc.o
-obj-$(CONFIG_TWL4030_INPUT) += twl4030.o
-obj-$(CONFIG_TWL6030_INPUT) += twl6030.o
+COBJS-$(CONFIG_I8042_KBD) += i8042.o
+COBJS-$(CONFIG_TEGRA_KEYBOARD) += tegra-kbc.o
+COBJS-$(CONFIG_CROS_EC_KEYB) += cros_ec_keyb.o
+ifdef CONFIG_PS2KBD
+COBJS-y += keyboard.o pc_keyb.o
+COBJS-$(CONFIG_PS2MULT) += ps2mult.o ps2ser.o
 endif
+COBJS-y += input.o
+COBJS-$(CONFIG_OF_CONTROL) += key_matrix.o
+
+COBJS	:= $(COBJS-y)
+SRCS	:= $(COBJS:.o=.c)
+OBJS	:= $(addprefix $(obj),$(COBJS))
+
+all:	$(LIB)
+
+$(LIB):	$(obj).depend $(OBJS)
+	$(call cmd_link_o_target, $(OBJS))
+
+#########################################################################
+
+# defines $(obj).depend target
+include $(SRCTREE)/rules.mk
+
+sinclude $(obj).depend
+
+#########################################################################

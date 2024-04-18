@@ -1,9 +1,10 @@
-/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * thor.h -- USB THOR Downloader protocol
  *
  * Copyright (C) 2013 Samsung Electronics
  * Lukasz Majewski  <l.majewski@samsung.com>
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  *
  */
 
@@ -12,9 +13,15 @@
 
 #include <linux/usb/composite.h>
 
-#define THOR_DFU_REINIT_NEEDED	0xFFFFFFFE
-
 int thor_handle(void);
 int thor_init(void);
+
+#ifdef CONFIG_THOR_FUNCTION
 int thor_add(struct usb_configuration *c);
+#else
+int thor_add(struct usb_configuration *c)
+{
+	return 0;
+}
+#endif
 #endif /* __THOR_H_ */

@@ -1,8 +1,9 @@
-/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * (C) Copyright 2006-2008
  * Texas Instruments, <www.ti.com>
  * Richard Woodruff <r-woodruff2@ti.com>
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 #ifndef _CLOCKS_H_
 #define _CLOCKS_H_
@@ -26,6 +27,8 @@
 #define ICK_DSS_ON	0x00000001
 #define FCK_CAM_ON	0x00000001
 #define ICK_CAM_ON	0x00000001
+#define FCK_PER_ON	0x0003ffff
+#define ICK_PER_ON	0x0003ffff
 
 /* Used to index into DPLL parameter tables */
 typedef struct {

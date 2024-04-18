@@ -37,25 +37,12 @@
  */
 
 #include <common.h>
-#include <dm.h>
-#include <log.h>
 #include <malloc.h>
-#include <memalign.h>
 #include <sdhci.h>
-#include <time.h>
-#include <asm/arch/msg.h>
-#include <asm/arch/mbox.h>
-#include <mach/sdhci.h>
-#include <mach/timer.h>
+#include <asm/arch/timer.h>
 
 /* 400KHz is max freq for card ID etc. Use that as min */
 #define MIN_FREQ 400000
-#define SDHCI_BUFFER 0x20
-
-struct bcm2835_sdhci_plat {
-	struct mmc_config cfg;
-	struct mmc mmc;
-};
 
 struct bcm2835_sdhci_host {
 	struct sdhci_host host;
@@ -69,7 +56,7 @@ static inline struct bcm2835_sdhci_host *to_bcm(struct sdhci_host *host)
 }
 
 static inline void bcm2835_sdhci_raw_writel(struct sdhci_host *host, u32 val,
-					    int reg)
+						int reg)
 {
 	struct bcm2835_sdhci_host *bcm_host = to_bcm(host);
 
@@ -81,14 +68,11 @@ static inline void bcm2835_sdhci_raw_writel(struct sdhci_host *host, u32 val,
 	 * (Which is just as well - otherwise we'd have to nobble the DMA engine
 	 * too)
 	 */
-	if (reg != SDHCI_BUFFER) {
-		while (timer_get_us() - bcm_host->last_write <
-		       bcm_host->twoticks_delay)
-			;
-	}
+	while (get_timer_us(bcm_host->last_write) < bcm_host->twoticks_delay)
+		;
 
 	writel(val, host->ioaddr + reg);
-	bcm_host->last_write = timer_get_us();
+	bcm_host->last_write = get_timer_us(0);
 }
 
 static inline u32 bcm2835_sdhci_raw_readl(struct sdhci_host *host, int reg)
@@ -164,34 +148,16 @@ static const struct sdhci_ops bcm2835_ops = {
 	.read_b = bcm2835_sdhci_readb,
 };
 
-static int bcm2835_sdhci_bind(struct udevice *dev)
+int bcm2835_sdhci_init(u32 regbase, u32 emmc_freq)
 {
-	struct bcm2835_sdhci_plat *plat = dev_get_plat(dev);
+	struct bcm2835_sdhci_host *bcm_host;
+	struct sdhci_host *host;
 
-	return sdhci_bind(dev, &plat->mmc, &plat->cfg);
-}
-
-static int bcm2835_sdhci_probe(struct udevice *dev)
-{
-	struct mmc_uclass_priv *upriv = dev_get_uclass_priv(dev);
-	struct bcm2835_sdhci_plat *plat = dev_get_plat(dev);
-	struct bcm2835_sdhci_host *priv = dev_get_priv(dev);
-	struct sdhci_host *host = &priv->host;
-	fdt_addr_t base;
-	int emmc_freq;
-	int ret;
-	int clock_id = (int)dev_get_driver_data(dev);
-
-	base = dev_read_addr(dev);
-	if (base == FDT_ADDR_T_NONE)
-		return -EINVAL;
-
-	ret = bcm2835_get_mmc_clock(clock_id);
-	if (ret < 0) {
-		debug("%s: Failed to set MMC clock (err=%d)\n", __func__, ret);
-		return ret;
+	bcm_host = malloc(sizeof(*bcm_host));
+	if (!bcm_host) {
+		printf("sdhci_host malloc fail!\n");
+		return 1;
 	}
-	emmc_freq = ret;
 
 	/*
 	 * See the comments in bcm2835_sdhci_raw_writel().
@@ -206,51 +172,19 @@ static int bcm2835_sdhci_probe(struct udevice *dev)
 	 * Multiply by 1000000 to get uS per two ticks.
 	 * +1 for hack rounding.
 	 */
-	priv->twoticks_delay = ((2 * 1000000) / MIN_FREQ) + 1;
-	priv->last_write = 0;
+	bcm_host->twoticks_delay = ((2 * 1000000) / MIN_FREQ) + 1;
+	bcm_host->last_write = 0;
 
-	host->name = dev->name;
-	host->ioaddr = (void *)(uintptr_t)base;
+	host = &bcm_host->host;
+	host->name = "bcm2835_sdhci";
+	host->ioaddr = (void *)regbase;
 	host->quirks = SDHCI_QUIRK_BROKEN_VOLTAGE | SDHCI_QUIRK_BROKEN_R1B |
-		SDHCI_QUIRK_WAIT_SEND_CMD | SDHCI_QUIRK_NO_HISPD_BIT;
-	host->max_clk = emmc_freq;
+		SDHCI_QUIRK_WAIT_SEND_CMD;
 	host->voltages = MMC_VDD_32_33 | MMC_VDD_33_34 | MMC_VDD_165_195;
 	host->ops = &bcm2835_ops;
 
-	host->mmc = &plat->mmc;
-	host->mmc->dev = dev;
+	host->version = sdhci_readw(host, SDHCI_HOST_VERSION);
+	add_sdhci(host, emmc_freq, MIN_FREQ);
 
-	ret = sdhci_setup_cfg(&plat->cfg, host, emmc_freq, MIN_FREQ);
-	if (ret) {
-		debug("%s: Failed to setup SDHCI (err=%d)\n", __func__, ret);
-		return ret;
-	}
-
-	upriv->mmc = &plat->mmc;
-	host->mmc->priv = host;
-
-	return sdhci_probe(dev);
+	return 0;
 }
-
-static const struct udevice_id bcm2835_sdhci_match[] = {
-	{
-		.compatible = "brcm,bcm2835-sdhci",
-		.data = BCM2835_MBOX_CLOCK_ID_EMMC
-	},
-	{
-		.compatible = "brcm,bcm2711-emmc2",
-		.data = BCM2835_MBOX_CLOCK_ID_EMMC2
-	},
-	{ /* sentinel */ }
-};
-
-U_BOOT_DRIVER(sdhci_cdns) = {
-	.name = "sdhci-bcm2835",
-	.id = UCLASS_MMC,
-	.of_match = bcm2835_sdhci_match,
-	.bind = bcm2835_sdhci_bind,
-	.probe = bcm2835_sdhci_probe,
-	.priv_auto	= sizeof(struct bcm2835_sdhci_host),
-	.plat_auto	= sizeof(struct bcm2835_sdhci_plat),
-	.ops = &sdhci_ops,
-};

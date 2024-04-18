@@ -1,7 +1,8 @@
-/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * (C) Copyright 2006-2010
  * Wolfgang Denk, DENX Software Engineering, wd@denx.de.
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 OUTPUT_ARCH(powerpc)
@@ -25,6 +26,7 @@ SECTIONS
     _GOT2_TABLE_ = .;
     KEEP(*(.got2))
     KEEP(*(.got))
+    PROVIDE(_GLOBAL_OFFSET_TABLE_ = . + 4);
     _FIXUP_TABLE_ = .;
     KEEP(*(.fixup))
   }
@@ -42,8 +44,8 @@ SECTIONS
   . = .;
 
   . = ALIGN(4);
-  __u_boot_list : {
-	KEEP(*(SORT(__u_boot_list*)));
+  .u_boot_list : {
+	KEEP(*(SORT(.u_boot_list*)));
   }
 
 
@@ -51,12 +53,6 @@ SECTIONS
   __start___ex_table = .;
   __ex_table : { *(__ex_table) }
   __stop___ex_table = .;
-
-  /*
-   * _end - This is end of u-boot.bin image.
-   * dtb will be appended here to make u-boot-dtb.bin
-   */
-  _end = .;
 
   . = ALIGN(4096);
   __init_begin = .;

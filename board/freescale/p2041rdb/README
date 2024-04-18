@@ -18,8 +18,8 @@ Boot from NOR flash
 2. Program image
 	=> tftp 1000000 u-boot.bin
 	=> protect off all
-	=> erase eff40000 efffffff
-	=> cp.b 1000000 eff40000 c0000
+	=> erase eff80000 efffffff
+	=> cp.b 1000000 eff80000 80000
 
 3. Program RCW
 	=> tftp 1000000 rcw.bin
@@ -30,8 +30,8 @@ Boot from NOR flash
 4. Program FMAN Firmware ucode
 	=> tftp 1000000 ucode.bin
 	=> protect off all
-	=> erase eff00000 eff3ffff
-	=> cp.b 1000000 eff00000 2000
+	=> erase ef000000 ef0fffff
+	=> cp.b 1000000 ef000000 2000
 
 5. Change DIP-switch
 	SW1[1-5] = 10110
@@ -50,11 +50,11 @@ Boot from SDCard
 3. Program the PBL image to SDCard
 	=> tftp 1000000 pbl_sd.bin
 	=> mmcinfo
-	=> mmc write 1000000 8 672
+	=> mmc write 1000000 8 441
 
 4. Program FMAN Firmware ucode
 	=> tftp 1000000 ucode.bin
-	=> mmc write 1000000 690 10
+	=> mmc write 1000000 46a 10
 
 5. Change DIP-switch
 	SW1[1-5] = 01100
@@ -84,21 +84,6 @@ Boot from SPI flash
 5. Change DIP-switch
 	SW1[1-5] = 10100
 	Note: 1 stands for 'on', 0 stands for 'off'
-
-Device tree support and how to enable it for different configs
---------------------------------------------------------------
-Device tree support is available for p2041rdb for below mentioned boot,
-1. NOR Boot
-2. NAND Boot
-3. SD Boot
-4. SPIFLASH Boot
-
-To enable device tree support for other boot, below configs need to be
-enabled in relative defconfig file,
-1. CONFIG_DEFAULT_DEVICE_TREE="p2041rdb" (Change default device tree name if required)
-2. CONFIG_OF_CONTROL
-3. CONFIG_MPC85XX_HAVE_RESET_VECTOR if reset vector is located at
-   CFG_RESET_VECTOR_ADDRESS - 0xffc
 
 CPLD command
 ============

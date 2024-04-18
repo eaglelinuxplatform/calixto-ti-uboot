@@ -1,8 +1,9 @@
-/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Chromium OS Matrix Keyboard Message Protocol definitions
  *
  * Copyright (c) 2012 The Chromium OS Authors.
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef _CROS_MESSAGE_H
@@ -22,7 +23,7 @@ enum {
 	MSG_PROTO_BYTES		= MSG_HEADER_BYTES + MSG_TRAILER_BYTES,
 
 	/* Max length of messages */
-	MSG_BYTES		= EC_PROTO2_MAX_PARAM_SIZE + MSG_PROTO_BYTES,
+	MSG_BYTES		= EC_HOST_PARAM_SIZE + MSG_PROTO_BYTES,
 };
 
 #endif

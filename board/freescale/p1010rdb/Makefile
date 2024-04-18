@@ -1,26 +1,46 @@
-# SPDX-License-Identifier: GPL-2.0+
 #
 # Copyright 2010-2011 Freescale Semiconductor, Inc.
+#
+# SPDX-License-Identifier:	GPL-2.0+
+#
+
+include $(TOPDIR)/config.mk
+
+LIB	= $(obj)lib$(BOARD).o
 
 MINIMAL=
 
 ifdef CONFIG_SPL_BUILD
-ifndef CONFIG_TPL_BUILD
 ifdef CONFIG_SPL_INIT_MINIMAL
 MINIMAL=y
 endif
 endif
-endif
 
 ifdef MINIMAL
-obj-y	+= spl_minimal.o
+
+COBJS-y	+= spl_minimal.o tlb.o law.o
+
 else
-ifdef CONFIG_SPL_BUILD
-obj-y	+= spl.o
-endif
-obj-y	+= p1010rdb.o
-obj-y	+= ddr.o
+
+COBJS-y	+= $(BOARD).o
+COBJS-y	+= ddr.o
+COBJS-y	+= law.o
+COBJS-y	+= tlb.o
+
 endif
 
-obj-y	+= law.o
-obj-y	+= tlb.o
+SRCS	:= $(SOBJS:.o=.S) $(COBJS-y:.o=.c)
+OBJS	:= $(addprefix $(obj),$(COBJS-y))
+SOBJS	:= $(addprefix $(obj),$(SOBJS))
+
+$(LIB):	$(obj).depend $(OBJS) $(SOBJS)
+	$(call cmd_link_o_target, $(OBJS))
+
+#########################################################################
+
+# defines $(obj).depend target
+include $(SRCTREE)/rules.mk
+
+sinclude $(obj).depend
+
+#########################################################################

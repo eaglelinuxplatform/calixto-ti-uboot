@@ -1,12 +1,10 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright 2009-2011 Freescale Semiconductor, Inc.
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
-#include <env.h>
-#include <log.h>
-#include <time.h>
 #ifdef CONFIG_SYS_P4080_ERRATUM_SERDES8
 #include <hwconfig.h>
 #endif
@@ -15,8 +13,7 @@
 #include <asm/io.h>
 #include <asm/processor.h>
 #include <asm/fsl_law.h>
-#include <linux/delay.h>
-#include <linux/errno.h>
+#include <asm/errno.h>
 #include "fsl_corenet_serdes.h"
 
 /*
@@ -79,7 +76,7 @@ static const struct {
 	{ 17, 163, FSL_SRDS_BANK_2 },
 	{ 18, 164, FSL_SRDS_BANK_2 },
 	{ 19, 165, FSL_SRDS_BANK_2 },
-#ifdef CONFIG_ARCH_P4080
+#ifdef CONFIG_PPC_P4080
 	{ 20, 170, FSL_SRDS_BANK_3 },
 	{ 21, 171, FSL_SRDS_BANK_3 },
 	{ 22, 172, FSL_SRDS_BANK_3 },
@@ -108,8 +105,8 @@ int serdes_get_bank_by_lane(int lane)
 
 int serdes_lane_enabled(int lane)
 {
-	ccsr_gur_t *gur = (void *)(CFG_SYS_MPC85xx_GUTS_ADDR);
-	serdes_corenet_t *regs = (void *)CFG_SYS_FSL_CORENET_SERDES_ADDR;
+	ccsr_gur_t *gur = (void *)(CONFIG_SYS_MPC85xx_GUTS_ADDR);
+	serdes_corenet_t *regs = (void *)CONFIG_SYS_FSL_CORENET_SERDES_ADDR;
 
 	int bank = lanes[lane].bank;
 	int word = lanes[lane].lpd / 32;
@@ -133,14 +130,11 @@ int serdes_lane_enabled(int lane)
 
 int is_serdes_configured(enum srds_prtcl device)
 {
-	ccsr_gur_t *gur = (void *)(CFG_SYS_MPC85xx_GUTS_ADDR);
+	ccsr_gur_t *gur = (void *)(CONFIG_SYS_MPC85xx_GUTS_ADDR);
 
 	/* Is serdes enabled at all? */
 	if (!(in_be32(&gur->rcwsr[5]) & FSL_CORENET_RCWSR5_SRDS_EN))
 		return 0;
-
-	if (!(serdes_prtcl_map & (1 << NONE)))
-		fsl_serdes_init();
 
 	return (1 << device) & serdes_prtcl_map;
 }
@@ -169,7 +163,7 @@ int serdes_get_first_lane(enum srds_prtcl device)
 	u32 prtcl;
 	const ccsr_gur_t *gur;
 
-	gur = (typeof(gur))CFG_SYS_MPC85xx_GUTS_ADDR;
+	gur = (typeof(gur))CONFIG_SYS_MPC85xx_GUTS_ADDR;
 
 	/* Is serdes enabled at all? */
 	if (unlikely((in_be32(&gur->rcwsr[5]) & 0x2000) == 0))
@@ -251,22 +245,22 @@ void serdes_reset_rx(enum srds_prtcl device)
 	if (unlikely(device == NONE))
 		return;
 
-	gur = (typeof(gur))CFG_SYS_MPC85xx_GUTS_ADDR;
+	gur = (typeof(gur))CONFIG_SYS_MPC85xx_GUTS_ADDR;
 
 	/* Is serdes enabled at all? */
 	if (unlikely((in_be32(&gur->rcwsr[5]) & 0x2000) == 0))
 		return;
 
-	regs = (typeof(regs))CFG_SYS_FSL_CORENET_SERDES_ADDR;
+	regs = (typeof(regs))CONFIG_SYS_FSL_CORENET_SERDES_ADDR;
 	prtcl = (in_be32(&gur->rcwsr[4]) & FSL_CORENET_RCWSR4_SRDS_PRTCL) >> 26;
 
 	__serdes_reset_rx(regs, prtcl, device);
 }
 #endif
 
-#ifndef CFG_SYS_DCSRBAR_PHYS
-#define CFG_SYS_DCSRBAR_PHYS	0x80000000 /* Must be 1GB-aligned for rev1.0 */
-#define CFG_SYS_DCSRBAR	0x80000000
+#ifndef CONFIG_SYS_DCSRBAR_PHYS
+#define CONFIG_SYS_DCSRBAR_PHYS	0x80000000 /* Must be 1GB-aligned for rev1.0 */
+#define CONFIG_SYS_DCSRBAR	0x80000000
 #define __DCSR_NOT_DEFINED_BY_CONFIG
 #endif
 
@@ -315,16 +309,16 @@ static void enable_bank(ccsr_gur_t *gur, int bank)
 	 */
 	{
 #ifdef __DCSR_NOT_DEFINED_BY_CONFIG
-		struct law_entry law = find_law(CFG_SYS_DCSRBAR_PHYS);
+		struct law_entry law = find_law(CONFIG_SYS_DCSRBAR_PHYS);
 		int law_index;
 		if (law.index == -1)
-			law_index = set_next_law(CFG_SYS_DCSRBAR_PHYS,
+			law_index = set_next_law(CONFIG_SYS_DCSRBAR_PHYS,
 						 LAW_SIZE_1M, LAW_TRGT_IF_DCSR);
 		else
-			set_law(law.index, CFG_SYS_DCSRBAR_PHYS, LAW_SIZE_1M,
+			set_law(law.index, CONFIG_SYS_DCSRBAR_PHYS, LAW_SIZE_1M,
 				LAW_TRGT_IF_DCSR);
 #endif
-		u32 *p = (void *)CFG_SYS_DCSRBAR + 0x20114;
+		u32 *p = (void *)CONFIG_SYS_DCSRBAR + 0x20114;
 		out_be32(p, rcw5);
 #ifdef __DCSR_NOT_DEFINED_BY_CONFIG
 		if (law.index == -1)
@@ -466,7 +460,7 @@ static void p4080_erratum_serdes_a005(serdes_corenet_t *regs, unsigned int cfg)
 static void wait_for_rstdone(unsigned int bank)
 {
 	serdes_corenet_t *srds_regs =
-		(void *)CFG_SYS_FSL_CORENET_SERDES_ADDR;
+		(void *)CONFIG_SYS_FSL_CORENET_SERDES_ADDR;
 	unsigned long long end_tick;
 	u32 rstctl;
 
@@ -491,10 +485,10 @@ void soc_serdes_init(void) __attribute__((weak, alias("__soc_serdes_init")));
 
 void fsl_serdes_init(void)
 {
-	ccsr_gur_t *gur = (void *)(CFG_SYS_MPC85xx_GUTS_ADDR);
+	ccsr_gur_t *gur = (void *)(CONFIG_SYS_MPC85xx_GUTS_ADDR);
 	int cfg;
 	serdes_corenet_t *srds_regs;
-#ifdef CONFIG_ARCH_P5040
+#ifdef CONFIG_PPC_P5040
 	serdes_corenet_t *srds2_regs;
 #endif
 	int lane, bank, idx;
@@ -517,17 +511,15 @@ void fsl_serdes_init(void)
 	 * Extract hwconfig from environment since we have not properly setup
 	 * the environment but need it for ddr config params
 	 */
-	if (env_get_f("hwconfig", buffer, sizeof(buffer)) > 0)
+	if (getenv_f("hwconfig", buffer, sizeof(buffer)) > 0)
 		buf = buffer;
 #endif
-	if (serdes_prtcl_map & (1 << NONE))
-		return;
 
 	/* Is serdes enabled at all? */
 	if (!(in_be32(&gur->rcwsr[5]) & FSL_CORENET_RCWSR5_SRDS_EN))
 		return;
 
-	srds_regs = (void *)(CFG_SYS_FSL_CORENET_SERDES_ADDR);
+	srds_regs = (void *)(CONFIG_SYS_FSL_CORENET_SERDES_ADDR);
 	cfg = (in_be32(&gur->rcwsr[4]) & FSL_CORENET_RCWSR4_SRDS_PRTCL) >> 26;
 	debug("Using SERDES configuration 0x%x, lane settings:\n", cfg);
 
@@ -580,7 +572,7 @@ void fsl_serdes_init(void)
 		}
 	}
 
-#ifdef CONFIG_ARCH_P5040
+#ifdef CONFIG_PPC_P5040
 	/*
 	 * Lanes on bank 4 on P5040 are commented-out, but for some SERDES
 	 * protocols, these lanes are routed to SATA.  We use serdes_prtcl_map
@@ -601,7 +593,7 @@ void fsl_serdes_init(void)
 		serdes_prtcl_map |= 1 << SATA1 | 1 << SATA2;
 		break;
 	default:
-		srds2_regs = (void *)CFG_SYS_FSL_CORENET_SERDES2_ADDR;
+		srds2_regs = (void *)CONFIG_SYS_FSL_CORENET_SERDES2_ADDR;
 
 		/* We don't need bank 4, so power it down */
 		setbits_be32(&srds2_regs->bank[0].rstctl, SRDS_RSTCTL_SDPD);
@@ -609,9 +601,6 @@ void fsl_serdes_init(void)
 #endif
 
 	soc_serdes_init();
-
-	/* Set the first bit to indicate serdes has been initialized */
-	serdes_prtcl_map |= (1 << NONE);
 
 #ifdef CONFIG_SYS_P4080_ERRATUM_SERDES8
 	/*
@@ -868,20 +857,4 @@ void fsl_serdes_init(void)
 			     SRDS_RSTCTL_SDPD);
 	}
 #endif
-}
-
-const char *serdes_clock_to_string(u32 clock)
-{
-	switch (clock) {
-	case SRDS_PLLCR0_RFCK_SEL_100:
-		return "100";
-	case SRDS_PLLCR0_RFCK_SEL_125:
-		return "125";
-	case SRDS_PLLCR0_RFCK_SEL_156_25:
-		return "156.25";
-	case SRDS_PLLCR0_RFCK_SEL_161_13:
-		return "161.1328123";
-	default:
-		return "150";
-	}
 }

@@ -20,8 +20,6 @@
  */
 
 #include <common.h>
-#include <div64.h>
-#include <malloc.h>
 
 #include <config.h>
 #include "nand.h"
@@ -35,7 +33,6 @@
 #else
 #include "malloc.h"
 #endif
-#include <linux/mtd/rawnand.h>
 
 unsigned yaffs_trace_mask = 0x0; /* Disable logging */
 static int yaffs_errno;
@@ -143,6 +140,8 @@ static const char *yaffs_error_str(void)
 	}
 }
 
+extern nand_info_t nand_info[];
+
 void cmd_yaffs_tracemask(unsigned set, unsigned mask)
 {
 	if (set)
@@ -168,14 +167,10 @@ void cmd_yaffs_devconfig(char *_mp, int flash_dev,
 	char *mp = NULL;
 	struct nand_chip *chip;
 
-	mtd = get_nand_dev_by_index(flash_dev);
-	if (!mtd) {
-		pr_err("\nno NAND devices available\n");
-		return;
-	}
-
 	dev = calloc(1, sizeof(*dev));
 	mp = strdup(_mp);
+
+	mtd = &nand_info[flash_dev];
 
 	if (!dev || !mp) {
 		/* Alloc error */
@@ -189,14 +184,14 @@ void cmd_yaffs_devconfig(char *_mp, int flash_dev,
 	}
 
 	if (end_block == 0)
-		end_block = lldiv(mtd->size, mtd->erasesize - 1);
+		end_block = mtd->size / mtd->erasesize - 1;
 
 	if (end_block < start_block) {
 		printf("Bad start/end\n");
 		goto err;
 	}
 
-	chip =  mtd_to_nand(mtd);
+	chip =  mtd->priv;
 
 	/* Check for any conflicts */
 	yaffs_dev_rewind();
@@ -264,7 +259,9 @@ void cmd_yaffs_dev_ls(void)
 		dev = yaffs_next_dev();
 		if (!dev)
 			return;
-		flash_dev = nand_mtd_to_devnum(dev->driver_context);
+		flash_dev =
+			((unsigned) dev->driver_context - (unsigned) nand_info)/
+				sizeof(nand_info[0]);
 		printf("%-10s %5d 0x%05x 0x%05x %s",
 			dev->param.name, flash_dev,
 			dev->param.start_block, dev->param.end_block,
@@ -326,7 +323,7 @@ void read_a_file(char *fn)
 		i++;
 		if (i > 32) {
 			printf("\n");
-			i = 0;
+			i = 0;;
 		}
 	}
 	printf("\n");

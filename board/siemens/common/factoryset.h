@@ -1,7 +1,8 @@
-/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Common board functions for siemens AM335X based boards
  * (C) Copyright 2013 Siemens Schweiz AG
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef __FACTORYSET_H
@@ -11,20 +12,16 @@
 
 struct factorysetcontainer {
 	uchar mac[6];
-#if CONFIG_IS_ENABLED(TARGET_GIEDI) || CONFIG_IS_ENABLED(TARGET_DENEB)
-	uchar mac_wlan[6];
-#endif
 	int usb_vendor_id;
 	int usb_product_id;
 	int pxm50;
-	unsigned char serial[MAX_STRING_LENGTH];
-	int version;
-	uchar asn[MAX_STRING_LENGTH];
-	uchar comp_version[MAX_STRING_LENGTH];
+#if defined(CONFIG_VIDEO)
+	unsigned char disp_name[MAX_STRING_LENGTH];
+#endif
 };
 
 int factoryset_read_eeprom(int i2c_addr);
-int factoryset_env_set(void);
+int factoryset_setenv(void);
 extern struct factorysetcontainer factory_dat;
 
 #endif /* __FACTORYSET_H */

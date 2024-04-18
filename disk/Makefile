@@ -1,20 +1,37 @@
-# SPDX-License-Identifier: GPL-2.0+
 #
 # (C) Copyright 2000-2006
 # Wolfgang Denk, DENX Software Engineering, wd@denx.de.
+#
+# SPDX-License-Identifier:	GPL-2.0+
+#
 
-#ccflags-y += -DET_DEBUG -DDEBUG
+include $(TOPDIR)/config.mk
 
-obj-$(CONFIG_$(SPL_TPL_)PARTITIONS)  += part.o
-ifdef CONFIG_$(SPL_TPL_)BLK
-obj-$(CONFIG_$(SPL_TPL_)PARTITIONS)  += disk-uclass.o
-endif
+#CFLAGS += -DET_DEBUG -DDEBUG
 
-# Must have BLK or SPL_LEGACY_BLOCK to support partitions
-ifneq ($(CONFIG_$(SPL_TPL_)BLK),$(CONFIG_SPL_LEGACY_BLOCK),)
-obj-$(CONFIG_$(SPL_TPL_)MAC_PARTITION)   += part_mac.o
-obj-$(CONFIG_$(SPL_TPL_)DOS_PARTITION)   += part_dos.o
-obj-$(CONFIG_$(SPL_TPL_)ISO_PARTITION)   += part_iso.o
-obj-$(CONFIG_$(SPL_TPL_)AMIGA_PARTITION) += part_amiga.o
-obj-$(CONFIG_$(SPL_TPL_)EFI_PARTITION)   += part_efi.o
-endif
+LIB	= $(obj)libdisk.o
+
+COBJS-$(CONFIG_PARTITIONS) 	+= part.o
+COBJS-$(CONFIG_MAC_PARTITION)   += part_mac.o
+COBJS-$(CONFIG_DOS_PARTITION)   += part_dos.o
+COBJS-$(CONFIG_ISO_PARTITION)   += part_iso.o
+COBJS-$(CONFIG_AMIGA_PARTITION) += part_amiga.o
+COBJS-$(CONFIG_EFI_PARTITION)   += part_efi.o
+
+COBJS	:= $(COBJS-y)
+SRCS	:= $(COBJS:.o=.c)
+OBJS	:= $(addprefix $(obj),$(COBJS))
+
+all:	$(LIB)
+
+$(LIB):	$(obj).depend $(OBJS)
+	$(call cmd_link_o_target, $(OBJS))
+
+#########################################################################
+
+# defines $(obj).depend target
+include $(SRCTREE)/rules.mk
+
+sinclude $(obj).depend
+
+#########################################################################

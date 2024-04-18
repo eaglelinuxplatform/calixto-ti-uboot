@@ -1,18 +1,29 @@
-# SPDX-License-Identifier: GPL-2.0+
+#
+# SPDX-License-Identifier:	GPL-2.0+
+#
 
-obj-$(CONFIG_BOOTCOUNT_GENERIC)	+= bootcount.o
-obj-$(CONFIG_BOOTCOUNT_MEM)	+= bootcount.o
-obj-$(CONFIG_BOOTCOUNT_AT91)	+= bootcount_at91.o
-obj-$(CONFIG_BOOTCOUNT_AM33XX)	+= bootcount_davinci.o
-obj-$(CONFIG_BOOTCOUNT_RAM)	+= bootcount_ram.o
-obj-$(CONFIG_BOOTCOUNT_ENV)	+= bootcount_env.o
-obj-$(CONFIG_BOOTCOUNT_I2C)	+= bootcount_i2c.o
-obj-$(CONFIG_BOOTCOUNT_EXT)	+= bootcount_ext.o
-obj-$(CONFIG_BOOTCOUNT_AM33XX_NVMEM)	+= bootcount_nvmem.o
+include $(TOPDIR)/config.mk
 
-obj-$(CONFIG_DM_BOOTCOUNT)      += bootcount-uclass.o
-obj-$(CONFIG_DM_BOOTCOUNT_PMIC_PFUZE100) += pmic_pfuze100.o
-obj-$(CONFIG_DM_BOOTCOUNT_RTC)  += rtc.o
-obj-$(CONFIG_DM_BOOTCOUNT_I2C_EEPROM)	+= i2c-eeprom.o
-obj-$(CONFIG_DM_BOOTCOUNT_SPI_FLASH)	+= spi-flash.o
-obj-$(CONFIG_DM_BOOTCOUNT_SYSCON) += bootcount_syscon.o
+LIB 	:= $(obj)libbootcount.o
+
+COBJS-y				+= bootcount.o
+COBJS-$(CONFIG_AT91SAM9XE)	+= bootcount_at91.o
+COBJS-$(CONFIG_BLACKFIN)	+= bootcount_blackfin.o
+COBJS-$(CONFIG_SOC_DA8XX)	+= bootcount_davinci.o
+COBJS-$(CONFIG_BOOTCOUNT_RAM)	+= bootcount_ram.o
+
+COBJS	:= $(COBJS-y)
+SRCS 	:= $(COBJS:.o=.c)
+OBJS 	:= $(addprefix $(obj),$(COBJS))
+
+$(LIB):	$(obj).depend $(OBJS)
+	$(call cmd_link_o_target, $(OBJS))
+
+#########################################################################
+
+# defines $(obj).depend target
+include $(SRCTREE)/rules.mk
+
+sinclude $(obj).depend
+
+########################################################################

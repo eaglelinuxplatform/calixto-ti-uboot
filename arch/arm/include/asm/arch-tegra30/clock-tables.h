@@ -1,6 +1,17 @@
-/* SPDX-License-Identifier: GPL-2.0 */
 /*
  * Copyright (c) 2010-2012, NVIDIA CORPORATION.  All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms and conditions of the GNU General Public License,
+ * version 2, as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 /* Tegra30 clock PLL tables */
@@ -27,7 +38,6 @@ enum clock_id {
 	/* These are the base clocks (inputs to the Tegra SOC) */
 	CLOCK_ID_32KHZ,
 	CLOCK_ID_OSC,
-	CLOCK_ID_CLK_M,
 
 	CLOCK_ID_COUNT,	/* number of PLLs */
 	CLOCK_ID_DISPLAY2,	/* Tegra3, placeholder */
@@ -190,9 +200,9 @@ enum periph_id {
 	PERIPH_ID_ACTMON,
 
 	/* 24 */
-	PERIPH_ID_EXTPERIPH1,
-	PERIPH_ID_EXTPERIPH2,
-	PERIPH_ID_EXTPERIPH3,
+	PERIPH_ID_EX_RESERVED24,
+	PERIPH_ID_EX_RESERVED25,
+	PERIPH_ID_EX_RESERVED26,
 	PERIPH_ID_EX_RESERVED27,
 	PERIPH_ID_SATA,
 	PERIPH_ID_HDA,

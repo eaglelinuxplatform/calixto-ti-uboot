@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * An inteface for configuring a hardware via u-boot environment.
  *
@@ -6,16 +5,15 @@
  * Copyright 2011 Freescale Semiconductor, Inc.
  *
  * Author: Anton Vorontsov <avorontsov@ru.mvista.com>
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef HWCONFIG_TEST
 #include <config.h>
 #include <common.h>
-#include <env.h>
 #include <exports.h>
 #include <hwconfig.h>
-#include <log.h>
-#include <asm/global_data.h>
 #include <linux/types.h>
 #include <linux/string.h>
 #else
@@ -78,14 +76,12 @@ static const char *__hwconfig(const char *opt, size_t *arglen,
 
 	/* if we are passed a buffer use it, otherwise try the environment */
 	if (!env_hwconfig) {
-		if (!(gd->flags & GD_FLG_ENV_READY) && gd->env_valid != ENV_VALID) {
+		if (!(gd->flags & GD_FLG_ENV_READY)) {
 			printf("WARNING: Calling __hwconfig without a buffer "
 					"and before environment is ready\n");
 			return NULL;
 		}
-#if CONFIG_IS_ENABLED(ENV_SUPPORT)
-		env_hwconfig = env_get("hwconfig");
-#endif
+		env_hwconfig = getenv("hwconfig");
 	}
 
 	if (env_hwconfig) {
@@ -181,7 +177,7 @@ int hwconfig_arg_cmp_f(const char *opt, const char *arg, char *buf)
  *
  * This call is similar to hwconfig_f(), except that it takes additional
  * argument @subopt. In this example:
- *	"dr_usb:mode=peripheral"
+ * 	"dr_usb:mode=peripheral"
  * "dr_usb" is an option, "mode" is a sub-option, and "peripheral" is its
  * argument.
  */
@@ -247,7 +243,7 @@ int main()
 	const char *ret;
 	size_t len;
 
-	env_set("hwconfig", "key1:subkey1=value1,subkey2=value2;key2:value3;;;;"
+	setenv("hwconfig", "key1:subkey1=value1,subkey2=value2;key2:value3;;;;"
 			   "key3;:,:=;key4", 1);
 
 	ret = hwconfig_arg("key1", &len);
@@ -278,7 +274,7 @@ int main()
 	assert(hwconfig_arg("key4", &len) == NULL);
 	assert(hwconfig_arg("bogus", &len) == NULL);
 
-	unenv_set("hwconfig");
+	unsetenv("hwconfig");
 
 	assert(hwconfig(NULL) == 0);
 	assert(hwconfig("") == 0);

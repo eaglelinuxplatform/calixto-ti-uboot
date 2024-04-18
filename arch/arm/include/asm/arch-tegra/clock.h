@@ -1,6 +1,7 @@
-/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Copyright (c) 2011 The Chromium OS Authors.
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 /* Tegra clock control functions */
@@ -8,35 +9,15 @@
 #ifndef _TEGRA_CLOCK_H_
 #define _TEGRA_CLOCK_H_
 
-struct udevice;
-
 /* Set of oscillator frequencies supported in the internal API. */
 enum clock_osc_freq {
 	/* All in MHz, so 13_0 is 13.0MHz */
-	CLOCK_OSC_FREQ_13_0 = 0,
-	CLOCK_OSC_FREQ_16_8,
-	CLOCK_OSC_FREQ_19_2 = 4,
-	CLOCK_OSC_FREQ_38_4,
-	CLOCK_OSC_FREQ_12_0 = 8,
-	CLOCK_OSC_FREQ_48_0,
-	CLOCK_OSC_FREQ_26_0 = 12,
+	CLOCK_OSC_FREQ_13_0,
+	CLOCK_OSC_FREQ_19_2,
+	CLOCK_OSC_FREQ_12_0,
+	CLOCK_OSC_FREQ_26_0,
 
 	CLOCK_OSC_FREQ_COUNT,
-};
-
-/*
- * Note that no Tegra clock register actually uses all of bits 31:28 as
- * the mux field. Rather, bits 30:28, 29:28, or 28 are used. However, in
- * those cases, nothing is stored in the bits about the mux field, so it's
- * safe to pretend that the mux field extends all the way to the end of the
- * register. As such, the U-Boot clock driver is currently a bit lazy, and
- * doesn't distinguish between 31:28, 30:28, 29:28 and 28; it just lumps
- * them all together and pretends they're all 31:28.
- */
-enum {
-	MASK_BITS_31_30,
-	MASK_BITS_31_29,
-	MASK_BITS_31_28,
 };
 
 #include <asm/arch/clock-tables.h>
@@ -45,9 +26,6 @@ enum {
 
 /* return the current oscillator clock frequency */
 enum clock_osc_freq clock_get_osc_freq(void);
-
-/* return the clk_m frequency */
-unsigned int clk_m_get_rate(unsigned int parent_rate);
 
 /**
  * Start PLL using the provided configuration parameters.
@@ -71,7 +49,7 @@ unsigned long clock_start_pll(enum clock_id id, u32 divm, u32 divn,
  * @param pllout	pll output id
  * @param rate		desired output rate
  *
- * Return: 0 if ok, -1 on error (invalid clock id or no suitable divider)
+ * @return 0 if ok, -1 on error (invalid clock id or no suitable divider)
  */
 int clock_set_pllout(enum clock_id clkid, enum pll_out_id pllout,
 		unsigned rate);
@@ -135,9 +113,9 @@ void reset_set_enable(enum periph_id periph_id, int enable);
 enum crc_reset_id {
 	/* Things we can hold in reset for each CPU */
 	crc_rst_cpu = 1,
-	crc_rst_de = 1 << 4,	/* What is de? */
-	crc_rst_watchdog = 1 << 8,
-	crc_rst_debug = 1 << 12,
+	crc_rst_de = 1 << 2,	/* What is de? */
+	crc_rst_watchdog = 1 << 3,
+	crc_rst_debug = 1 << 4,
 };
 
 /**
@@ -163,17 +141,6 @@ void reset_cmplx_set_enable(int cpu, int which, int reset);
 void clock_ll_set_source(enum periph_id periph_id, unsigned source);
 
 /**
- * This function is similar to clock_ll_set_source() except that it can be
- * used for clocks with more than 2 mux bits.
- *
- * @param periph_id	peripheral to adjust
- * @param mux_bits	number of mux bits for the clock
- * @param source	source clock (0-15 depending on mux_bits)
- */
-int clock_ll_set_source_bits(enum periph_id periph_id, int mux_bits,
-			     unsigned source);
-
-/**
  * Set the source and divisor for a peripheral clock. This sets the
  * clock rate. You need to look up the datasheet to see the meaning of the
  * source parameter as it changes for each peripheral.
@@ -189,23 +156,13 @@ void clock_ll_set_source_divisor(enum periph_id periph_id, unsigned source,
 		unsigned divisor);
 
 /**
- * Returns the current parent clock ID of a given peripheral. This can be
- * useful in order to call clock_*_periph_*() from generic code that has no
- * specific knowledge of system-level clock tree structure.
- *
- * @param periph_id	peripheral to query
- * Return: clock ID of the peripheral's current parent clock
- */
-enum clock_id clock_get_periph_parent(enum periph_id periph_id);
-
-/**
  * Start a peripheral PLL clock at the given rate. This also resets the
  * peripheral.
  *
  * @param periph_id	peripheral to start
  * @param parent	PLL id of required parent clock
  * @param rate		Required clock rate in Hz
- * Return: rate selected in Hz, or -1U if something went wrong
+ * @return rate selected in Hz, or -1U if something went wrong
  */
 unsigned clock_start_periph_pll(enum periph_id periph_id,
 		enum clock_id parent, unsigned rate);
@@ -218,7 +175,7 @@ unsigned clock_start_periph_pll(enum periph_id periph_id,
  * @param periph_id	peripheral to start
  * @param parent	PLL id of parent clock (used to calculate rate, you
  *			must know this!)
- * Return: clock rate of peripheral in Hz
+ * @return clock rate of peripheral in Hz
  */
 unsigned long clock_get_periph_rate(enum periph_id periph_id,
 		enum clock_id parent);
@@ -234,7 +191,7 @@ unsigned long clock_get_periph_rate(enum periph_id periph_id,
  * @param rate		Required clock rate in Hz
  * @param extra_div	value for the second-stage divisor (NULL if one is
 			not available)
- * Return: rate selected in Hz, or -1U if something went wrong
+ * @return rate selected in Hz, or -1U if something went wrong
  */
 unsigned clock_adjust_periph_pll_div(enum periph_id periph_id,
 		enum clock_id parent, unsigned rate, int *extra_div);
@@ -243,7 +200,7 @@ unsigned clock_adjust_periph_pll_div(enum periph_id periph_id,
  * Returns the clock rate of a specified clock, in Hz.
  *
  * @param parent	PLL id of clock to check
- * Return: rate of clock in Hz
+ * @return rate of clock in Hz
  */
 unsigned clock_get_rate(enum clock_id clkid);
 
@@ -266,34 +223,21 @@ void clock_ll_start_uart(enum periph_id periph_id);
  *
  * @param blob		FDT blob to use
  * @param node		Node to look at
- * Return: peripheral ID, or PERIPH_ID_NONE if none
+ * @return peripheral ID, or PERIPH_ID_NONE if none
  */
-int clock_decode_periph_id(struct udevice *dev);
-
-/**
- * Get periph clock id and its parent from device tree.
- *
- * This works by looking up the peripheral's 'clocks' node and reading out
- * the second and fourth cells, which are the peripheral and PLL clock numbers.
- *
- * @param dev          udevice associated with FDT node
- * @param clk_id       pointer to int array of 2 values
- *                     first is periph clock, second is
- *                     its PLL parent according to FDT.
- */
-int clock_decode_pair(struct udevice *dev, int *clk_id);
+enum periph_id clock_decode_periph_id(const void *blob, int node);
 
 /**
  * Checks if the oscillator bypass is enabled (XOBP bit)
  *
- * Return: 1 if bypass is enabled, 0 if not
+ * @return 1 if bypass is enabled, 0 if not
  */
 int clock_get_osc_bypass(void);
 
 /*
  * Checks that clocks are valid and prints a warning if not
  *
- * Return: 0 if ok, -1 on error
+ * @return 0 if ok, -1 on error
  */
 int clock_verify(void);
 
@@ -303,44 +247,8 @@ void clock_init(void);
 /* Initialize the PLLs */
 void clock_early_init(void);
 
-/* @return true if hardware indicates that clock_early_init() was called */
-bool clock_early_init_done(void);
-
 /* Returns a pointer to the clock source register for a peripheral */
 u32 *get_periph_source_reg(enum periph_id periph_id);
-
-/* Returns a pointer to the given 'simple' PLL */
-struct clk_pll_simple *clock_get_simple_pll(enum clock_id clkid);
-
-/*
- * Given a peripheral ID, determine where the mux bits are in the peripheral
- * clock's register, the number of divider bits the clock has, and the SoC-
- * specific clock type.
- *
- * This is an internal API between the core Tegra clock code and the SoC-
- * specific clock code.
- *
- * @param periph_id     peripheral to query
- * @param mux_bits      Set to number of bits in mux register
- * @param divider_bits  Set to the relevant MASK_BITS_* value
- * @param type          Set to the SoC-specific clock type
- * Return: 0 on success, -1 on error
- */
-int get_periph_clock_info(enum periph_id periph_id, int *mux_bits,
-			  int *divider_bits, int *type);
-
-/*
- * Given a peripheral ID and clock source mux value, determine the clock_id
- * of that peripheral's parent.
- *
- * This is an internal API between the core Tegra clock code and the SoC-
- * specific clock code.
- *
- * @param periph_id     peripheral to query
- * @param source        raw clock source mux value
- * Return: the CLOCK_ID_* value @source represents
- */
-enum clock_id get_periph_clock_id(enum periph_id periph_id, int source);
 
 /**
  * Given a peripheral ID and the required source clock, this returns which
@@ -352,7 +260,7 @@ enum clock_id get_periph_clock_id(enum periph_id periph_id, int source);
  * @param source        PLL id of required parent clock
  * @param mux_bits      Set to number of bits in mux register: 2 or 4
  * @param divider_bits  Set to number of divider bits (8 or 16)
- * Return: mux value (0-4, or -1 if not found)
+ * @return mux value (0-4, or -1 if not found)
  */
 int get_periph_clock_source(enum periph_id periph_id,
 		enum clock_id parent, int *mux_bits, int *divider_bits);
@@ -363,17 +271,9 @@ int get_periph_clock_source(enum periph_id periph_id,
  * provided.
  *
  * @param clk_id        Clock ID according to tegra30 device tree binding
- * Return: peripheral ID, or PERIPH_ID_NONE if the clock ID is invalid
+ * @return peripheral ID, or PERIPH_ID_NONE if the clock ID is invalid
  */
 enum periph_id clk_id_to_periph_id(int clk_id);
-
-/*
- * Convert a device tree clock ID to our PLL ID.
- *
- * @param clk_id	Clock ID according to tegra device tree binding
- * Return: clock ID, or CLOCK_ID_NONE if the clock ID is invalid
- */
-enum clock_id clk_id_to_pll_id(int clk_id);
 
 /**
  * Set the output frequency you want for each PLL clock.
@@ -389,8 +289,8 @@ enum clock_id clk_id_to_pll_id(int clk_id);
  * @param m PLL input divider(DIVN)
  * @param p post divider(DIVP)
  * @param cpcon base PLL charge pump(CPCON)
- * Return: 0 if ok, -1 on error (the requested PLL is incorrect and cannot
- *              be overridden), 1 if PLL is already correct
+ * @return 0 if ok, -1 on error (the requested PLL is incorrect and cannot
+ *              be overriden), 1 if PLL is already correct
  */
 int clock_set_rate(enum clock_id clkid, u32 n, u32 m, u32 p, u32 cpcon);
 
@@ -404,42 +304,5 @@ int clock_set_rate(enum clock_id clkid, u32 n, u32 m, u32 p, u32 cpcon);
 
 /* SoC-specific TSC init */
 void arch_timer_init(void);
-
-void tegra30_set_up_pllp(void);
-
-/* Number of PLL-based clocks (i.e. not OSC, MCLK or 32KHz) */
-#define CLOCK_ID_PLL_COUNT	(CLOCK_ID_COUNT - 3)
-
-struct clk_pll_info {
-	u32	m_shift:5;	/* DIVM_SHIFT */
-	u32	n_shift:5;	/* DIVN_SHIFT */
-	u32	p_shift:5;	/* DIVP_SHIFT */
-	u32	kcp_shift:5;	/* KCP/cpcon SHIFT */
-	u32	kvco_shift:5;	/* KVCO/lfcon SHIFT */
-	u32	lock_ena:6;	/* LOCK_ENABLE/EN_LOCKDET shift */
-	u32	rsvd:1;
-	u32	m_mask:10;	/* DIVM_MASK */
-	u32	n_mask:12;	/* DIVN_MASK */
-	u32	p_mask:10;	/* DIVP_MASK or VCO_MASK */
-	u32	kcp_mask:10;	/* KCP/CPCON MASK */
-	u32	kvco_mask:10;	/* KVCO/LFCON MASK */
-	u32	lock_det:6;	/* LOCK_DETECT/LOCKED shift */
-	u32	rsvd2:6;
-};
-extern struct clk_pll_info tegra_pll_info_table[CLOCK_ID_PLL_COUNT];
-
-struct periph_clk_init {
-	enum periph_id periph_id;
-	enum clock_id parent_clock_id;
-};
-extern struct periph_clk_init periph_clk_init_table[];
-
-/**
- * Enable output clock for external peripherals
- *
- * @param clk_id	Clock ID to output (1, 2 or 3)
- * Return: 0 if OK. -ve on error
- */
-int clock_external_output(int clk_id);
 
 #endif  /* _TEGRA_CLOCK_H_ */

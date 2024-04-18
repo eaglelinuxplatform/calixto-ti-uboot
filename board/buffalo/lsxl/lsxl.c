@@ -1,27 +1,23 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (c) 2012 Michael Walle
  * Michael Walle <michael@walle.cc>
  *
  * Based on sheevaplug/sheevaplug.c by
  *   Marvell Semiconductor <www.marvell.com>
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
-#include <bootstage.h>
-#include <button.h>
-#include <command.h>
-#include <env.h>
-#include <init.h>
-#include <led.h>
-#include <power/regulator.h>
-#include <spi.h>
-#include <spi_flash.h>
+#include <net.h>
+#include <malloc.h>
+#include <netdev.h>
+#include <miiphy.h>
+#include <asm/arch/kirkwood.h>
 #include <asm/arch/cpu.h>
 #include <asm/arch/mpp.h>
-#include <asm/global_data.h>
-#include <asm/io.h>
-#include <linux/delay.h>
+#include <asm/arch/gpio.h>
+#include <spi_flash.h>
 
 #include "lsxl.h"
 
@@ -42,9 +38,11 @@
  * Additionally, the bootsource is set to 'rescue'.
  */
 
-DECLARE_GLOBAL_DATA_PTR;
+#ifndef CONFIG_ENV_OVERWRITE
+# error "You need to set CONFIG_ENV_OVERWRITE"
+#endif
 
-static bool force_rescue_mode;
+DECLARE_GLOBAL_DATA_PTR;
 
 int board_early_init_f(void)
 {
@@ -53,9 +51,9 @@ int board_early_init_f(void)
 	 * There are maximum 64 gpios controlled through 2 sets of registers
 	 * the below configuration configures mainly initial LED status
 	 */
-	mvebu_config_gpio(LSXL_OE_VAL_LOW,
-			  LSXL_OE_VAL_HIGH,
-			  LSXL_OE_LOW, LSXL_OE_HIGH);
+	kw_config_gpio(LSXL_OE_VAL_LOW,
+			LSXL_OE_VAL_HIGH,
+			LSXL_OE_LOW, LSXL_OE_HIGH);
 
 	/*
 	 * Multi-Purpose Pins Functionality configuration
@@ -120,43 +118,48 @@ int board_early_init_f(void)
 	return 0;
 }
 
-enum {
-	LSXL_LED_OFF,
-	LSXL_LED_ALARM,
-	LSXL_LED_POWER,
-	LSXL_LED_INFO,
-};
+#define LED_OFF             0
+#define LED_ALARM_ON        1
+#define LED_ALARM_BLINKING  2
+#define LED_POWER_ON        3
+#define LED_POWER_BLINKING  4
+#define LED_INFO_ON         5
+#define LED_INFO_BLINKING   6
 
-static void __set_led(int alarm, int info, int power)
+static void __set_led(int blink_alarm, int blink_info, int blink_power,
+		int value_alarm, int value_info, int value_power)
 {
-	struct udevice *led;
-	int ret;
-
-	ret = led_get_by_label("lsxl:red:alarm", &led);
-	if (!ret)
-		led_set_state(led, alarm);
-	ret = led_get_by_label("lsxl:amber:info", &led);
-	if (!ret)
-		led_set_state(led, info);
-	ret = led_get_by_label("lsxl:blue:power", &led);
-	if (!ret)
-		led_set_state(led, power);
+	kw_gpio_set_blink(GPIO_ALARM_LED, blink_alarm);
+	kw_gpio_set_blink(GPIO_INFO_LED, blink_info);
+	kw_gpio_set_blink(GPIO_POWER_LED, blink_power);
+	kw_gpio_set_value(GPIO_ALARM_LED, value_alarm);
+	kw_gpio_set_value(GPIO_INFO_LED, value_info);
+	kw_gpio_set_value(GPIO_POWER_LED, value_power);
 }
 
 static void set_led(int state)
 {
 	switch (state) {
-	case LSXL_LED_OFF:
-		__set_led(0, 0, 0);
+	case LED_OFF:
+		__set_led(0, 0, 0, 1, 1, 1);
 		break;
-	case LSXL_LED_ALARM:
-		__set_led(1, 0, 0);
+	case LED_ALARM_ON:
+		__set_led(0, 0, 0, 0, 1, 1);
 		break;
-	case LSXL_LED_INFO:
-		__set_led(0, 1, 0);
+	case LED_ALARM_BLINKING:
+		__set_led(1, 0, 0, 1, 1, 1);
 		break;
-	case LSXL_LED_POWER:
-		__set_led(0, 0, 1);
+	case LED_INFO_ON:
+		__set_led(0, 0, 0, 1, 0, 1);
+		break;
+	case LED_INFO_BLINKING:
+		__set_led(0, 1, 0, 1, 1, 1);
+		break;
+	case LED_POWER_ON:
+		__set_led(0, 0, 0, 1, 1, 0);
+		break;
+	case LED_POWER_BLINKING:
+		__set_led(0, 0, 1, 1, 1, 1);
 		break;
 	}
 }
@@ -164,67 +167,44 @@ static void set_led(int state)
 int board_init(void)
 {
 	/* address of boot parameters */
-	gd->bd->bi_boot_params = mvebu_sdram_bar(0) + 0x100;
+	gd->bd->bi_boot_params = kw_sdram_bar(0) + 0x100;
 
-	set_led(LSXL_LED_POWER);
+	set_led(LED_POWER_BLINKING);
 
 	return 0;
 }
 
+#ifdef CONFIG_MISC_INIT_R
 static void check_power_switch(void)
 {
-	struct udevice *power_button, *hdd_power, *usb_power;
-	int ret;
-
-	ret = button_get_by_label("Power-on Switch", &power_button);
-	if (ret)
-		goto err;
-
-	ret = regulator_get_by_platname("HDD Power", &hdd_power);
-	if (ret)
-		goto err;
-
-	ret = regulator_get_by_platname("USB Power", &usb_power);
-	if (ret)
-		goto err;
-
-	if (button_get_state(power_button) == BUTTON_OFF) {
-		ret = regulator_set_enable(hdd_power, false);
-		if (ret)
-			goto err;
-		ret = regulator_set_enable(usb_power, false);
-		if (ret)
-			goto err;
-		/* TODO: fan off */
-		set_led(LSXL_LED_OFF);
+	if (kw_gpio_get_value(GPIO_POWER_SWITCH)) {
+		/* turn off fan, HDD and USB power */
+		kw_gpio_set_value(GPIO_HDD_POWER, 0);
+		kw_gpio_set_value(GPIO_USB_VBUS, 0);
+		kw_gpio_set_value(GPIO_FAN_HIGH, 1);
+		kw_gpio_set_value(GPIO_FAN_LOW, 1);
+		set_led(LED_OFF);
 
 		/* loop until released */
-		while (button_get_state(power_button) == BUTTON_OFF)
+		while (kw_gpio_get_value(GPIO_POWER_SWITCH))
 			;
 
 		/* turn power on again */
-		ret = regulator_set_enable(hdd_power, true);
-		if (ret)
-			goto err;
-		ret = regulator_set_enable(usb_power, true);
-		if (ret)
-			goto err;
-		/* TODO: fan on */
-		set_led(LSXL_LED_POWER);
-	};
-
-	return;
-err:
-	printf("error in %s\n", __func__);
+		kw_gpio_set_value(GPIO_HDD_POWER, 1);
+		kw_gpio_set_value(GPIO_USB_VBUS, 1);
+		kw_gpio_set_value(GPIO_FAN_HIGH, 0);
+		kw_gpio_set_value(GPIO_FAN_LOW, 0);
+		set_led(LED_POWER_BLINKING);
+	}
 }
 
 void check_enetaddr(void)
 {
 	uchar enetaddr[6];
 
-	if (!eth_env_get_enetaddr("ethaddr", enetaddr)) {
+	if (!eth_getenv_enetaddr("ethaddr", enetaddr)) {
 		/* signal unset/invalid ethaddr to user */
-		set_led(LSXL_LED_INFO);
+		set_led(LED_INFO_BLINKING);
 	}
 }
 
@@ -246,30 +226,35 @@ static void erase_environment(void)
 
 static void rescue_mode(void)
 {
+	uchar enetaddr[6];
+
 	printf("Entering rescue mode..\n");
-	env_set("bootsource", "rescue");
+#ifdef CONFIG_RANDOM_MACADDR
+	if (!eth_getenv_enetaddr("ethaddr", enetaddr)) {
+		eth_random_enetaddr(enetaddr);
+		if (eth_setenv_enetaddr("ethaddr", enetaddr)) {
+			printf("Failed to set ethernet address\n");
+				set_led(LED_ALARM_BLINKING);
+			return;
+		}
+	}
+#endif
+	setenv("bootsource", "rescue");
 }
 
 static void check_push_button(void)
 {
-	struct udevice *func_button;
 	int i = 0;
 
-	int ret;
-
-	ret = button_get_by_label("Function Button", &func_button);
-	if (ret)
-		goto err;
-
-	while (button_get_state(func_button) == BUTTON_ON) {
+	while (!kw_gpio_get_value(GPIO_FUNC_BUTTON)) {
 		udelay(100000);
 		i++;
 
 		if (i == 10)
-			set_led(LSXL_LED_INFO);
+			set_led(LED_INFO_ON);
 
 		if (i >= 100) {
-			set_led(LSXL_LED_ALARM);
+			set_led(LED_INFO_BLINKING);
 			break;
 		}
 	}
@@ -277,31 +262,20 @@ static void check_push_button(void)
 	if (i >= 100)
 		erase_environment();
 	else if (i >= 10)
-		force_rescue_mode = true;
-
-	return;
-err:
-	printf("error in %s\n", __func__);
-}
-
-int board_early_init_r(void)
-{
-	check_push_button();
-
-	return 0;
+		rescue_mode();
 }
 
 int misc_init_r(void)
 {
 	check_power_switch();
 	check_enetaddr();
-	if (force_rescue_mode)
-		rescue_mode();
+	check_push_button();
 
 	return 0;
 }
+#endif
 
-#if CONFIG_IS_ENABLED(BOOTSTAGE)
+#ifdef CONFIG_SHOW_BOOT_PROGRESS
 void show_boot_progress(int progress)
 {
 	if (progress > 0)
@@ -311,6 +285,6 @@ void show_boot_progress(int progress)
 	if (progress == -BOOTSTAGE_ID_NET_LOADED)
 		return;
 
-	set_led(LSXL_LED_ALARM);
+	set_led(LED_ALARM_BLINKING);
 }
 #endif

@@ -1,9 +1,33 @@
-# SPDX-License-Identifier: GPL-2.0+
 #
 # (C) Copyright 2000-2006
 # Wolfgang Denk, DENX Software Engineering, wd@denx.de.
+#
+# SPDX-License-Identifier:	GPL-2.0+
+#
 
-# ccflags-y += -DET_DEBUG
+include $(TOPDIR)/config.mk
 
-extra-y	= start.o
-obj-y	= interrupts.o cpu.o speed.o cpu_init.o
+# CFLAGS += -DET_DEBUG
+
+LIB	= $(obj)lib$(CPU).o
+
+START	= start.o
+COBJS	= interrupts.o cpu.o speed.o cpu_init.o
+
+SRCS	:= $(START:.o=.S) $(SOBJS:.o=.S) $(COBJS:.o=.c)
+OBJS	:= $(addprefix $(obj),$(SOBJS) $(COBJS))
+START	:= $(addprefix $(obj),$(START))
+
+all:	$(obj).depend $(START) $(LIB)
+
+$(LIB):	$(OBJS)
+	$(call cmd_link_o_target, $(OBJS))
+
+#########################################################################
+
+# defines $(obj).depend target
+include $(SRCTREE)/rules.mk
+
+sinclude $(obj).depend
+
+#########################################################################

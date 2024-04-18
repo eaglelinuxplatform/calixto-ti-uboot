@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2009
  * Graeme Russ, <graeme.russ@gmail.com>
@@ -17,6 +16,8 @@
  *
  * (C) Copyright 2001
  * Josh Huber, Mission Critical Linux, Inc, <huber@mclx.com>
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 /*
@@ -30,11 +31,7 @@
  */
 
 #include <common.h>
-#include <command.h>
-#include <irq_func.h>
 #include <asm/interrupt.h>
-
-#if !CONFIG_IS_ENABLED(X86_64)
 
 struct irq_action {
 	interrupt_handler_t *handler;
@@ -42,7 +39,7 @@ struct irq_action {
 	unsigned int count;
 };
 
-static struct irq_action irq_handlers[SYS_NUM_IRQS] = { {0} };
+static struct irq_action irq_handlers[CONFIG_SYS_NUM_IRQS] = { {0} };
 static int spurious_irq_cnt;
 static int spurious_irq;
 
@@ -50,7 +47,7 @@ void irq_install_handler(int irq, interrupt_handler_t *handler, void *arg)
 {
 	int status;
 
-	if (irq < 0 || irq >= SYS_NUM_IRQS) {
+	if (irq < 0 || irq >= CONFIG_SYS_NUM_IRQS) {
 		printf("irq_install_handler: bad irq number %d\n", irq);
 		return;
 	}
@@ -66,8 +63,7 @@ void irq_install_handler(int irq, interrupt_handler_t *handler, void *arg)
 	irq_handlers[irq].arg = arg;
 	irq_handlers[irq].count = 0;
 
-	if (CONFIG_IS_ENABLED(I8259_PIC))
-		unmask_irq(irq);
+	unmask_irq(irq);
 
 	if (status)
 		enable_interrupts();
@@ -79,15 +75,14 @@ void irq_free_handler(int irq)
 {
 	int status;
 
-	if (irq < 0 || irq >= SYS_NUM_IRQS) {
+	if (irq < 0 || irq >= CONFIG_SYS_NUM_IRQS) {
 		printf("irq_free_handler: bad irq number %d\n", irq);
 		return;
 	}
 
 	status = disable_interrupts();
 
-	if (CONFIG_IS_ENABLED(I8259_PIC))
-		mask_irq(irq);
+	mask_irq(irq);
 
 	irq_handlers[irq].handler = NULL;
 	irq_handlers[irq].arg = NULL;
@@ -102,22 +97,20 @@ void do_irq(int hw_irq)
 {
 	int irq = hw_irq - 0x20;
 
-	if (irq < 0 || irq >= SYS_NUM_IRQS) {
+	if (irq < 0 || irq >= CONFIG_SYS_NUM_IRQS) {
 		printf("do_irq: bad irq number %d\n", irq);
 		return;
 	}
 
 	if (irq_handlers[irq].handler) {
-		if (CONFIG_IS_ENABLED(I8259_PIC))
-			mask_irq(irq);
+		mask_irq(irq);
 
 		irq_handlers[irq].handler(irq_handlers[irq].arg);
 		irq_handlers[irq].count++;
 
-		if (CONFIG_IS_ENABLED(I8259_PIC)) {
-			unmask_irq(irq);
-			specific_eoi(irq);
-		}
+		unmask_irq(irq);
+		specific_eoi(irq);
+
 	} else {
 		if ((irq & 7) != 7) {
 			spurious_irq_cnt++;
@@ -125,24 +118,19 @@ void do_irq(int hw_irq)
 		}
 	}
 }
-#endif
 
 #if defined(CONFIG_CMD_IRQ)
-int do_irqinfo(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
+int do_irqinfo(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 {
-#if !CONFIG_IS_ENABLED(X86_64)
-	struct idt_ptr ptr;
 	int irq;
 
-	interrupt_read_idt(&ptr);
-	printf("IDT at %lx, size %x\n", ptr.address, ptr.size);
 	printf("Spurious IRQ: %u, last unknown IRQ: %d\n",
 			spurious_irq_cnt, spurious_irq);
 
 	printf("Interrupt-Information:\n");
 	printf("Nr  Routine   Arg       Count\n");
 
-	for (irq = 0; irq < SYS_NUM_IRQS; irq++) {
+	for (irq = 0; irq <= CONFIG_SYS_NUM_IRQS; irq++) {
 		if (irq_handlers[irq].handler != NULL) {
 			printf("%02d  %08lx  %08lx  %d\n",
 					irq,
@@ -151,7 +139,6 @@ int do_irqinfo(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 					irq_handlers[irq].count);
 		}
 	}
-#endif
 
 	return 0;
 }

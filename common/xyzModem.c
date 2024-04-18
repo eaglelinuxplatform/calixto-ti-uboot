@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: eCos-2.0
 /*
  *==========================================================================
  *
@@ -6,6 +5,8 @@
  *
  *      RedBoot stream handler for xyzModem protocol
  *
+ *==========================================================================
+ * SPDX-License-Identifier:	eCos-2.0
  *==========================================================================
  *#####DESCRIPTIONBEGIN####
  *
@@ -24,16 +25,13 @@
 #include <common.h>
 #include <xyzModem.h>
 #include <stdarg.h>
-#include <u-boot/crc.h>
-#include <watchdog.h>
-#include <env.h>
+#include <crc.h>
 
 /* Assumption - run xyzModem protocol over the console port */
 
 /* Values magic to the protocol */
 #define SOH 0x01
 #define STX 0x02
-#define ETX 0x03		/* ^C for interrupt */
 #define EOT 0x04
 #define ACK 0x06
 #define BSP 0x08
@@ -41,19 +39,25 @@
 #define CAN 0x18
 #define EOF 0x1A		/* ^Z for DOS officionados */
 
+#define USE_YMODEM_LENGTH
+
 /* Data & state local to the protocol */
 static struct
 {
+#ifdef REDBOOT
+  hal_virtual_comm_table_t *__chan;
+#else
   int *__chan;
+#endif
   unsigned char pkt[1024], *bufp;
   unsigned char blk, cblk, crc1, crc2;
   unsigned char next_blk;	/* Expected block */
   int len, mode, total_retries;
   int total_SOH, total_STX, total_CAN;
   bool crc_mode, at_eof, tx_ack;
-  bool first_xmodem_packet;
-  ulong initial_time, timeout;
+#ifdef USE_YMODEM_LENGTH
   unsigned long file_length, read_length;
+#endif
 } xyz;
 
 #define xyzModem_CHAR_TIMEOUT            2000	/* 2 seconds */
@@ -62,21 +66,21 @@ static struct
 #define xyzModem_CAN_COUNT                3	/* Wait for 3 CAN before quitting */
 
 
+#ifndef REDBOOT			/*SB */
 typedef int cyg_int32;
 static int
 CYGACC_COMM_IF_GETC_TIMEOUT (char chan, char *c)
 {
-
-  ulong now = get_timer(0);
-  schedule();
-  while (!tstc ())
+#define DELAY 20
+  unsigned long counter = 0;
+  while (!tstc () && (counter < xyzModem_CHAR_TIMEOUT * 1000 / DELAY))
     {
-      if (get_timer(now) > xyzModem_CHAR_TIMEOUT)
-        break;
+      udelay (DELAY);
+      counter++;
     }
   if (tstc ())
     {
-      *c = getchar();
+      *c = getc ();
       return 1;
     }
   return 0;
@@ -152,7 +156,17 @@ parse_num (char *s, unsigned long *val, char **es, char *delim)
       if (_is_hex (c) && ((digit = _from_hex (c)) < radix))
 	{
 	  /* Valid digit */
+#ifdef CYGPKG_HAL_MIPS
+	  /* FIXME: tx49 compiler generates 0x2539018 for MUL which */
+	  /* isn't any good. */
+	  if (16 == radix)
+	    result = result << 4;
+	  else
+	    result = 10 * result;
+	  result += digit;
+#else
 	  result = (result * radix) + digit;
+#endif
 	}
       else
 	{
@@ -176,38 +190,86 @@ parse_num (char *s, unsigned long *val, char **es, char *delim)
   return true;
 }
 
+#endif
 
-#if defined(DEBUG) && !CONFIG_IS_ENABLED(USE_TINY_PRINTF)
+#define USE_SPRINTF
+#ifdef DEBUG
+#ifndef USE_SPRINTF
 /*
- * Note: this debug setup works by storing the strings in a fixed buffer
+ * Note: this debug setup only works if the target platform has two serial ports
+ * available so that the other one (currently only port 1) can be used for debug
+ * messages.
  */
-static char zm_debug_buf[8192];
-static char *zm_out = zm_debug_buf;
-static char *zm_out_start = zm_debug_buf;
-
 static int
-zm_dprintf(char *fmt, ...)
+zm_dprintf (char *fmt, ...)
 {
-	int len;
-	va_list args;
+  int cur_console;
+  va_list args;
 
-	va_start(args, fmt);
-	len = diag_vsprintf(zm_out, fmt, args);
-	va_end(args);
-	zm_out += len;
-	return len;
+  va_start (args, fmt);
+#ifdef REDBOOT
+  cur_console =
+    CYGACC_CALL_IF_SET_CONSOLE_COMM
+    (CYGNUM_CALL_IF_SET_COMM_ID_QUERY_CURRENT);
+  CYGACC_CALL_IF_SET_CONSOLE_COMM (1);
+#endif
+  diag_vprintf (fmt, args);
+#ifdef REDBOOT
+  CYGACC_CALL_IF_SET_CONSOLE_COMM (cur_console);
+#endif
 }
 
 static void
 zm_flush (void)
 {
+}
+
+#else
+/*
+ * Note: this debug setup works by storing the strings in a fixed buffer
+ */
+#define FINAL
+#ifdef FINAL
+static char *zm_out = (char *) 0x00380000;
+static char *zm_out_start = (char *) 0x00380000;
+#else
+static char zm_buf[8192];
+static char *zm_out = zm_buf;
+static char *zm_out_start = zm_buf;
+
+#endif
+static int
+zm_dprintf (char *fmt, ...)
+{
+  int len;
+  va_list args;
+
+  va_start (args, fmt);
+  len = diag_vsprintf (zm_out, fmt, args);
+  zm_out += len;
+  return len;
+}
+
+static void
+zm_flush (void)
+{
+#ifdef REDBOOT
+  char *p = zm_out_start;
+  while (*p)
+    mon_write_char (*p++);
+#endif
   zm_out = zm_out_start;
 }
+#endif
 
 static void
 zm_dump_buf (void *buf, int len)
 {
+#ifdef REDBOOT
+  diag_vdump_buf_with_offset (zm_dprintf, buf, len, 0);
+#else
 
+#endif
 }
 
 static unsigned char zm_buf[2048];
@@ -287,7 +349,6 @@ xyzModem_get_hdr (void)
 	      hdr_found = true;
 	      break;
 	    case CAN:
-	    case ETX:
 	      xyz.total_CAN++;
 	      ZM_DEBUG (zm_dump (__LINE__));
 	      if (++can_total == xyzModem_CAN_COUNT)
@@ -385,7 +446,7 @@ xyzModem_get_hdr (void)
   /* Verify checksum/CRC */
   if (xyz.crc_mode)
     {
-      cksum = crc16_ccitt(0, xyz.pkt, xyz.len);
+      cksum = cyg_crc16 (xyz.pkt, xyz.len);
       if (cksum != ((xyz.crc1 << 8) | xyz.crc2))
 	{
 	  ZM_DEBUG (zm_dprintf ("CRC error - recvd: %02x%02x, computed: %x\n",
@@ -412,22 +473,12 @@ xyzModem_get_hdr (void)
   return 0;
 }
 
-static
-ulong
-xyzModem_get_initial_timeout (void)
-{
-  /* timeout is in seconds, non-positive timeout value is infinity */
-#if CONFIG_IS_ENABLED(ENV_SUPPORT)
-  const char *timeout_str = env_get("loadxy_timeout");
-  if (timeout_str)
-    return 1000 * simple_strtol(timeout_str, NULL, 10);
-#endif
-  return 1000 * CONFIG_CMD_LOADXY_TIMEOUT;
-}
-
 int
 xyzModem_stream_open (connection_info_t * info, int *err)
 {
+#ifdef REDBOOT
+  int console_chan;
+#endif
   int stat = 0;
   int retries = xyzModem_MAX_RETRIES;
   int crc_retries = xyzModem_MAX_RETRIES_WITH_CRC;
@@ -441,9 +492,29 @@ xyzModem_stream_open (connection_info_t * info, int *err)
     }
 #endif
 
+#ifdef REDBOOT
+  /* Set up the I/O channel.  Note: this allows for using a different port in the future */
+  console_chan =
+    CYGACC_CALL_IF_SET_CONSOLE_COMM
+    (CYGNUM_CALL_IF_SET_COMM_ID_QUERY_CURRENT);
+  if (info->chan >= 0)
+    {
+      CYGACC_CALL_IF_SET_CONSOLE_COMM (info->chan);
+    }
+  else
+    {
+      CYGACC_CALL_IF_SET_CONSOLE_COMM (console_chan);
+    }
+  xyz.__chan = CYGACC_CALL_IF_CONSOLE_PROCS ();
+
+  CYGACC_CALL_IF_SET_CONSOLE_COMM (console_chan);
+  CYGACC_COMM_IF_CONTROL (*xyz.__chan, __COMMCTL_SET_TIMEOUT,
+			  xyzModem_CHAR_TIMEOUT);
+#else
 /* TODO: CHECK ! */
   int dummy = 0;
   xyz.__chan = &dummy;
+#endif
   xyz.len = 0;
   xyz.crc_mode = true;
   xyz.at_eof = false;
@@ -453,40 +524,34 @@ xyzModem_stream_open (connection_info_t * info, int *err)
   xyz.total_SOH = 0;
   xyz.total_STX = 0;
   xyz.total_CAN = 0;
+#ifdef USE_YMODEM_LENGTH
   xyz.read_length = 0;
   xyz.file_length = 0;
-  xyz.first_xmodem_packet = false;
-  xyz.initial_time = get_timer(0);
-  xyz.timeout = xyzModem_get_initial_timeout();
+#endif
 
   CYGACC_COMM_IF_PUTC (*xyz.__chan, (xyz.crc_mode ? 'C' : NAK));
 
   if (xyz.mode == xyzModem_xmodem)
     {
       /* X-modem doesn't have an information header - exit here */
-      xyz.first_xmodem_packet = true;
       xyz.next_blk = 1;
       return 0;
     }
 
-  while (!(xyz.timeout && get_timer(xyz.initial_time) > xyz.timeout))
+  while (retries-- > 0)
     {
-      if (--retries <= 0)
-        {
-          retries = xyzModem_MAX_RETRIES;
-          crc_retries = xyzModem_MAX_RETRIES_WITH_CRC;
-          xyz.crc_mode = true;
-        }
       stat = xyzModem_get_hdr ();
       if (stat == 0)
 	{
 	  /* Y-modem file information header */
 	  if (xyz.blk == 0)
 	    {
+#ifdef USE_YMODEM_LENGTH
 	      /* skip filename */
 	      while (*xyz.bufp++);
 	      /* get the length */
 	      parse_num ((char *) xyz.bufp, &xyz.file_length, NULL, " ");
+#endif
 	      /* The rest of the file name data block quietly discarded */
 	      xyz.tx_ack = true;
 	    }
@@ -522,26 +587,16 @@ xyzModem_stream_read (char *buf, int size, int *err)
   total = 0;
   stat = xyzModem_cancel;
   /* Try and get 'size' bytes into the buffer */
-  while (!xyz.at_eof && xyz.len >= 0 && (size > 0))
+  while (!xyz.at_eof && (size > 0))
     {
       if (xyz.len == 0)
 	{
 	  retries = xyzModem_MAX_RETRIES;
 	  while (retries-- > 0)
 	    {
-	      if (xyz.first_xmodem_packet && xyz.timeout &&
-		  get_timer(xyz.initial_time) > xyz.timeout)
-		{
-		  *err = xyzModem_timeout;
-		  xyz.len = -1;
-		  return total;
-		}
-
 	      stat = xyzModem_get_hdr ();
 	      if (stat == 0)
 		{
-		  if (xyz.mode == xyzModem_xmodem && xyz.first_xmodem_packet)
-		    xyz.first_xmodem_packet = false;
 		  if (xyz.blk == xyz.next_blk)
 		    {
 		      xyz.tx_ack = true;
@@ -549,8 +604,13 @@ xyzModem_stream_read (char *buf, int size, int *err)
 				("ACK block %d (%d)\n", xyz.blk, __LINE__));
 		      xyz.next_blk = (xyz.next_blk + 1) & 0xFF;
 
+#if defined(xyzModem_zmodem) || defined(USE_YMODEM_LENGTH)
 		      if (xyz.mode == xyzModem_xmodem || xyz.file_length == 0)
 			{
+#else
+		      if (1)
+			{
+#endif
 			  /* Data blocks can be padded with ^Z (EOF) characters */
 			  /* This code tries to detect and remove them */
 			  if ((xyz.bufp[xyz.len - 1] == EOF) &&
@@ -565,6 +625,7 @@ xyzModem_stream_read (char *buf, int size, int *err)
 			    }
 			}
 
+#ifdef USE_YMODEM_LENGTH
 		      /*
 		       * See if accumulated length exceeds that of the file.
 		       * If so, reduce size (i.e., cut out pad bytes)
@@ -579,6 +640,7 @@ xyzModem_stream_read (char *buf, int size, int *err)
 			      xyz.len -= (xyz.read_length - xyz.file_length);
 			    }
 			}
+#endif
 		      break;
 		    }
 		  else if (xyz.blk == ((xyz.next_blk - 1) & 0xFF))
@@ -610,8 +672,6 @@ xyzModem_stream_read (char *buf, int size, int *err)
 		      CYGACC_COMM_IF_PUTC (*xyz.__chan, ACK);
 		      ZM_DEBUG (zm_dprintf ("FINAL ACK (%d)\n", __LINE__));
 		    }
-		  else
-		    stat = 0;
 		  xyz.at_eof = true;
 		  break;
 		}
@@ -619,7 +679,7 @@ xyzModem_stream_read (char *buf, int size, int *err)
 	      xyz.total_retries++;
 	      ZM_DEBUG (zm_dprintf ("NAK (%d)\n", __LINE__));
 	    }
-	  if (stat < 0 && (!xyz.first_xmodem_packet || stat != xyzModem_timeout))
+	  if (stat < 0)
 	    {
 	      *err = stat;
 	      xyz.len = -1;
@@ -627,7 +687,7 @@ xyzModem_stream_read (char *buf, int size, int *err)
 	    }
 	}
       /* Don't "read" data from the EOF protocol package */
-      if (!xyz.at_eof && xyz.len > 0)
+      if (!xyz.at_eof)
 	{
 	  len = xyz.len;
 	  if (size < len)
@@ -646,10 +706,10 @@ xyzModem_stream_read (char *buf, int size, int *err)
 void
 xyzModem_stream_close (int *err)
 {
-  ZM_DEBUG (zm_dprintf
+  diag_printf
     ("xyzModem - %s mode, %d(SOH)/%d(STX)/%d(CAN) packets, %d retries\n",
      xyz.crc_mode ? "CRC" : "Cksum", xyz.total_SOH, xyz.total_STX,
-     xyz.total_CAN, xyz.total_retries));
+     xyz.total_CAN, xyz.total_retries);
   ZM_DEBUG (zm_flush ());
 }
 
@@ -699,8 +759,7 @@ xyzModem_stream_terminate (bool abort, int (*getc) (void))
        * If we don't eat it now, RedBoot will think the user typed it.
        */
       ZM_DEBUG (zm_dprintf ("Trailing gunk:\n"));
-      while ((c = (*getc) ()) > -1)
-        ;
+      while ((c = (*getc) ()) > -1);
       ZM_DEBUG (zm_dprintf ("\n"));
       /*
        * Make a small delay to give terminal programs like minicom
@@ -749,3 +808,10 @@ xyzModem_error (int err)
 /*
  * RedBoot interface
  */
+#if 0				/* SB */
+GETC_IO_FUNCS (xyzModem_io, xyzModem_stream_open, xyzModem_stream_close,
+	       xyzModem_stream_terminate, xyzModem_stream_read,
+	       xyzModem_error);
+RedBoot_load (xmodem, xyzModem_io, false, false, xyzModem_xmodem);
+RedBoot_load (ymodem, xyzModem_io, false, false, xyzModem_ymodem);
+#endif

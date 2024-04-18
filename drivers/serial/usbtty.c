@@ -1,17 +1,16 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2003
  * Gerry Hamel, geh@ti.com, Texas Instruments
  *
  * (C) Copyright 2006
  * Bryan O'Donoghue, bodonoghue@codehermit.ie
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
 #include <config.h>
 #include <circbuf.h>
-#include <env.h>
-#include <serial.h>
 #include <stdio_dev.h>
 #include <asm/unaligned.h>
 #include "usbtty.h"
@@ -45,8 +44,8 @@
 #define GSERIAL_RX_ENDPOINT 1
 #define NUM_ACM_INTERFACES 2
 #define NUM_GSERIAL_INTERFACES 1
-#define CFG_USBD_DATA_INTERFACE_STR "Bulk Data Interface"
-#define CFG_USBD_CTRL_INTERFACE_STR "Control Interface"
+#define CONFIG_USBD_DATA_INTERFACE_STR "Bulk Data Interface"
+#define CONFIG_USBD_CTRL_INTERFACE_STR "Control Interface"
 
 /*
  * Buffers to hold input and output data
@@ -97,9 +96,9 @@ static u8 wstrLang[4] = {4,USB_DT_STRING,0x9,0x4};
 static u8 wstrManufacturer[2 + 2*(sizeof(CONFIG_USBD_MANUFACTURER)-1)];
 static u8 wstrProduct[2 + 2*(sizeof(CONFIG_USBD_PRODUCT_NAME)-1)];
 static u8 wstrSerial[2 + 2*(sizeof(serial_number) - 1)];
-static u8 wstrConfiguration[2 + 2*(sizeof(CFG_USBD_CONFIGURATION_STR)-1)];
-static u8 wstrDataInterface[2 + 2*(sizeof(CFG_USBD_DATA_INTERFACE_STR)-1)];
-static u8 wstrCtrlInterface[2 + 2*(sizeof(CFG_USBD_DATA_INTERFACE_STR)-1)];
+static u8 wstrConfiguration[2 + 2*(sizeof(CONFIG_USBD_CONFIGURATION_STR)-1)];
+static u8 wstrDataInterface[2 + 2*(sizeof(CONFIG_USBD_DATA_INTERFACE_STR)-1)];
+static u8 wstrCtrlInterface[2 + 2*(sizeof(CONFIG_USBD_DATA_INTERFACE_STR)-1)];
 
 /* Standard USB Data Structures */
 static struct usb_interface_descriptor interface_descriptors[MAX_INTERFACES];
@@ -119,6 +118,20 @@ static struct usb_device_descriptor device_descriptor = {
 	.iSerialNumber =	STR_SERIAL,
 	.bNumConfigurations =	NUM_CONFIGS
 };
+
+
+#if defined(CONFIG_USBD_HS)
+static struct usb_qualifier_descriptor qualifier_descriptor = {
+	.bLength = sizeof(struct usb_qualifier_descriptor),
+	.bDescriptorType =	USB_DT_QUAL,
+	.bcdUSB =		cpu_to_le16(USB_BCD_VERSION),
+	.bDeviceClass =		COMMUNICATIONS_DEVICE_CLASS,
+	.bDeviceSubClass =	0x00,
+	.bDeviceProtocol =	0x00,
+	.bMaxPacketSize0 =	EP0_MAX_PACKET_SIZE,
+	.bNumConfigurations =	NUM_CONFIGS
+};
+#endif
 
 /*
  * Static CDC ACM specific descriptors
@@ -206,7 +219,7 @@ static struct acm_config_desc acm_configuration_descriptors[NUM_CONFIGS] = {
 			.bEndpointAddress	= UDC_INT_ENDPOINT | USB_DIR_IN,
 			.bmAttributes		= USB_ENDPOINT_XFER_INT,
 			.wMaxPacketSize
-				= cpu_to_le16(CFG_USBD_SERIAL_INT_PKTSIZE),
+				= cpu_to_le16(CONFIG_USBD_SERIAL_INT_PKTSIZE),
 			.bInterval		= 0xFF,
 		},
 
@@ -233,7 +246,7 @@ static struct acm_config_desc acm_configuration_descriptors[NUM_CONFIGS] = {
 				.bmAttributes		=
 					USB_ENDPOINT_XFER_BULK,
 				.wMaxPacketSize		=
-					cpu_to_le16(CFG_USBD_SERIAL_BULK_PKTSIZE),
+					cpu_to_le16(CONFIG_USBD_SERIAL_BULK_PKTSIZE),
 				.bInterval		= 0xFF,
 			},
 			{
@@ -244,7 +257,7 @@ static struct acm_config_desc acm_configuration_descriptors[NUM_CONFIGS] = {
 				.bmAttributes		=
 					USB_ENDPOINT_XFER_BULK,
 				.wMaxPacketSize		=
-					cpu_to_le16(CFG_USBD_SERIAL_BULK_PKTSIZE),
+					cpu_to_le16(CONFIG_USBD_SERIAL_BULK_PKTSIZE),
 				.bInterval		= 0xFF,
 			},
 		},
@@ -312,7 +325,7 @@ gserial_configuration_descriptors[NUM_CONFIGS] ={
 				.bEndpointAddress =	UDC_OUT_ENDPOINT | USB_DIR_OUT,
 				.bmAttributes =		USB_ENDPOINT_XFER_BULK,
 				.wMaxPacketSize =
-					cpu_to_le16(CFG_USBD_SERIAL_OUT_PKTSIZE),
+					cpu_to_le16(CONFIG_USBD_SERIAL_OUT_PKTSIZE),
 				.bInterval=		0xFF,
 			},
 			{
@@ -322,7 +335,7 @@ gserial_configuration_descriptors[NUM_CONFIGS] ={
 				.bEndpointAddress =	UDC_IN_ENDPOINT | USB_DIR_IN,
 				.bmAttributes =		USB_ENDPOINT_XFER_BULK,
 				.wMaxPacketSize =
-					cpu_to_le16(CFG_USBD_SERIAL_IN_PKTSIZE),
+					cpu_to_le16(CONFIG_USBD_SERIAL_IN_PKTSIZE),
 				.bInterval =		0xFF,
 			},
 			{
@@ -332,7 +345,7 @@ gserial_configuration_descriptors[NUM_CONFIGS] ={
 				.bEndpointAddress =	UDC_INT_ENDPOINT | USB_DIR_IN,
 				.bmAttributes =		USB_ENDPOINT_XFER_INT,
 				.wMaxPacketSize =
-					cpu_to_le16(CFG_USBD_SERIAL_INT_PKTSIZE),
+					cpu_to_le16(CONFIG_USBD_SERIAL_INT_PKTSIZE),
 				.bInterval =		0xFF,
 			},
 		},
@@ -376,7 +389,7 @@ static void str2wide (char *str, u16 * wide)
  * Test whether a character is in the RX buffer
  */
 
-int usbtty_tstc(struct stdio_dev *dev)
+int usbtty_tstc (void)
 {
 	struct usb_endpoint_instance *endpoint =
 		&endpoint_instance[rx_endpoint];
@@ -396,7 +409,7 @@ int usbtty_tstc(struct stdio_dev *dev)
  * written into its argument c.
  */
 
-int usbtty_getc(struct stdio_dev *dev)
+int usbtty_getc (void)
 {
 	char c;
 	struct usb_endpoint_instance *endpoint =
@@ -416,16 +429,15 @@ int usbtty_getc(struct stdio_dev *dev)
 /*
  * Output a single byte to the usb client port.
  */
-void usbtty_putc(struct stdio_dev *dev, const char c)
+void usbtty_putc (const char c)
 {
 	if (!usbtty_configured ())
 		return;
 
+	buf_push (&usbtty_output, &c, 1);
 	/* If \n, also do \r */
 	if (c == '\n')
 		buf_push (&usbtty_output, "\r", 1);
-
-	buf_push(&usbtty_output, &c, 1);
 
 	/* Poll at end to handle new data... */
 	if ((usbtty_output.size + 2) >= usbtty_output.totalsize) {
@@ -463,7 +475,7 @@ static void __usbtty_puts (const char *str, int len)
 		if (space) {
 			write_buffer (&usbtty_output);
 
-			n = min(space, min(len, maxlen));
+			n = MIN (space, MIN (len, maxlen));
 			buf_push (&usbtty_output, str, n);
 
 			str += n;
@@ -472,7 +484,7 @@ static void __usbtty_puts (const char *str, int len)
 	}
 }
 
-void usbtty_puts(struct stdio_dev *dev, const char *str)
+void usbtty_puts (const char *str)
 {
 	int n;
 	int len;
@@ -486,8 +498,8 @@ void usbtty_puts(struct stdio_dev *dev, const char *str)
 		n = next_nl_pos (str);
 
 		if (str[n] == '\n') {
-			__usbtty_puts(str, n);
-			__usbtty_puts("\r\n", 2);
+			__usbtty_puts (str, n + 1);
+			__usbtty_puts ("\r", 1);
 			str += (n + 1);
 			len -= (n + 1);
 		} else {
@@ -512,10 +524,10 @@ int drv_usbtty_init (void)
 	char * tt;
 	int snlen;
 
-	/* Get serial number */
-	sn = env_get("serial#");
-	if (!sn)
+	/* Ger seiral number */
+	if (!(sn = getenv("serial#"))) {
 		sn = "000000000000";
+	}
 	snlen = strlen(sn);
 	if (snlen > sizeof(serial_number) - 1) {
 		printf ("Warning: serial number %s is too long (%d > %lu)\n",
@@ -527,9 +539,10 @@ int drv_usbtty_init (void)
 
 	/* Decide on which type of UDC device to be.
 	 */
-	tt = env_get("usbtty");
-	if (!tt)
+
+	if(!(tt = getenv("usbtty"))) {
 		tt = "generic";
+	}
 	usbtty_init_terminal_type(strcmp(tt,"cdc_acm"));
 
 	/* prepare buffers... */
@@ -594,20 +607,20 @@ static void usbtty_init_strings (void)
 	string = (struct usb_string_descriptor *) wstrConfiguration;
 	string->bLength = sizeof(wstrConfiguration);
 	string->bDescriptorType = USB_DT_STRING;
-	str2wide (CFG_USBD_CONFIGURATION_STR, string->wData);
+	str2wide (CONFIG_USBD_CONFIGURATION_STR, string->wData);
 	usbtty_string_table[STR_CONFIG]=string;
 
 
 	string = (struct usb_string_descriptor *) wstrDataInterface;
 	string->bLength = sizeof(wstrDataInterface);
 	string->bDescriptorType = USB_DT_STRING;
-	str2wide (CFG_USBD_DATA_INTERFACE_STR, string->wData);
+	str2wide (CONFIG_USBD_DATA_INTERFACE_STR, string->wData);
 	usbtty_string_table[STR_DATA_INTERFACE]=string;
 
 	string = (struct usb_string_descriptor *) wstrCtrlInterface;
 	string->bLength = sizeof(wstrCtrlInterface);
 	string->bDescriptorType = USB_DT_STRING;
-	str2wide (CFG_USBD_CTRL_INTERFACE_STR, string->wData);
+	str2wide (CONFIG_USBD_CTRL_INTERFACE_STR, string->wData);
 	usbtty_string_table[STR_CTRL_INTERFACE]=string;
 
 	/* Now, initialize the string table for ep0 handling */
@@ -625,6 +638,9 @@ static void usbtty_init_instances (void)
 	memset (device_instance, 0, sizeof (struct usb_device_instance));
 	device_instance->device_state = STATE_INIT;
 	device_instance->device_descriptor = &device_descriptor;
+#if defined(CONFIG_USBD_HS)
+	device_instance->qualifier_descriptor = &qualifier_descriptor;
+#endif
 	device_instance->event = usbtty_event_handler;
 	device_instance->cdc_recv_setup = usbtty_cdc_setup;
 	device_instance->bus = bus_instance;
@@ -738,6 +754,10 @@ static void usbtty_init_terminal_type(short type)
 			device_descriptor.idProduct =
 				cpu_to_le16(CONFIG_USBD_PRODUCTID_CDCACM);
 
+#if defined(CONFIG_USBD_HS)
+			qualifier_descriptor.bDeviceClass =
+				COMMUNICATIONS_DEVICE_CLASS;
+#endif
 			/* Assign endpoint indices */
 			tx_endpoint = ACM_TX_ENDPOINT;
 			rx_endpoint = ACM_RX_ENDPOINT;
@@ -766,6 +786,9 @@ static void usbtty_init_terminal_type(short type)
 			device_descriptor.bDeviceClass = 0xFF;
 			device_descriptor.idProduct =
 				cpu_to_le16(CONFIG_USBD_PRODUCTID_GSERIAL);
+#if defined(CONFIG_USBD_HS)
+			qualifier_descriptor.bDeviceClass = 0xFF;
+#endif
 			/* Assign endpoint indices */
 			tx_endpoint = GSERIAL_TX_ENDPOINT;
 			rx_endpoint = GSERIAL_RX_ENDPOINT;
@@ -825,9 +848,10 @@ static int write_buffer (circbuf_t * buf)
 			&endpoint_instance[tx_endpoint];
 	struct urb *current_urb = NULL;
 
+	current_urb = next_urb (device_instance, endpoint);
 	/* TX data still exists - send it now
 	 */
-	if(endpoint->sent < endpoint->tx_urb->actual_length){
+	if(endpoint->sent < current_urb->actual_length){
 		if(udc_endpoint_write (endpoint)){
 			/* Write pre-empted by RX */
 			return -1;
@@ -846,7 +870,11 @@ static int write_buffer (circbuf_t * buf)
 		 */
 		while (buf->size > 0) {
 
-			current_urb = next_urb (device_instance, endpoint);
+			if (!current_urb) {
+				TTYERR ("current_urb is NULL, buf->size %d\n",
+					buf->size);
+				return total;
+			}
 
 			dest = (char*)current_urb->buffer +
 				current_urb->actual_length;
@@ -854,7 +882,7 @@ static int write_buffer (circbuf_t * buf)
 			space_avail =
 				current_urb->buffer_length -
 				current_urb->actual_length;
-			popnum = min(space_avail, (int)buf->size);
+			popnum = MIN (space_avail, buf->size);
 			if (popnum == 0)
 				break;
 
@@ -913,6 +941,9 @@ static int usbtty_configured (void)
 static void usbtty_event_handler (struct usb_device_instance *device,
 				  usb_device_event_t event, int data)
 {
+#if defined(CONFIG_USBD_HS)
+	int i;
+#endif
 	switch (event) {
 	case DEVICE_RESET:
 	case DEVICE_BUS_INACTIVE:
@@ -923,6 +954,29 @@ static void usbtty_event_handler (struct usb_device_instance *device,
 		break;
 
 	case DEVICE_ADDRESS_ASSIGNED:
+#if defined(CONFIG_USBD_HS)
+		/*
+		 * is_usbd_high_speed routine needs to be defined by
+		 * specific gadget driver
+		 * It returns true if device enumerates at High speed
+		 * Retuns false otherwise
+		 */
+		for (i = 0; i < NUM_ENDPOINTS; i++) {
+			if (((ep_descriptor_ptrs[i]->bmAttributes &
+			      USB_ENDPOINT_XFERTYPE_MASK) ==
+			      USB_ENDPOINT_XFER_BULK)
+			    && is_usbd_high_speed()) {
+
+				ep_descriptor_ptrs[i]->wMaxPacketSize =
+					CONFIG_USBD_SERIAL_BULK_HS_PKTSIZE;
+			}
+
+			endpoint_instance[i + 1].tx_packetSize =
+				ep_descriptor_ptrs[i]->wMaxPacketSize;
+			endpoint_instance[i + 1].rcv_packetSize =
+				ep_descriptor_ptrs[i]->wMaxPacketSize;
+		}
+#endif
 		usbtty_init_endpoints ();
 
 	default:

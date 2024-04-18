@@ -1,4 +1,3 @@
-/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * (C) Copyright 2009 Ilya Yanok, Emcraft Systems Ltd <yanok@emcraft.com>
  * (C) Copyright 2008 Armadeus Systems, nc
@@ -11,18 +10,25 @@
  *
  * This file is based on mpc4200fec.h
  * (C) Copyright Motorola, Inc., 2000
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
+
 
 #ifndef __FEC_MXC_H
 #define __FEC_MXC_H
 
-#include <clk.h>
+void imx_get_mac_from_fuse(int dev_id, unsigned char *mac);
 
-/* Layout description of the FEC */
+/**
+ * Layout description of the FEC
+ */
 struct ethernet_regs {
-	/* [10:2]addr = 00 */
 
-	/*  Control and status Registers (offset 000-1FF) */
+/* [10:2]addr = 00 */
+
+/*  Control and status Registers (offset 000-1FF) */
+
 	uint32_t res0[1];		/* MBAR_ETH + 0x000 */
 	uint32_t ievent;		/* MBAR_ETH + 0x004 */
 	uint32_t imask;			/* MBAR_ETH + 0x008 */
@@ -65,7 +71,8 @@ struct ethernet_regs {
 	uint32_t emrbr;			/* MBAR_ETH + 0x188 */
 	uint32_t res12[29];		/* MBAR_ETH + 0x18C-1FC */
 
-	/*  MIB COUNTERS (Offset 200-2FF) */
+/*  MIB COUNTERS (Offset 200-2FF) */
+
 	uint32_t rmon_t_drop;		/* MBAR_ETH + 0x200 */
 	uint32_t rmon_t_packets;	/* MBAR_ETH + 0x204 */
 	uint32_t rmon_t_bc_pkt;		/* MBAR_ETH + 0x208 */
@@ -128,7 +135,7 @@ struct ethernet_regs {
 
 	uint32_t res14[7];		/* MBAR_ETH + 0x2E4-2FC */
 
-#if defined(CONFIG_MX53) || defined(CONFIG_MX6SL)
+#if defined(CONFIG_MX25) || defined(CONFIG_MX53) || defined(CONFIG_MX6SL)
 	uint16_t miigsk_cfgr;		/* MBAR_ETH + 0x300 */
 	uint16_t res15[3];		/* MBAR_ETH + 0x302-306 */
 	uint16_t miigsk_enr;		/* MBAR_ETH + 0x308 */
@@ -167,6 +174,7 @@ struct ethernet_regs {
 #define FEC_IMASKT_RL			0x00100000
 #define FEC_IMASK_UN			0x00080000
 
+
 #define FEC_RCNTRL_MAX_FL_SHIFT		16
 #define FEC_RCNTRL_LOOP			0x00000001
 #define FEC_RCNTRL_DRT			0x00000002
@@ -188,15 +196,13 @@ struct ethernet_regs {
 #define FEC_ECNTRL_ETHER_EN		0x00000002	/* enable the FEC */
 #define FEC_ECNTRL_SPEED		0x00000020
 #define FEC_ECNTRL_DBSWAP		0x00000100
-#define FEC_ECNTRL_TXC_DLY		0x00010000	/* TXC delayed */
-#define FEC_ECNTRL_RXC_DLY		0x00020000	/* RXC delayed */
 
 #define FEC_X_WMRK_STRFWD		0x00000100
 
 #define FEC_X_DES_ACTIVE_TDAR		0x01000000
 #define FEC_R_DES_ACTIVE_RDAR		0x01000000
 
-#if defined(CONFIG_MX53) || defined(CONFIG_MX6SL)
+#if defined(CONFIG_MX25) || defined(CONFIG_MX53) || defined(CONFIG_MX6SL)
 /* defines for MIIGSK */
 /* RMII frequency control: 0=50MHz, 1=5MHz */
 #define MIIGSK_CFGR_FRCONT		(1 << 6)
@@ -227,7 +233,9 @@ struct fec_bd {
 	uint32_t data_pointer;		/* payload's buffer address */
 };
 
-/* Supported phy types on this platform */
+/**
+ * Supported phy types on this platform
+ */
 enum xceiver_type {
 	SEVENWIRE,	/* 7-wire       */
 	MII10,		/* MII 10Mbps   */
@@ -236,7 +244,9 @@ enum xceiver_type {
 	RGMII,		/* RGMII */
 };
 
-/* @brief i.MX27-FEC private structure */
+/**
+ * @brief i.MX27-FEC private structure
+ */
 struct fec_priv {
 	struct ethernet_regs *eth;	/* pointer to register'S base */
 	enum xceiver_type xcv_type;	/* transceiver type */
@@ -244,33 +254,16 @@ struct fec_priv {
 	int rbd_index;			/* next receive BD to read */
 	struct fec_bd *tbd_base;	/* TBD ring */
 	int tbd_index;			/* next transmit BD to write */
-	struct bd_info *bd;
+	bd_t *bd;
 	uint8_t *tdb_ptr;
 	int dev_id;
 	struct mii_dev *bus;
 #ifdef CONFIG_PHYLIB
 	struct phy_device *phydev;
-	ofnode phy_of_node;
 #else
 	int phy_id;
 	int (*mii_postcall)(int);
 #endif
-#ifdef CONFIG_DM_REGULATOR
-	struct udevice *phy_supply;
-#endif
-#if CONFIG_IS_ENABLED(DM_GPIO)
-	struct gpio_desc phy_reset_gpio;
-	uint32_t reset_delay;
-	uint32_t reset_post_delay;
-#endif
-	u32 interface;
-	struct clk ipg_clk;
-	struct clk ahb_clk;
-	struct clk clk_enet_out;
-	struct clk clk_ref;
-	struct clk clk_ptp;
-	u32 clk_rate;
-	bool promisc;
 };
 
 /**

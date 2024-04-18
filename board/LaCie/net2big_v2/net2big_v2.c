@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2011 Simon Guinot <sguinot@lacie.com>
  *
@@ -6,18 +5,15 @@
  * (C) Copyright 2009
  * Marvell Semiconductor <www.marvell.com>
  * Written-by: Prafulla Wadaskar <prafulla@marvell.com>
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
 #include <command.h>
-#include <env.h>
 #include <i2c.h>
-#include <init.h>
-#include <net.h>
-#include <asm/global_data.h>
-#include <asm/mach-types.h>
 #include <asm/arch/cpu.h>
-#include <asm/arch/soc.h>
+#include <asm/arch/kirkwood.h>
 #include <asm/arch/mpp.h>
 #include <asm/arch/gpio.h>
 
@@ -30,8 +26,8 @@ DECLARE_GLOBAL_DATA_PTR;
 int board_early_init_f(void)
 {
 	/* GPIO configuration */
-	mvebu_config_gpio(NET2BIG_V2_OE_VAL_LOW, NET2BIG_V2_OE_VAL_HIGH,
-			  NET2BIG_V2_OE_LOW, NET2BIG_V2_OE_HIGH);
+	kw_config_gpio(NET2BIG_V2_OE_VAL_LOW, NET2BIG_V2_OE_VAL_HIGH,
+			NET2BIG_V2_OE_LOW, NET2BIG_V2_OE_HIGH);
 
 	/* Multi-Purpose Pins Functionality configuration */
 	static const u32 kwmpp_config[] = {
@@ -81,14 +77,14 @@ int board_init(void)
 	gd->bd->bi_arch_number = MACH_TYPE_NET2BIG_V2;
 
 	/* Boot parameters address */
-	gd->bd->bi_boot_params = mvebu_sdram_bar(0) + 0x100;
+	gd->bd->bi_boot_params = kw_sdram_bar(0) + 0x100;
 
 	return 0;
 }
 
 #if defined(CONFIG_MISC_INIT_R)
 
-#if defined(CONFIG_CMD_I2C) && defined(CFG_SYS_I2C_G762_ADDR)
+#if defined(CONFIG_CMD_I2C) && defined(CONFIG_SYS_I2C_G762_ADDR)
 /*
  * Start I2C fan (GMT G762 controller)
  */
@@ -100,11 +96,11 @@ static void init_fan(void)
 
 	/* Enable open-loop and PWM modes */
 	data = 0x20;
-	if (i2c_write(CFG_SYS_I2C_G762_ADDR,
+	if (i2c_write(CONFIG_SYS_I2C_G762_ADDR,
 		      G762_REG_FAN_CMD1, 1, &data, 1) != 0)
 		goto err;
 	data = 0;
-	if (i2c_write(CFG_SYS_I2C_G762_ADDR,
+	if (i2c_write(CONFIG_SYS_I2C_G762_ADDR,
 		      G762_REG_SET_CNT, 1, &data, 1) != 0)
 		goto err;
 	/*
@@ -124,18 +120,18 @@ static void init_fan(void)
 	 * Start fan at low speed (2800 RPM):
 	 */
 	data = 0x08;
-	if (i2c_write(CFG_SYS_I2C_G762_ADDR,
+	if (i2c_write(CONFIG_SYS_I2C_G762_ADDR,
 		      G762_REG_SET_OUT, 1, &data, 1) != 0)
 		goto err;
 
 	return;
 err:
 	printf("Error: failed to start I2C fan @%02x\n",
-	       CFG_SYS_I2C_G762_ADDR);
+	       CONFIG_SYS_I2C_G762_ADDR);
 }
 #else
 static void init_fan(void) {}
-#endif /* CONFIG_CMD_I2C && CFG_SYS_I2C_G762_ADDR */
+#endif /* CONFIG_CMD_I2C && CONFIG_SYS_I2C_G762_ADDR */
 
 #if defined(CONFIG_NET2BIG_V2) && defined(CONFIG_KIRKWOOD_GPIO)
 /*
@@ -224,10 +220,10 @@ int misc_init_r(void)
 {
 	init_fan();
 #if defined(CONFIG_CMD_I2C) && defined(CONFIG_SYS_I2C_EEPROM_ADDR)
-	if (!env_get("ethaddr")) {
+	if (!getenv("ethaddr")) {
 		uchar mac[6];
 		if (lacie_read_mac_address(mac) == 0)
-			eth_env_set_enetaddr("ethaddr", mac);
+			eth_setenv_enetaddr("ethaddr", mac);
 	}
 #endif
 	init_leds();
@@ -240,15 +236,14 @@ int misc_init_r(void)
 /* Configure and initialize PHY */
 void reset_phy(void)
 {
-	mv_phy_88e1116_init("ethernet-controller@72000", 8);
+	mv_phy_88e1116_init("egiga0", 8);
 }
 #endif
 
 #if defined(CONFIG_KIRKWOOD_GPIO)
 /* Return GPIO push button status */
 static int
-do_read_push_button(struct cmd_tbl *cmdtp, int flag, int argc,
-		    char *const argv[])
+do_read_push_button(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 {
 	return !kw_gpio_get_value(NET2BIG_V2_GPIO_PUSH_BUTTON);
 }

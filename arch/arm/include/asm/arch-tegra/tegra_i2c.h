@@ -1,17 +1,31 @@
-/* SPDX-License-Identifier: GPL-2.0 */
 /*
  * NVIDIA Tegra I2C controller
  *
  * Copyright 2010-2011 NVIDIA Corporation
+ *
+ * This software may be used and distributed according to the
+ * terms of the GNU Public License, Version 2, incorporated
+ * herein by reference.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * Version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
+ * MA 02111-1307 USA
  */
 
 #ifndef _TEGRA_I2C_H_
 #define _TEGRA_I2C_H_
 
-#include <asm/io.h>
 #include <asm/types.h>
-
-struct udevice;
 
 enum {
 	I2C_TIMEOUT_USEC = 10000,	/* Wait time for completion */
@@ -110,8 +124,6 @@ struct i2c_ctlr {
 /* bit fields definitions for IO Packet Header 3 format */
 #define PKT_HDR3_READ_MODE_SHIFT	19
 #define PKT_HDR3_READ_MODE_MASK		(1 << PKT_HDR3_READ_MODE_SHIFT)
-#define PKT_HDR3_REPEAT_START_SHIFT	16
-#define PKT_HDR3_REPEAT_START_MASK	(1 << PKT_HDR3_REPEAT_START_SHIFT)
 #define PKT_HDR3_SLAVE_ADDR_SHIFT	0
 #define PKT_HDR3_SLAVE_ADDR_MASK	(0x3ff << PKT_HDR3_SLAVE_ADDR_SHIFT)
 
@@ -151,24 +163,8 @@ struct i2c_ctlr {
 /**
  * Returns the bus number of the DVC controller
  *
- * Return: number of bus, or -1 if there is no DVC active
+ * @return number of bus, or -1 if there is no DVC active
  */
-int tegra_i2c_get_dvc_bus(struct udevice **busp);
-
-/* Pre-dm section used for initial setup of PMIC */
-#define I2C_SEND_2_BYTES		0x0A02
-
-static inline void tegra_i2c_ll_write(uint addr, uint data)
-{
-	struct i2c_ctlr *reg = (struct i2c_ctlr *)TEGRA_DVC_BASE;
-
-	writel(addr, &reg->cmd_addr0);
-	writel(0x2, &reg->cnfg);
-
-	writel(data, &reg->cmd_data1);
-	writel(I2C_SEND_2_BYTES, &reg->cnfg);
-}
-
-void pmic_enable_cpu_vdd(void);
+int tegra_i2c_get_dvc_bus_num(void);
 
 #endif	/* _TEGRA_I2C_H_ */

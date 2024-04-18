@@ -1,11 +1,11 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2002
  * Wolfgang Denk, DENX Software Engineering, wd@denx.de.
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
-#include <cpu_func.h>
 
 /*
  * CPU test
@@ -20,7 +20,7 @@
 #include <post.h>
 #include <asm/mmu.h>
 
-#if CFG_POST & CFG_SYS_POST_CPU
+#if CONFIG_POST & CONFIG_SYS_POST_CPU
 
 extern int cpu_post_test_cmp (void);
 extern int cpu_post_test_cmpi (void);
@@ -42,6 +42,8 @@ extern int cpu_post_test_multi (void);
 extern int cpu_post_test_string (void);
 extern int cpu_post_test_complex (void);
 
+DECLARE_GLOBAL_DATA_PTR;
+
 ulong cpu_post_makecr (long v)
 {
 	ulong cr = 0;
@@ -58,12 +60,16 @@ ulong cpu_post_makecr (long v)
 
 int cpu_post_test (int flags)
 {
-	int ic = icache_status();
+	int ic = icache_status ();
 	int ret = 0;
 
-	schedule();
+	WATCHDOG_RESET();
 	if (ic)
-		icache_disable();
+		icache_disable ();
+#ifdef CONFIG_4xx_DCACHE
+	/* disable cache */
+	change_tlb(gd->bd->bi_memstart, gd->bd->bi_memsize, TLB_WORD2_I_ENABLE);
+#endif
 
 	if (ret == 0)
 		ret = cpu_post_test_cmp ();
@@ -73,7 +79,7 @@ int cpu_post_test (int flags)
 		ret = cpu_post_test_two ();
 	if (ret == 0)
 		ret = cpu_post_test_twox ();
-	schedule();
+	WATCHDOG_RESET();
 	if (ret == 0)
 		ret = cpu_post_test_three ();
 	if (ret == 0)
@@ -82,7 +88,7 @@ int cpu_post_test (int flags)
 		ret = cpu_post_test_threei ();
 	if (ret == 0)
 		ret = cpu_post_test_andi ();
-	schedule();
+	WATCHDOG_RESET();
 	if (ret == 0)
 		ret = cpu_post_test_srawi ();
 	if (ret == 0)
@@ -91,7 +97,7 @@ int cpu_post_test (int flags)
 		ret = cpu_post_test_rlwinm ();
 	if (ret == 0)
 		ret = cpu_post_test_rlwimi ();
-	schedule();
+	WATCHDOG_RESET();
 	if (ret == 0)
 		ret = cpu_post_test_store ();
 	if (ret == 0)
@@ -100,22 +106,26 @@ int cpu_post_test (int flags)
 		ret = cpu_post_test_cr ();
 	if (ret == 0)
 		ret = cpu_post_test_b ();
-	schedule();
+	WATCHDOG_RESET();
 	if (ret == 0)
 		ret = cpu_post_test_multi ();
-	schedule();
+	WATCHDOG_RESET();
 	if (ret == 0)
 		ret = cpu_post_test_string ();
 	if (ret == 0)
 		ret = cpu_post_test_complex ();
-	schedule();
+	WATCHDOG_RESET();
 
 	if (ic)
-		icache_enable();
+		icache_enable ();
+#ifdef CONFIG_4xx_DCACHE
+	/* enable cache */
+	change_tlb(gd->bd->bi_memstart, gd->bd->bi_memsize, 0);
+#endif
 
-	schedule();
+	WATCHDOG_RESET();
 
 	return ret;
 }
 
-#endif /* CFG_POST & CFG_SYS_POST_CPU */
+#endif /* CONFIG_POST & CONFIG_SYS_POST_CPU */

@@ -31,10 +31,9 @@ informed to load it before running the kernel.
 To boot the kernel, these steps under a Falcon-aware U-Boot are required:
 
 1. Boot the board into U-Boot.
-After loading the desired legacy-format kernel image into memory (and DT as
-well, if used), use the "spl export" command to generate the kernel parameters
-area or the DT.  U-Boot runs as when it boots the kernel, but stops before
-passing the control to the kernel.
+Use the "spl export" command to generate the kernel parameters area or the DT.
+U-Boot runs as when it boots the kernel, but stops before passing the control
+to the kernel.
 
 2. Save the prepared snapshot into persistent media.
 The address where to save it must be configured into board configuration
@@ -67,9 +66,7 @@ CONFIG_SYS_NAND_SPL_KERNEL_OFFS	Offset in NAND where the kernel is stored
 
 CONFIG_CMD_SPL_NAND_OFS	Offset in NAND where the parameters area was saved.
 
-CONFIG_CMD_SPL_NOR_OFS	Offset in NOR where the parameters area was saved.
-
-CONFIG_CMD_SPL_WRITE_SIZE	Size of the parameters area to be copied
+CONFIG_CMD_SPL_WRITE_SIZE 	Size of the parameters area to be copied
 
 CONFIG_SPL_OS_BOOT	Activate Falcon Mode.
 
@@ -83,19 +80,6 @@ spl_start_uboot() : required
 		Returns "0" if SPL should start the kernel, "1" if U-Boot
 		must be started.
 
-Environment variables
----------------------
-
-A board may chose to look at the environment for decisions about falcon
-mode.  In this case the following variables may be supported:
-
-boot_os :		Set to yes/Yes/true/True/1 to enable booting to OS,
-			any other value to fall back to U-Boot (including
-			unset)
-falcon_args_file :	Filename to load as the 'args' portion of falcon mode
-			rather than the hard-coded value.
-falcon_image_file :	Filename to load as the OS image portion of falcon
-			mode rather than the hard-coded value.
 
 Using spl command
 -----------------
@@ -120,12 +104,7 @@ after each run of 'spl export'. Unfortunately the position of temporary
 storage can not be predicted nor provided at commandline, it depends
 highly on your system setup and your provided data (ATAGS or FDT).
 However at the end of an succesful 'spl export' run it will print the
-RAM address of temporary storage. The RAM address of FDT will also be
-set in the environment variable 'fdtargsaddr', the new length of the
-prepared FDT will be set in the environment variable 'fdtargslen'.
-These environment variables can be used in scripts for writing updated
-FDT to persistent storage.
-
+RAM address of temporary storage.
 Now the user have to save the generated BLOB from that printed address
 to the pre-defined address in persistent storage
 (CONFIG_CMD_SPL_NAND_OFS in case of NAND).

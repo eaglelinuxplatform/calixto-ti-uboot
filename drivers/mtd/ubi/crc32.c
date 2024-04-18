@@ -20,18 +20,17 @@
  * Version 2.  See the file COPYING for more details.
  */
 
-#ifndef __UBOOT__
+#ifdef UBI_LINUX
 #include <linux/crc32.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/compiler.h>
-#include <u-boot/crc.h>
 #endif
 #include <linux/types.h>
 
 #include <asm/byteorder.h>
 
-#ifndef __UBOOT__
+#ifdef UBI_LINUX
 #include <linux/slab.h>
 #include <linux/init.h>
 #include <asm/atomic.h>
@@ -47,7 +46,7 @@
 #define tobe(x) (x)
 #endif
 #include "crc32table.h"
-#ifndef __UBOOT__
+#ifdef UBI_LINUX
 MODULE_AUTHOR("Matt Domsch <Matt_Domsch@dell.com>");
 MODULE_DESCRIPTION("Ethernet CRC32 calculations");
 MODULE_LICENSE("GPL");
@@ -147,7 +146,7 @@ u32 crc32_le(u32 crc, unsigned char const *p, size_t len)
 # endif
 }
 #endif
-#ifndef __UBOOT__
+#ifdef UBI_LINUX
 /**
  * crc32_be() - Calculate bitwise big-endian Ethernet AUTODIN II CRC32
  * @crc: seed value for computation.  ~0 for Ethernet, sometimes 0 for
@@ -293,8 +292,8 @@ EXPORT_SYMBOL(crc32_be);
  *
  * A big-endian CRC written this way would be coded like:
  * for (i = 0; i < input_bits; i++) {
- *	multiple = remainder & 0x80000000 ? CRCPOLY : 0;
- *	remainder = (remainder << 1 | next_input_bit()) ^ multiple;
+ * 	multiple = remainder & 0x80000000 ? CRCPOLY : 0;
+ * 	remainder = (remainder << 1 | next_input_bit()) ^ multiple;
  * }
  * Notice how, to get at bit 32 of the shifted remainder, we look
  * at bit 31 of the remainder *before* shifting it.
@@ -313,14 +312,14 @@ EXPORT_SYMBOL(crc32_be);
  * This changes the code to:
  * for (i = 0; i < input_bits; i++) {
  *      remainder ^= next_input_bit() << 31;
- *	multiple = (remainder & 0x80000000) ? CRCPOLY : 0;
- *	remainder = (remainder << 1) ^ multiple;
+ * 	multiple = (remainder & 0x80000000) ? CRCPOLY : 0;
+ * 	remainder = (remainder << 1) ^ multiple;
  * }
  * With this optimization, the little-endian code is simpler:
  * for (i = 0; i < input_bits; i++) {
  *      remainder ^= next_input_bit();
- *	multiple = (remainder & 1) ? CRCPOLY : 0;
- *	remainder = (remainder >> 1) ^ multiple;
+ * 	multiple = (remainder & 1) ? CRCPOLY : 0;
+ * 	remainder = (remainder >> 1) ^ multiple;
  * }
  *
  * Note that the other details of endianness have been hidden in CRCPOLY
@@ -330,19 +329,19 @@ EXPORT_SYMBOL(crc32_be);
  * order, we can actually do the merging 8 or more bits at a time rather
  * than one bit at a time:
  * for (i = 0; i < input_bytes; i++) {
- *	remainder ^= next_input_byte() << 24;
- *	for (j = 0; j < 8; j++) {
- *		multiple = (remainder & 0x80000000) ? CRCPOLY : 0;
- *		remainder = (remainder << 1) ^ multiple;
- *	}
+ * 	remainder ^= next_input_byte() << 24;
+ * 	for (j = 0; j < 8; j++) {
+ * 		multiple = (remainder & 0x80000000) ? CRCPOLY : 0;
+ * 		remainder = (remainder << 1) ^ multiple;
+ * 	}
  * }
  * Or in little-endian:
  * for (i = 0; i < input_bytes; i++) {
- *	remainder ^= next_input_byte();
- *	for (j = 0; j < 8; j++) {
- *		multiple = (remainder & 1) ? CRCPOLY : 0;
- *		remainder = (remainder << 1) ^ multiple;
- *	}
+ * 	remainder ^= next_input_byte();
+ * 	for (j = 0; j < 8; j++) {
+ * 		multiple = (remainder & 1) ? CRCPOLY : 0;
+ * 		remainder = (remainder << 1) ^ multiple;
+ * 	}
  * }
  * If the input is a multiple of 32 bits, you can even XOR in a 32-bit
  * word at a time and increase the inner loop count to 32.
@@ -380,7 +379,7 @@ EXPORT_SYMBOL(crc32_be);
 #include <stdlib.h>
 #include <stdio.h>
 
-#ifndef __UBOOT__
+#ifdef UBI_LINUX				/*Not used at present */
 static void
 buf_dump(char const *prefix, unsigned char const *buf, size_t len)
 {
@@ -406,7 +405,7 @@ static void random_garbage(unsigned char *buf, size_t len)
 		*buf++ = (unsigned char) random();
 }
 
-#ifndef __UBOOT__
+#ifdef UBI_LINUX				/* Not used at present */
 static void store_le(u32 x, unsigned char *buf)
 {
 	buf[0] = (unsigned char) x;

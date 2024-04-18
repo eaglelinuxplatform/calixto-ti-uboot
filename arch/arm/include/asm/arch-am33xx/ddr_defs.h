@@ -1,10 +1,11 @@
-/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * ddr_defs.h
  *
  * ddr specific header
  *
  * Copyright (C) 2011, Texas Instruments, Incorporated - http://www.ti.com/
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef _DDR_DEFS_H
@@ -17,11 +18,7 @@
 #define VTP_CTRL_READY		(0x1 << 5)
 #define VTP_CTRL_ENABLE		(0x1 << 6)
 #define VTP_CTRL_START_EN	(0x1)
-#ifdef CONFIG_AM43XX
-#define DDR_CKE_CTRL_NORMAL	0x3
-#else
 #define DDR_CKE_CTRL_NORMAL	0x1
-#endif
 #define PHY_EN_DYN_PWRDN	(0x1 << 20)
 
 /* Micron MT47H128M16RT-25E */
@@ -32,7 +29,11 @@
 #define MT47H128M16RT25E_EMIF_SDCFG		0x41805332
 #define MT47H128M16RT25E_EMIF_SDREF		0x0000081a
 #define MT47H128M16RT25E_RATIO			0x80
+#define MT47H128M16RT25E_INVERT_CLKOUT		0x00
 #define MT47H128M16RT25E_RD_DQS			0x12
+#define MT47H128M16RT25E_WR_DQS			0x00
+#define MT47H128M16RT25E_PHY_WRLVL		0x00
+#define MT47H128M16RT25E_PHY_GATELVL		0x00
 #define MT47H128M16RT25E_PHY_WR_DATA		0x40
 #define MT47H128M16RT25E_PHY_FIFO_WE		0x80
 #define MT47H128M16RT25E_IOCTRL_VALUE		0x18B
@@ -52,59 +53,6 @@
 #define MT41J128MJT125_PHY_WR_DATA		0xC1
 #define MT41J128MJT125_PHY_FIFO_WE		0x100
 #define MT41J128MJT125_IOCTRL_VALUE		0x18B
-
-/* Micron MT41J128M16JT-125 at 400MHz*/
-#define MT41J128MJT125_EMIF_READ_LATENCY_400MHz	0x100007
-#define MT41J128MJT125_EMIF_TIM1_400MHz		0x0AAAD4DB
-#define MT41J128MJT125_EMIF_TIM2_400MHz		0x26437FDA
-#define MT41J128MJT125_EMIF_TIM3_400MHz		0x501F83FF
-#define MT41J128MJT125_EMIF_SDCFG_400MHz	0x61C052B2
-#define MT41J128MJT125_EMIF_SDREF_400MHz	0x00000C30
-#define MT41J128MJT125_ZQ_CFG_400MHz		0x50074BE4
-#define MT41J128MJT125_RATIO_400MHz		0x80
-#define MT41J128MJT125_INVERT_CLKOUT_400MHz	0x0
-#define MT41J128MJT125_RD_DQS_400MHz		0x3A
-#define MT41J128MJT125_WR_DQS_400MHz		0x3B
-#define MT41J128MJT125_PHY_WR_DATA_400MHz	0x76
-#define MT41J128MJT125_PHY_FIFO_WE_400MHz	0x96
-
-/* Micron MT41K128M16JT-187E */
-#define MT41K128MJT187E_EMIF_READ_LATENCY	0x06
-#define MT41K128MJT187E_EMIF_TIM1		0x0888B3DB
-#define MT41K128MJT187E_EMIF_TIM2		0x36337FDA
-#define MT41K128MJT187E_EMIF_TIM3		0x501F830F
-#define MT41K128MJT187E_EMIF_SDCFG		0x61C04AB2
-#define MT41K128MJT187E_EMIF_SDREF		0x0000093B
-#define MT41K128MJT187E_ZQ_CFG			0x50074BE4
-#define MT41K128MJT187E_RATIO			0x40
-#define MT41K128MJT187E_INVERT_CLKOUT		0x1
-#define MT41K128MJT187E_RD_DQS			0x3B
-#define MT41K128MJT187E_WR_DQS			0x85
-#define MT41K128MJT187E_PHY_WR_DATA		0xC1
-#define MT41K128MJT187E_PHY_FIFO_WE		0x100
-#define MT41K128MJT187E_IOCTRL_VALUE		0x18B
-
-/* Micron MT41K128M16JT-125 IT:K (256 MB) at 400MHz */
-#define MT41K128M16JT125K_EMIF_READ_LATENCY     0x07
-#define MT41K128M16JT125K_EMIF_TIM1             0x0AAAD4DB
-#define MT41K128M16JT125K_EMIF_TIM2             0x2A437FDA
-#define MT41K128M16JT125K_EMIF_TIM3             0x501F83FF
-#define MT41K128M16JT125K_EMIF_SDCFG            0x61A052B2
-#define MT41K128M16JT125K_EMIF_SDREF            0x00000C30
-#define MT41K128M16JT125K_ZQ_CFG                0x50074BE4
-#define MT41K128M16JT125K_RATIO                 0x80
-#define MT41K128M16JT125K_INVERT_CLKOUT         0x0
-#define MT41K128M16JT125K_RD_DQS                0x38
-#define MT41K128M16JT125K_WR_DQS                0x46
-#define MT41K128M16JT125K_PHY_WR_DATA           0x7D
-#define MT41K128M16JT125K_PHY_FIFO_WE           0x9B
-#define MT41K128M16JT125K_IOCTRL_VALUE          0x18B
-
-/* Micron MT41J64M16JT-125 */
-#define MT41J64MJT125_EMIF_SDCFG		0x61C04A32
-
-/* Micron MT41J256M16JT-125 */
-#define MT41J256MJT125_EMIF_SDCFG		0x61C04B32
 
 /* Micron MT41J256M8HX-15E */
 #define MT41J256M8HX15E_EMIF_READ_LATENCY	0x100006
@@ -170,6 +118,54 @@
 #define K4B2G1646EBIH9_PHY_WR_DATA		0x76
 #define K4B2G1646EBIH9_IOCTRL_VALUE		0x18B
 
+#if defined(CONFIG_256DDR3) || defined(CONFIG_512DDR3)
+#define CALIXTO_DDR3_RATIO                      0x100
+#define CALIXTO_DDR3_INVERT_CLKOUT              0x1
+#define CALIXTO_DDR3_RD_DQS                     0x03B
+#define CALIXTO_DDR3_WR_DQS                     0xCD
+#define CALIXTO_DDR3_PHY_FIFO_WE                0x102
+#define CALIXTO_DDR3_PHY_WR_DATA                0x107
+#define CALIXTO_DDR3_IOCTRL_VALUE               0x18B
+#endif
+
+/* Micron/Hynix DDR3 512MB on CalixtoSOM */
+#define CALIXTO512_DDR3_EMIF_READ_LATENCY       0x07
+#define CALIXTO512_DDR3_EMIF_TIM1               0x0AAAD4DB
+#define CALIXTO512_DDR3_EMIF_TIM2               0x266B7FDA
+#define CALIXTO512_DDR3_EMIF_TIM3               0x501F867F
+#define CALIXTO512_DDR3_EMIF_SDCFG              0x61C05332
+#define CALIXTO512_DDR3_EMIF_SDREF              0x0000093B
+#define CALIXTO512_DDR3_ZQ_CFG                  0x50074BE4
+
+/* Micron/Hynix DDR3 256MB on CalixtoSOM */
+#define CALIXTO256_DDR3_EMIF_READ_LATENCY       0x07
+#define CALIXTO256_DDR3_EMIF_TIM1               0x0AAAD4DB
+#define CALIXTO256_DDR3_EMIF_TIM2               0x26377FDA
+#define CALIXTO256_DDR3_EMIF_TIM3               0x501F833F
+#define CALIXTO256_DDR3_EMIF_SDCFG              0x61C052B2
+#define CALIXTO256_DDR3_EMIF_SDREF              0x0000093B
+#define CALIXTO256_DDR3_ZQ_CFG                  0x50074BE4
+
+/* ISSL DDR2 128MB on CalixtoStampSOM */
+#if defined(CONFIG_128DDR2)
+#define CALIXTO_DDR2_RATIO			0x80
+#define CALIXTO_DDR2_INVERT_CLKOUT		0x00
+#define CALIXTO_DDR2_RD_DQS			0x37
+#define CALIXTO_DDR2_WR_DQS			0x37
+#define CALIXTO_DDR2_PHY_WRLVL			0x00
+#define CALIXTO_DDR2_PHY_GATELVL		0x00
+#define CALIXTO_DDR2_PHY_WR_DATA		0x73
+#define CALIXTO_DDR2_PHY_FIFO_WE		0x99
+#define CALIXTO_DDR2_IOCTRL_VALUE		0x18B
+#endif
+
+#define CALIXTO128_DDR2_EMIF_READ_LATENCY	0x05
+#define CALIXTO128_DDR2_EMIF_TIM1		0x0666A391
+#define CALIXTO128_DDR2_EMIF_TIM2		0x142431CA
+#define CALIXTO128_DDR2_EMIF_TIM3		0x0000021F
+#define CALIXTO128_DDR2_EMIF_SDCFG		0x41805232
+#define CALIXTO128_DDR2_EMIF_SDREF		0x0000081A
+
 #define  LPDDR2_ADDRCTRL_IOCTRL_VALUE   0x294
 #define  LPDDR2_ADDRCTRL_WD0_IOCTRL_VALUE 0x00000000
 #define  LPDDR2_ADDRCTRL_WD1_IOCTRL_VALUE 0x00000000
@@ -195,7 +191,6 @@ void config_dmm(const struct dmm_lisa_map_regs *regs);
  * Configure SDRAM
  */
 void config_sdram(const struct emif_regs *regs, int nr);
-void config_sdram_emif4d5(const struct emif_regs *regs, int nr);
 
 /**
  * Set SDRAM timings
@@ -361,7 +356,7 @@ struct ctrl_ioregs {
 /**
  * Configure DDR io control registers
  */
-void config_io_ctrl(const struct ctrl_ioregs *ioregs);
+void config_io_ctrl(unsigned long val);
 
 struct ddr_ctrl {
 	unsigned int ddrioctrl;
@@ -369,15 +364,11 @@ struct ddr_ctrl {
 	unsigned int ddrckectrl;
 };
 
-#ifdef CONFIG_TI816X
-void config_ddr(const struct ddr_data *data, const struct cmd_control *ctrl,
-		const struct emif_regs *regs,
-		const struct dmm_lisa_map_regs *lisa_regs, int nrs);
-#else
-void config_ddr(unsigned int pll, const struct ctrl_ioregs *ioregs,
+void config_ddr(unsigned int pll, unsigned int ioctrl,
 		const struct ddr_data *data, const struct cmd_control *ctrl,
 		const struct emif_regs *regs, int nr);
-#endif
-void emif_get_ext_phy_ctrl_const_regs(const u32 **regs, u32 *size);
 
+void do_sdram_init(const struct ctrl_ioregs *ioregs,
+		   const struct emif_regs *emif_regs,
+		   const u32 *ext_phy_ctrl_const_regs, u32 ddr_type);
 #endif  /* _DDR_DEFS_H */

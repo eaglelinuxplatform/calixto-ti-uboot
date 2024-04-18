@@ -1,18 +1,33 @@
-# SPDX-License-Identifier: GPL-2.0+
 # Copyright (c) 2011 The Chromium OS Authors. All rights reserved.
+#
+# SPDX-License-Identifier:	GPL-2.0+
+#
 
-obj-$(CONFIG_$(SPL_TPL_)TPM) += tpm-uclass.o
+include $(TOPDIR)/config.mk
 
-obj-$(CONFIG_TPM_ATMEL_TWI) += tpm_atmel_twi.o
-obj-$(CONFIG_TPM_TIS_INFINEON) += tpm_tis_infineon.o
-obj-$(CONFIG_TPM_TIS_LPC) += tpm_tis_lpc.o
-obj-$(CONFIG_TPM_TIS_SANDBOX) += tpm_tis_sandbox.o sandbox_common.o
-obj-$(CONFIG_TPM_ST33ZP24_I2C) += tpm_tis_st33zp24_i2c.o
-obj-$(CONFIG_TPM_ST33ZP24_SPI) += tpm_tis_st33zp24_spi.o
+LIB := $(obj)libtpm.o
 
-obj-$(CONFIG_$(SPL_TPL_)TPM2_CR50_I2C) += cr50_i2c.o
-obj-$(CONFIG_TPM2_TIS_SANDBOX) += tpm2_tis_sandbox.o sandbox_common.o
-obj-$(CONFIG_TPM2_TIS_SPI) += tpm2_tis_core.o tpm2_tis_spi.o
-obj-$(CONFIG_TPM2_TIS_I2C) += tpm2_tis_core.o tpm2_tis_i2c.o
-obj-$(CONFIG_TPM2_FTPM_TEE) += tpm2_ftpm_tee.o
-obj-$(CONFIG_TPM2_MMIO) += tpm2_tis_core.o tpm2_tis_mmio.o
+$(shell mkdir -p $(obj)slb9635_i2c)
+
+# TODO: Merge tpm_tis_lpc.c with tpm.c
+COBJS-$(CONFIG_TPM_ATMEL_TWI) += tpm_atmel_twi.o
+COBJS-$(CONFIG_TPM_TIS_I2C) += tpm.o
+COBJS-$(CONFIG_TPM_TIS_I2C) += tpm_tis_i2c.o
+COBJS-$(CONFIG_TPM_TIS_LPC) += tpm_tis_lpc.o
+
+COBJS	:= $(COBJS-y)
+SRCS	:= $(COBJS:.o=.c)
+OBJS	:= $(addprefix $(obj),$(COBJS))
+
+all:	$(LIB)
+
+$(LIB): $(obj).depend $(OBJS)
+	$(call cmd_link_o_target, $(OBJS))
+
+#########################################################################
+
+include $(SRCTREE)/rules.mk
+
+sinclude $(obj).depend
+
+#########################################################################

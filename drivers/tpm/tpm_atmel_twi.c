@@ -1,66 +1,66 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
- * Copyright (C) 2013 Guntermann & Drunck, GmbH
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License as
+ * published by the Free Software Foundation; either version 2 of
+ * the License, or (at your option) any later version.
  *
- * Written by Dirk Eibach <dirk.eibach@gdsys.cc>
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
+ * MA 02111-1307 USA
  */
 
 #include <common.h>
-#include <display_options.h>
-#include <dm.h>
-#include <tpm-v1.h>
+#include <tpm.h>
 #include <i2c.h>
 #include <asm/unaligned.h>
-#include <linux/delay.h>
-
-#include "tpm_internal.h"
 
 #define ATMEL_TPM_TIMEOUT_MS 5000 /* sufficient for anything but
 				     generating/exporting keys */
 
 /*
- * tpm_atmel_twi_open()
+ * tis_init()
+ *
+ * Initialize the TPM device. Returns 0 on success or -1 on
+ * failure (in case device probing did not succeed).
+ */
+int tis_init(void)
+{
+	return 0;
+}
+
+/*
+ * tis_open()
  *
  * Requests access to locality 0 for the caller. After all commands have been
  * completed the caller is supposed to call tis_close().
  *
  * Returns 0 on success, -1 on failure.
  */
-static int tpm_atmel_twi_open(struct udevice *dev)
+int tis_open(void)
 {
 	return 0;
 }
 
 /*
- * tpm_atmel_twi_close()
+ * tis_close()
  *
  * terminate the currect session with the TPM by releasing the locked
  * locality. Returns 0 on success of -1 on failure (in case lock
  * removal did not succeed).
  */
-static int tpm_atmel_twi_close(struct udevice *dev)
+int tis_close(void)
 {
 	return 0;
 }
 
 /*
- * tpm_atmel_twi_get_desc()
- *
- * @dev:        Device to check
- * @buf:        Buffer to put the string
- * @size:       Maximum size of buffer
- * Return: length of string, or -ENOSPC it no space
- */
-static int tpm_atmel_twi_get_desc(struct udevice *dev, char *buf, int size)
-{
-	if (size < 50)
-		return -ENOSPC;
-
-	return snprintf(buf, size, "Atmel AT97SC3204T I2C 1.2 TPM (%s)", dev->name);
-}
-
-/*
- * tpm_atmel_twi_xfer()
+ * tis_sendrecv()
  *
  * Send the requested data to the TPM and then try to get its response
  *
@@ -72,9 +72,8 @@ static int tpm_atmel_twi_get_desc(struct udevice *dev, char *buf, int size)
  * Returns 0 on success (and places the number of response bytes at recv_len)
  * or -1 on failure.
  */
-static int tpm_atmel_twi_xfer(struct udevice *dev,
-			      const uint8_t *sendbuf, size_t send_size,
-			      uint8_t *recvbuf, size_t *recv_len)
+int tis_sendrecv(const uint8_t *sendbuf, size_t send_size, uint8_t *recvbuf,
+			size_t *recv_len)
 {
 	int res;
 	unsigned long start;
@@ -85,17 +84,14 @@ static int tpm_atmel_twi_xfer(struct udevice *dev,
 	print_buffer(0, (void *)sendbuf, 1, send_size, 0);
 #endif
 
-	res = dm_i2c_write(dev, 0, sendbuf, send_size);
+	res = i2c_write(0x29, 0, 0, (uchar *)sendbuf, send_size);
 	if (res) {
 		printf("i2c_write returned %d\n", res);
 		return -1;
 	}
 
 	start = get_timer(0);
-
-	while ((res = dm_i2c_read(dev, 0, recvbuf, 10)))
-	{
-		/* TODO Use TIS_TIMEOUT from tpm_tis_infineon.h */
+	while ((res = i2c_read(0x29, 0, 0, recvbuf, 10))) {
 		if (get_timer(start) > ATMEL_TPM_TIMEOUT_MS) {
 			puts("tpm timed out\n");
 			return -1;
@@ -103,21 +99,12 @@ static int tpm_atmel_twi_xfer(struct udevice *dev,
 		udelay(100);
 	}
 	if (!res) {
-		unsigned int hdr_recv_len;
-		hdr_recv_len = get_unaligned_be32(recvbuf + 2);
-		if (hdr_recv_len < 10) {
-			puts("tpm response header too small\n");
-			return -1;
-		} else if (hdr_recv_len > *recv_len) {
-			puts("tpm response length is bigger than receive buffer\n");
-			return -1;
-		} else {
-			*recv_len = hdr_recv_len;
-			res = dm_i2c_read(dev, 0, recvbuf, *recv_len);
-		}
+		*recv_len = get_unaligned_be32(recvbuf + 2);
+		if (*recv_len > 10)
+			res = i2c_read(0x29, 0, 0, recvbuf, *recv_len);
 	}
 	if (res) {
-		printf("i2c_read returned %d (rlen=%zu)\n", res, *recv_len);
+		printf("i2c_read returned %d (rlen=%d)\n", res, *recv_len);
 #ifdef DEBUG
 		print_buffer(0, recvbuf, 1, *recv_len, 0);
 #endif
@@ -132,29 +119,3 @@ static int tpm_atmel_twi_xfer(struct udevice *dev,
 
 	return res;
 }
-
-static int tpm_atmel_twi_probe(struct udevice *dev)
-{
-	i2c_set_chip_offset_len(dev, 0);
-	return 0;
-}
-
-static const struct udevice_id tpm_atmel_twi_ids[] = {
-	{ .compatible = "atmel,at97sc3204t"},
-	{ }
-};
-
-static const struct tpm_ops tpm_atmel_twi_ops = {
-	.open = tpm_atmel_twi_open,
-	.close = tpm_atmel_twi_close,
-	.xfer = tpm_atmel_twi_xfer,
-	.get_desc = tpm_atmel_twi_get_desc,
-};
-
-U_BOOT_DRIVER(tpm_atmel_twi) = {
-	.name = "tpm_atmel_twi",
-	.id = UCLASS_TPM,
-	.of_match = tpm_atmel_twi_ids,
-	.ops = &tpm_atmel_twi_ops,
-	.probe = tpm_atmel_twi_probe,
-};

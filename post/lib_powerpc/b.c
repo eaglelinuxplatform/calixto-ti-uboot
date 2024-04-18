@@ -1,18 +1,18 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2002
  * Wolfgang Denk, DENX Software Engineering, wd@denx.de.
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
-#include <irq_func.h>
 
 /*
  * CPU test
  * Branch instructions:		b, bl, bc
  *
  * The first 2 instructions (b, bl) are verified by jumping
- * to a fixed address and checking whether control was transferred
+ * to a fixed address and checking whether control was transfered
  * to that very point. For the bl instruction the value of the
  * link register is checked as well (using mfspr).
  * To verify the bc instruction various combinations of the BI/BO
@@ -24,7 +24,7 @@
 #include <post.h>
 #include "cpu_asm.h"
 
-#if CFG_POST & CFG_SYS_POST_CPU
+#if CONFIG_POST & CONFIG_SYS_POST_CPU
 
 extern void cpu_post_exec_11 (ulong *code, ulong *res, ulong op1);
 extern void cpu_post_exec_31 (ulong *code, ulong *ctr, ulong *lr, ulong *jump,

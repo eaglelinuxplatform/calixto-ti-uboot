@@ -1,15 +1,17 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2011
  * Stefano Babic, DENX Software Engineering, sbabic@denx.de.
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
-#include "imagetool.h"
+#include "mkimage.h"
 #include "aisimage.h"
 #include <image.h>
 
 #define IS_FNC_EXEC(c)	(cmd_table[c].AIS_cmd == AIS_CMD_FNLOAD)
 #define WORD_ALIGN0	4
+#define WORD_ALIGN(len) (((len)+WORD_ALIGN0-1) & ~(WORD_ALIGN0-1))
 #define MAX_CMD_BUFFER	4096
 
 static uint32_t ais_img_size;
@@ -174,7 +176,7 @@ static uint32_t *ais_insert_cmd_header(uint32_t cmd, uint32_t nargs,
 
 }
 
-static uint32_t *ais_alloc_buffer(struct image_tool_params *params)
+static uint32_t *ais_alloc_buffer(struct mkimage_params *params)
 {
 	int dfd;
 	struct stat sbuf;
@@ -201,9 +203,8 @@ static uint32_t *ais_alloc_buffer(struct image_tool_params *params)
 	 * is not left to the main program, because after the datafile
 	 * the header must be terminated with the Jump & Close command.
 	 */
-	ais_img_size = ALIGN(sbuf.st_size, WORD_ALIGN0) + MAX_CMD_BUFFER;
-	ptr = (uint32_t *)malloc(ALIGN(sbuf.st_size, WORD_ALIGN0)
-			+ MAX_CMD_BUFFER);
+	ais_img_size = WORD_ALIGN(sbuf.st_size) + MAX_CMD_BUFFER;
+	ptr = (uint32_t *)malloc(WORD_ALIGN(sbuf.st_size) + MAX_CMD_BUFFER);
 	if (!ptr) {
 		fprintf(stderr, "%s: malloc return failure: %s\n",
 			params->cmdname, strerror(errno));
@@ -215,7 +216,7 @@ static uint32_t *ais_alloc_buffer(struct image_tool_params *params)
 	return ptr;
 }
 
-static uint32_t *ais_copy_image(struct image_tool_params *params,
+static uint32_t *ais_copy_image(struct mkimage_params *params,
 	uint32_t *aisptr)
 
 {
@@ -242,7 +243,7 @@ static uint32_t *ais_copy_image(struct image_tool_params *params,
 	*aisptr++ = params->ep;
 	*aisptr++ = sbuf.st_size;
 	memcpy((void *)aisptr, ptr, sbuf.st_size);
-	aisptr += ALIGN(sbuf.st_size, WORD_ALIGN0) / sizeof(uint32_t);
+	aisptr += WORD_ALIGN(sbuf.st_size) / sizeof(uint32_t);
 
 	(void) munmap((void *)ptr, sbuf.st_size);
 	(void) close(dfd);
@@ -251,7 +252,7 @@ static uint32_t *ais_copy_image(struct image_tool_params *params,
 
 }
 
-static int aisimage_generate(struct image_tool_params *params,
+static int aisimage_generate(struct mkimage_params *params,
 	struct image_type_params *tparams)
 {
 	FILE *fd = NULL;
@@ -369,7 +370,7 @@ static int aisimage_check_image_types(uint8_t type)
 }
 
 static int aisimage_verify_header(unsigned char *ptr, int image_size,
-			struct image_tool_params *params)
+			struct mkimage_params *params)
 {
 	struct ais_header *ais_hdr = (struct ais_header *)ptr;
 
@@ -383,11 +384,11 @@ static int aisimage_verify_header(unsigned char *ptr, int image_size,
 }
 
 static void aisimage_set_header(void *ptr, struct stat *sbuf, int ifd,
-				struct image_tool_params *params)
+				struct mkimage_params *params)
 {
 }
 
-int aisimage_check_params(struct image_tool_params *params)
+int aisimage_check_params(struct mkimage_params *params)
 {
 	if (!params)
 		return CFG_INVALID;
@@ -412,17 +413,19 @@ int aisimage_check_params(struct image_tool_params *params)
 /*
  * aisimage parameters
  */
-U_BOOT_IMAGE_TYPE(
-	aisimage,
-	"TI Davinci AIS Boot Image support",
-	0,
-	NULL,
-	aisimage_check_params,
-	aisimage_verify_header,
-	aisimage_print_header,
-	aisimage_set_header,
-	NULL,
-	aisimage_check_image_types,
-	NULL,
-	aisimage_generate
-);
+static struct image_type_params aisimage_params = {
+	.name		= "TI Davinci AIS Boot Image support",
+	.header_size	= 0,
+	.hdr		= NULL,
+	.check_image_type = aisimage_check_image_types,
+	.verify_header	= aisimage_verify_header,
+	.print_header	= aisimage_print_header,
+	.set_header	= aisimage_set_header,
+	.check_params	= aisimage_check_params,
+	.vrec_header	= aisimage_generate,
+};
+
+void init_ais_image_type(void)
+{
+	mkimage_register(&aisimage_params);
+}

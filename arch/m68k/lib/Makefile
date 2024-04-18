@@ -1,16 +1,34 @@
-# SPDX-License-Identifier: GPL-2.0+
 #
 # (C) Copyright 2000-2006
 # Wolfgang Denk, DENX Software Engineering, wd@denx.de.
+#
+# SPDX-License-Identifier:	GPL-2.0+
+#
 
-## Build a couple of necessary functions into a private libgcc
-## if the user asked for it
-lib-$(CONFIG_USE_PRIVATE_LIBGCC) += lshrdi3.o muldi3.o ashldi3.o ashrdi3.o
+include $(TOPDIR)/config.mk
 
-obj-y	+= bdinfo.o
-obj-$(CONFIG_CMD_BOOTM) += bootm.o
-obj-y	+= cache.o
-obj-y	+= interrupts.o
-obj-y	+= time.o
-obj-y	+= traps.o
-obj-y   += fec.o
+LIB	= $(obj)lib$(ARCH).o
+
+SOBJS-y	+=
+
+COBJS-y	+= board.o
+COBJS-$(CONFIG_CMD_BOOTM) += bootm.o
+COBJS-y	+= cache.o
+COBJS-y	+= interrupts.o
+COBJS-y	+= time.o
+COBJS-y	+= traps.o
+
+SRCS	:= $(SOBJS-y:.o=.S) $(COBJS-y:.o=.c)
+OBJS	:= $(addprefix $(obj),$(SOBJS-y) $(COBJS-y))
+
+$(LIB):	$(obj).depend $(OBJS)
+	$(call cmd_link_o_target, $(OBJS))
+
+#########################################################################
+
+# defines $(obj).depend target
+include $(SRCTREE)/rules.mk
+
+sinclude $(obj).depend
+
+#########################################################################

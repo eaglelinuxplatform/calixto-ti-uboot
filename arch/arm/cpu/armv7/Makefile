@@ -1,44 +1,44 @@
-# SPDX-License-Identifier: GPL-2.0+
 #
 # (C) Copyright 2000-2003
 # Wolfgang Denk, DENX Software Engineering, wd@denx.de.
+#
+# SPDX-License-Identifier:	GPL-2.0+
+#
 
-extra-y	:= start.o
+include $(TOPDIR)/config.mk
 
-obj-y	+= cache_v7.o cache_v7_asm.o
+LIB	= $(obj)lib$(CPU).o
 
-obj-y	+= cpu.o cp15.o
-obj-y	+= syslib.o
+START	:= start.o
 
-obj-$(CONFIG_SYS_ARM_MPU) += mpu_v7r.o
+COBJS	+= cache_v7.o
 
-ifneq ($(CONFIG_SPL_BUILD),y)
-obj-$(CONFIG_EFI_LOADER) += sctlr.o
-obj-$(CONFIG_ARMV7_NONSEC) += exception_level.o
+COBJS	+= cpu.o
+COBJS	+= syslib.o
+
+ifneq ($(CONFIG_AM43XX)$(CONFIG_AM33XX)$(CONFIG_OMAP44XX)$(CONFIG_OMAP54XX)$(CONFIG_TEGRA)$(CONFIG_MX6)$(CONFIG_TI81XX),)
+SOBJS	+= lowlevel_init.o
 endif
 
-ifneq ($(CONFIG_$(SPL_)SKIP_LOWLEVEL_INIT),y)
-obj-y	+= lowlevel_init.o
+ifneq ($(CONFIG_ARMV7_NONSEC)$(CONFIG_ARMV7_VIRT),)
+SOBJS	+= nonsec_virt.o
+COBJS	+= virt-v7.o
 endif
 
-obj-$(CONFIG_ARM_SMCCC)		+= smccc-call.o
-obj-$(CONFIG_ARMV7_NONSEC)	+= nonsec_virt.o virt-v7.o virt-dt.o
-obj-$(CONFIG_ARMV7_PSCI)	+= psci.o psci-common.o
+SRCS	:= $(START:.o=.S) $(COBJS:.o=.c)
+OBJS	:= $(addprefix $(obj),$(COBJS) $(SOBJS))
+START	:= $(addprefix $(obj),$(START))
 
-obj-$(CONFIG_IPROC) += iproc-common/
-obj-$(CONFIG_SYS_ARCH_TIMER) += arch_timer.o
+all:	$(obj).depend $(START) $(LIB)
 
-ifneq (,$(filter s5pc1xx exynos,$(SOC)))
-obj-y += s5p-common/
-endif
+$(LIB):	$(OBJS)
+	$(call cmd_link_o_target, $(OBJS))
 
-obj-$(if $(filter bcm235xx,$(SOC)),y) += bcm235xx/
-obj-$(if $(filter bcm281xx,$(SOC)),y) += bcm281xx/
-obj-$(if $(filter bcmcygnus,$(SOC)),y) += bcmcygnus/
-obj-$(if $(filter bcmnsp,$(SOC)),y) += bcmnsp/
-obj-$(if $(filter ls102xa,$(SOC)),y) += ls102xa/
-obj-$(if $(filter stv0991,$(SOC)),y) += stv0991/
-obj-$(CONFIG_ARCH_SUNXI) += sunxi/
-obj-$(CONFIG_VF610) += vf610/
-obj-$(CONFIG_ARCH_S5P4418) += s5p4418/
-obj-$(CONFIG_ARCH_NEXELL) += s5p-common/
+#########################################################################
+
+# defines $(obj).depend target
+include $(SRCTREE)/rules.mk
+
+sinclude $(obj).depend
+
+#########################################################################

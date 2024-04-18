@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright 2004,2007-2011 Freescale Semiconductor, Inc.
  * (C) Copyright 2002, 2003 Motorola Inc.
@@ -6,33 +5,24 @@
  *
  * (C) Copyright 2000
  * Wolfgang Denk, DENX Software Engineering, wd@denx.de.
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <config.h>
 #include <common.h>
-#include <cpu_func.h>
-#include <clock_legacy.h>
-#include <display_options.h>
-#include <init.h>
-#include <irq_func.h>
-#include <log.h>
-#include <time.h>
-#include <vsprintf.h>
 #include <watchdog.h>
 #include <command.h>
 #include <fsl_esdhc.h>
 #include <asm/cache.h>
-#include <asm/global_data.h>
 #include <asm/io.h>
 #include <asm/mmu.h>
-#include <fsl_ifc.h>
+#include <asm/fsl_ifc.h>
 #include <asm/fsl_law.h>
 #include <asm/fsl_lbc.h>
 #include <post.h>
 #include <asm/processor.h>
-#include <fsl_ddr_sdram.h>
-#include <asm/ppc.h>
-#include <linux/delay.h>
+#include <asm/fsl_ddr_sdram.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -44,9 +34,7 @@ __board_reset(void)
 {
 	/* Do nothing */
 }
-void board_reset_prepare(void) __attribute__((weak, alias("__board_reset")));
 void board_reset(void) __attribute__((weak, alias("__board_reset")));
-void board_reset_last(void) __attribute__((weak, alias("__board_reset")));
 
 int checkcpu (void)
 {
@@ -56,10 +44,9 @@ int checkcpu (void)
 	uint major, minor;
 	struct cpu_type *cpu;
 	char buf1[32], buf2[32];
-#if defined(CONFIG_DYNAMIC_DDR_CLK_FREQ) || \
-	defined(CONFIG_STATIC_DDR_CLK_FREQ) || defined(CONFIG_FSL_CORENET)
+#if defined(CONFIG_DDR_CLK_FREQ) || defined(CONFIG_FSL_CORENET)
 	ccsr_gur_t __iomem *gur =
-		(void __iomem *)(CFG_SYS_MPC85xx_GUTS_ADDR);
+		(void __iomem *)(CONFIG_SYS_MPC85xx_GUTS_ADDR);
 #endif
 
 	/*
@@ -75,56 +62,27 @@ int checkcpu (void)
 		>> FSL_CORENET_RCWSR5_DDR_SYNC_SHIFT;
 #endif /* CONFIG_SYS_FSL_QORIQ_CHASSIS2 */
 #else	/* CONFIG_FSL_CORENET */
-#if defined(CONFIG_DYNAMIC_DDR_CLK_FREQ) || defined(CONFIG_STATIC_DDR_CLK_FREQ)
+#ifdef CONFIG_DDR_CLK_FREQ
 	u32 ddr_ratio = ((gur->porpllsr) & MPC85xx_PORPLLSR_DDR_RATIO)
 		>> MPC85xx_PORPLLSR_DDR_RATIO_SHIFT;
 #else
 	u32 ddr_ratio = 0;
-#endif /* CONFIG_DYNAMIC_DDR_CLK_FREQ || CONFIG_STATIC_DDR_CLK_FREQ */
+#endif /* CONFIG_DDR_CLK_FREQ */
 #endif /* CONFIG_FSL_CORENET */
 
 	unsigned int i, core, nr_cores = cpu_numcores();
 	u32 mask = cpu_mask();
 
-#ifdef CONFIG_HETROGENOUS_CLUSTERS
-	unsigned int j, dsp_core, dsp_numcores = cpu_num_dspcores();
-	u32 dsp_mask = cpu_dsp_mask();
-#endif
-
 	svr = get_svr();
 	major = SVR_MAJ(svr);
 	minor = SVR_MIN(svr);
-
-#if defined(CONFIG_SYS_FSL_QORIQ_CHASSIS2) && defined(CONFIG_E6500)
-	if (SVR_SOC_VER(svr) == SVR_T4080) {
-		ccsr_rcpm_t *rcpm =
-			(void __iomem *)(CFG_SYS_FSL_CORENET_RCPM_ADDR);
-
-		setbits_be32(&gur->devdisr2, FSL_CORENET_DEVDISR2_DTSEC1_6 ||
-			     FSL_CORENET_DEVDISR2_DTSEC1_9);
-		setbits_be32(&gur->devdisr3, FSL_CORENET_DEVDISR3_PCIE3);
-		setbits_be32(&gur->devdisr5, FSL_CORENET_DEVDISR5_DDR3);
-
-		/* It needs SW to disable core4~7 as HW design sake on T4080 */
-		for (i = 4; i < 8; i++)
-			cpu_disable(i);
-
-		/* request core4~7 into PH20 state, prior to entering PCL10
-		 * state, all cores in cluster should be placed in PH20 state.
-		 */
-		setbits_be32(&rcpm->pcph20setr, 0xf0);
-
-		/* put the 2nd cluster into PCL10 state */
-		setbits_be32(&rcpm->clpcl10setr, 1 << 1);
-	}
-#endif
 
 	if (cpu_numcores() > 1) {
 #ifndef CONFIG_MP
 		puts("Unicore software on multiprocessor system!!\n"
 		     "To enable mutlticore build define CONFIG_MP\n");
 #endif
-		volatile ccsr_pic_t *pic = (void *)(CFG_SYS_MPC8xxx_PIC_ADDR);
+		volatile ccsr_pic_t *pic = (void *)(CONFIG_SYS_MPC8xxx_PIC_ADDR);
 		printf("CPU%d:  ", pic->whoami);
 	} else {
 		puts("CPU:   ");
@@ -146,10 +104,8 @@ int checkcpu (void)
 	printf("Core:  ");
 	switch(ver) {
 	case PVR_VER_E500_V1:
-		puts("e500v1");
-		break;
 	case PVR_VER_E500_V2:
-		puts("e500v2");
+		puts("e500");
 		break;
 	case PVR_VER_E500MC:
 		puts("e500mc");
@@ -174,11 +130,6 @@ int checkcpu (void)
 
 	get_sys_info(&sysinfo);
 
-#ifdef CONFIG_SYS_FSL_SINGLE_SOURCE_CLK
-	if (sysinfo.diff_sysclk == 1)
-		puts("Single Source Clock Configuration\n");
-#endif
-
 	puts("Clock Configuration:");
 	for_each_cpu(i, core, nr_cores, mask) {
 		if (!(i & 3))
@@ -186,16 +137,6 @@ int checkcpu (void)
 		printf("CPU%d:%-4s MHz, ", core,
 			strmhz(buf1, sysinfo.freq_processor[core]));
 	}
-
-#ifdef CONFIG_HETROGENOUS_CLUSTERS
-	for_each_cpu(j, dsp_core, dsp_numcores, dsp_mask) {
-		if (!(j & 3))
-			printf("\n       ");
-		printf("DSP CPU%d:%-4s MHz, ", j,
-		       strmhz(buf1, sysinfo.freq_processor_dsp[dsp_core]));
-	}
-#endif
-
 	printf("\n       CCB:%-4s MHz,", strmhz(buf1, sysinfo.freq_systembus));
 	printf("\n");
 
@@ -246,25 +187,16 @@ int checkcpu (void)
 	printf("IFC:%-4s MHz\n", strmhz(buf1, sysinfo.freq_localbus));
 #endif
 
+#ifdef CONFIG_CPM2
+	printf("CPM:   %s MHz\n", strmhz(buf1, sysinfo.freq_systembus));
+#endif
+
 #ifdef CONFIG_QE
 	printf("       QE:%-4s MHz\n", strmhz(buf1, sysinfo.freq_qe));
 #endif
 
-#if defined(CONFIG_SYS_CPRI)
-	printf("       ");
-	printf("CPRI:%-4s MHz", strmhz(buf1, sysinfo.freq_cpri));
-#endif
-
-#if defined(CONFIG_SYS_MAPLE)
-	printf("\n       ");
-	printf("MAPLE:%-4s MHz, ", strmhz(buf1, sysinfo.freq_maple));
-	printf("MAPLE-ULB:%-4s MHz, ", strmhz(buf1, sysinfo.freq_maple_ulb));
-	printf("MAPLE-eTVPE:%-4s MHz\n",
-	       strmhz(buf1, sysinfo.freq_maple_etvpe));
-#endif
-
 #ifdef CONFIG_SYS_DPAA_FMAN
-	for (i = 0; i < CFG_SYS_NUM_FMAN; i++) {
+	for (i = 0; i < CONFIG_SYS_NUM_FMAN; i++) {
 		printf("       FMAN%d: %s MHz\n", i + 1,
 			strmhz(buf1, sysinfo.freq_fman[i]));
 	}
@@ -301,10 +233,11 @@ int checkcpu (void)
 
 /* ------------------------------------------------------------------------- */
 
-int do_reset(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
+int do_reset (cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 {
 /* Everything after the first generation of PQ3 parts has RSTCR */
-#if defined(CONFIG_ARCH_MPC8540) || defined(CONFIG_ARCH_MPC8560)
+#if defined(CONFIG_MPC8540) || defined(CONFIG_MPC8541) || \
+    defined(CONFIG_MPC8555) || defined(CONFIG_MPC8560)
 	unsigned long val, msr;
 
 	/*
@@ -319,10 +252,7 @@ int do_reset(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 	val |= 0x70000000;
 	mtspr(DBCR0,val);
 #else
-	volatile ccsr_gur_t *gur = (void *)(CFG_SYS_MPC85xx_GUTS_ADDR);
-
-	/* Call board-specific preparation for reset */
-	board_reset_prepare();
+	volatile ccsr_gur_t *gur = (void *)(CONFIG_SYS_MPC85xx_GUTS_ADDR);
 
 	/* Attempt board-specific reset */
 	board_reset();
@@ -330,9 +260,6 @@ int do_reset(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 	/* Next try asserting HRESET_REQ */
 	out_be32(&gur->rstcr, 0x2);
 	udelay(100);
-
-	/* Attempt last-stage board-specific reset */
-	board_reset_last();
 #endif
 
 	return 1;
@@ -342,7 +269,10 @@ int do_reset(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 /*
  * Get timebase clock frequency
  */
-__weak unsigned long get_tbclk(void)
+#ifndef CONFIG_SYS_FSL_TBCLK_DIV
+#define CONFIG_SYS_FSL_TBCLK_DIV 8
+#endif
+unsigned long get_tbclk (void)
 {
 	unsigned long tbclk_div = CONFIG_SYS_FSL_TBCLK_DIV;
 
@@ -350,16 +280,7 @@ __weak unsigned long get_tbclk(void)
 }
 
 
-#ifndef CONFIG_WDT
 #if defined(CONFIG_WATCHDOG)
-#define WATCHDOG_MASK (TCR_WP(63) | TCR_WRC(3) | TCR_WIE)
-void
-init_85xx_watchdog(void)
-{
-	mtspr(SPRN_TCR, (mfspr(SPRN_TCR) & ~WATCHDOG_MASK) |
-	      TCR_WP(CFG_WATCHDOG_PRESC) | TCR_WRC(CFG_WATCHDOG_RC));
-}
-
 void
 reset_85xx_watchdog(void)
 {
@@ -379,13 +300,12 @@ watchdog_reset(void)
 		enable_interrupts();
 }
 #endif	/* CONFIG_WATCHDOG */
-#endif
 
 /*
  * Initializes on-chip MMC controllers.
  * to override, implement board_mmc_init()
  */
-int cpu_mmc_init(struct bd_info *bis)
+int cpu_mmc_init(bd_t *bis)
 {
 #ifdef CONFIG_FSL_ESDHC
 	return fsl_esdhc_mmc_init(bis);
@@ -399,12 +319,10 @@ int cpu_mmc_init(struct bd_info *bis)
  * Currently prints out LAWs, BR0/OR0 for LBC, CSPR/CSOR/Timing
  * parameters for IFC and TLBs
  */
-void print_reginfo(void)
+void mpc85xx_reginfo(void)
 {
 	print_tlbcam();
-#ifdef CONFIG_FSL_LAW
 	print_laws();
-#endif
 #if defined(CONFIG_FSL_LBC)
 	print_lbc_regs();
 #endif
@@ -417,26 +335,23 @@ void print_reginfo(void)
 /* Common ddr init for non-corenet fsl 85xx platforms */
 #ifndef CONFIG_FSL_CORENET
 #if (defined(CONFIG_SYS_RAMBOOT) || defined(CONFIG_SPL)) && \
-	!defined(CFG_SYS_INIT_L2_ADDR)
-int dram_init(void)
+	!defined(CONFIG_SYS_INIT_L2_ADDR)
+phys_size_t initdram(int board_type)
 {
-#if defined(CONFIG_SPD_EEPROM) || defined(CONFIG_DDR_SPD) || \
-	defined(CONFIG_ARCH_QEMU_E500)
-	gd->ram_size = fsl_ddr_sdram_size();
+#if defined(CONFIG_SPD_EEPROM) || defined(CONFIG_DDR_SPD)
+	return fsl_ddr_sdram_size();
 #else
-	gd->ram_size = (phys_size_t)CFG_SYS_SDRAM_SIZE * 1024 * 1024;
+	return (phys_size_t)CONFIG_SYS_SDRAM_SIZE * 1024 * 1024;
 #endif
-
-	return 0;
 }
 #else /* CONFIG_SYS_RAMBOOT */
-int dram_init(void)
+phys_size_t initdram(int board_type)
 {
 	phys_size_t dram_size = 0;
 
 #if defined(CONFIG_SYS_FSL_ERRATUM_DDR_MSYNC_IN)
 	{
-		ccsr_gur_t *gur = (void *)(CFG_SYS_MPC85xx_GUTS_ADDR);
+		ccsr_gur_t *gur = (void *)(CONFIG_SYS_MPC85xx_GUTS_ADDR);
 		unsigned int x = 10;
 		unsigned int i;
 
@@ -479,18 +394,16 @@ int dram_init(void)
 #endif
 
 	debug("DDR: ");
-	gd->ram_size = dram_size;
-
-	return 0;
+	return dram_size;
 }
 #endif /* CONFIG_SYS_RAMBOOT */
 #endif
 
-#if CFG_POST & CFG_SYS_POST_MEMORY
+#if CONFIG_POST & CONFIG_SYS_POST_MEMORY
 
 /* Board-specific functions defined in each board's ddr.c */
 void fsl_ddr_get_spd(generic_spd_eeprom_t *ctrl_dimms_spd,
-	unsigned int ctrl_num, unsigned int dimm_slots_per_ctrl);
+	unsigned int ctrl_num);
 void read_tlbcam_entry(int idx, u32 *valid, u32 *tsize, unsigned long *epn,
 		       phys_addr_t *rpn);
 unsigned int
@@ -503,17 +416,17 @@ static void dump_spd_ddr_reg(void)
 	int i, j, k, m;
 	u8 *p_8;
 	u32 *p_32;
-	struct ccsr_ddr __iomem *ddr[CONFIG_SYS_NUM_DDR_CTLRS];
+	ccsr_ddr_t *ddr[CONFIG_NUM_DDR_CONTROLLERS];
 	generic_spd_eeprom_t
-		spd[CONFIG_SYS_NUM_DDR_CTLRS][CONFIG_DIMM_SLOTS_PER_CTLR];
+		spd[CONFIG_NUM_DDR_CONTROLLERS][CONFIG_DIMM_SLOTS_PER_CTLR];
 
-	for (i = 0; i < CONFIG_SYS_NUM_DDR_CTLRS; i++)
-		fsl_ddr_get_spd(spd[i], i, CONFIG_DIMM_SLOTS_PER_CTLR);
+	for (i = 0; i < CONFIG_NUM_DDR_CONTROLLERS; i++)
+		fsl_ddr_get_spd(spd[i], i);
 
-	puts("SPD data of all dimms (zero value is omitted)...\n");
+	puts("SPD data of all dimms (zero vaule is omitted)...\n");
 	puts("Byte (hex)  ");
 	k = 1;
-	for (i = 0; i < CONFIG_SYS_NUM_DDR_CTLRS; i++) {
+	for (i = 0; i < CONFIG_NUM_DDR_CONTROLLERS; i++) {
 		for (j = 0; j < CONFIG_DIMM_SLOTS_PER_CTLR; j++)
 			printf("Dimm%d ", k++);
 	}
@@ -521,7 +434,7 @@ static void dump_spd_ddr_reg(void)
 	for (k = 0; k < sizeof(generic_spd_eeprom_t); k++) {
 		m = 0;
 		printf("%3d (0x%02x)  ", k, k);
-		for (i = 0; i < CONFIG_SYS_NUM_DDR_CTLRS; i++) {
+		for (i = 0; i < CONFIG_NUM_DDR_CONTROLLERS; i++) {
 			for (j = 0; j < CONFIG_DIMM_SLOTS_PER_CTLR; j++) {
 				p_8 = (u8 *) &spd[i][j];
 				if (p_8[k]) {
@@ -537,24 +450,24 @@ static void dump_spd_ddr_reg(void)
 			puts("\r");
 	}
 
-	for (i = 0; i < CONFIG_SYS_NUM_DDR_CTLRS; i++) {
+	for (i = 0; i < CONFIG_NUM_DDR_CONTROLLERS; i++) {
 		switch (i) {
 		case 0:
-			ddr[i] = (void *)CFG_SYS_FSL_DDR_ADDR;
+			ddr[i] = (void *)CONFIG_SYS_MPC8xxx_DDR_ADDR;
 			break;
-#if defined(CFG_SYS_FSL_DDR2_ADDR) && (CONFIG_SYS_NUM_DDR_CTLRS > 1)
+#if defined(CONFIG_SYS_MPC8xxx_DDR2_ADDR) && (CONFIG_NUM_DDR_CONTROLLERS > 1)
 		case 1:
-			ddr[i] = (void *)CFG_SYS_FSL_DDR2_ADDR;
+			ddr[i] = (void *)CONFIG_SYS_MPC8xxx_DDR2_ADDR;
 			break;
 #endif
-#if defined(CFG_SYS_FSL_DDR3_ADDR) && (CONFIG_SYS_NUM_DDR_CTLRS > 2)
+#if defined(CONFIG_SYS_MPC8xxx_DDR3_ADDR) && (CONFIG_NUM_DDR_CONTROLLERS > 2)
 		case 2:
-			ddr[i] = (void *)CFG_SYS_FSL_DDR3_ADDR;
+			ddr[i] = (void *)CONFIG_SYS_MPC8xxx_DDR3_ADDR;
 			break;
 #endif
-#if defined(CONFIG_SYS_FSL_DDR4_ADDR) && (CONFIG_SYS_NUM_DDR_CTLRS > 3)
+#if defined(CONFIG_SYS_MPC8xxx_DDR4_ADDR) && (CONFIG_NUM_DDR_CONTROLLERS > 3)
 		case 3:
-			ddr[i] = (void *)CONFIG_SYS_FSL_DDR4_ADDR;
+			ddr[i] = (void *)CONFIG_SYS_MPC8xxx_DDR4_ADDR;
 			break;
 #endif
 		default:
@@ -564,15 +477,15 @@ static void dump_spd_ddr_reg(void)
 		}
 	}
 	printf("DDR registers dump for all controllers "
-		"(zero value is omitted)...\n");
+		"(zero vaule is omitted)...\n");
 	puts("Offset (hex)   ");
-	for (i = 0; i < CONFIG_SYS_NUM_DDR_CTLRS; i++)
+	for (i = 0; i < CONFIG_NUM_DDR_CONTROLLERS; i++)
 		printf("     Base + 0x%04x", (u32)ddr[i] & 0xFFFF);
 	puts("\n");
-	for (k = 0; k < sizeof(struct ccsr_ddr)/4; k++) {
+	for (k = 0; k < sizeof(ccsr_ddr_t)/4; k++) {
 		m = 0;
 		printf("%6d (0x%04x)", k * 4, k * 4);
-		for (i = 0; i < CONFIG_SYS_NUM_DDR_CTLRS; i++) {
+		for (i = 0; i < CONFIG_NUM_DDR_CONTROLLERS; i++) {
 			p_32 = (u32 *) ddr[i];
 			if (p_32[k]) {
 				printf("        0x%08x", p_32[k]);
@@ -591,7 +504,7 @@ static void dump_spd_ddr_reg(void)
 /* invalid the TLBs for DDR and setup new ones to cover p_addr */
 static int reset_tlb(phys_addr_t p_addr, u32 size, phys_addr_t *phys_offset)
 {
-	u32 vstart = CFG_SYS_DDR_SDRAM_BASE;
+	u32 vstart = CONFIG_SYS_DDR_SDRAM_BASE;
 	unsigned long epn;
 	u32 tsize, valid, ptr;
 	int ddr_esel;
@@ -616,26 +529,26 @@ static int reset_tlb(phys_addr_t p_addr, u32 size, phys_addr_t *phys_offset)
 /*
  * slide the testing window up to test another area
  * for 32_bit system, the maximum testable memory is limited to
- * CFG_MAX_MEM_MAPPED
+ * CONFIG_MAX_MEM_MAPPED
  */
 int arch_memory_test_advance(u32 *vstart, u32 *size, phys_addr_t *phys_offset)
 {
 	phys_addr_t test_cap, p_addr;
-	phys_size_t p_size = min(gd->ram_size, CFG_MAX_MEM_MAPPED);
+	phys_size_t p_size = min(gd->ram_size, CONFIG_MAX_MEM_MAPPED);
 
 #if !defined(CONFIG_PHYS_64BIT) || \
-    !defined(CFG_SYS_INIT_RAM_ADDR_PHYS) || \
-	(CFG_SYS_INIT_RAM_ADDR_PHYS < 0x100000000ull)
+    !defined(CONFIG_SYS_INIT_RAM_ADDR_PHYS) || \
+	(CONFIG_SYS_INIT_RAM_ADDR_PHYS < 0x100000000ull)
 		test_cap = p_size;
 #else
 		test_cap = gd->ram_size;
 #endif
 	p_addr = (*vstart) + (*size) + (*phys_offset);
 	if (p_addr < test_cap - 1) {
-		p_size = min(test_cap - p_addr, CFG_MAX_MEM_MAPPED);
+		p_size = min(test_cap - p_addr, CONFIG_MAX_MEM_MAPPED);
 		if (reset_tlb(p_addr, p_size, phys_offset) == -1)
 			return -1;
-		*vstart = CFG_SYS_DDR_SDRAM_BASE;
+		*vstart = CONFIG_SYS_DDR_SDRAM_BASE;
 		*size = (u32) p_size;
 		printf("Testing 0x%08llx - 0x%08llx\n",
 			(u64)(*vstart) + (*phys_offset),
@@ -649,18 +562,18 @@ int arch_memory_test_advance(u32 *vstart, u32 *size, phys_addr_t *phys_offset)
 /* initialization for testing area */
 int arch_memory_test_prepare(u32 *vstart, u32 *size, phys_addr_t *phys_offset)
 {
-	phys_size_t p_size = min(gd->ram_size, CFG_MAX_MEM_MAPPED);
+	phys_size_t p_size = min(gd->ram_size, CONFIG_MAX_MEM_MAPPED);
 
-	*vstart = CFG_SYS_DDR_SDRAM_BASE;
-	*size = (u32) p_size;	/* CFG_MAX_MEM_MAPPED < 4G */
+	*vstart = CONFIG_SYS_DDR_SDRAM_BASE;
+	*size = (u32) p_size;	/* CONFIG_MAX_MEM_MAPPED < 4G */
 	*phys_offset = 0;
 
 #if !defined(CONFIG_PHYS_64BIT) || \
-    !defined(CFG_SYS_INIT_RAM_ADDR_PHYS) || \
-	(CFG_SYS_INIT_RAM_ADDR_PHYS < 0x100000000ull)
-		if (gd->ram_size > CFG_MAX_MEM_MAPPED) {
+    !defined(CONFIG_SYS_INIT_RAM_ADDR_PHYS) || \
+	(CONFIG_SYS_INIT_RAM_ADDR_PHYS < 0x100000000ull)
+		if (gd->ram_size > CONFIG_MAX_MEM_MAPPED) {
 			puts("Cannot test more than ");
-			print_size(CFG_MAX_MEM_MAPPED,
+			print_size(CONFIG_MAX_MEM_MAPPED,
 				" without proper 36BIT support.\n");
 		}
 #endif

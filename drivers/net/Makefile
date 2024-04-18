@@ -1,99 +1,87 @@
-# SPDX-License-Identifier: GPL-2.0+
 #
 # (C) Copyright 2006
 # Wolfgang Denk, DENX Software Engineering, wd@denx.de.
+#
+# SPDX-License-Identifier:	GPL-2.0+
+#
 
+include $(TOPDIR)/config.mk
 
-obj-$(CONFIG_AG7XXX) += ag7xxx.o
-obj-$(CONFIG_ALTERA_TSE) += altera_tse.o
-obj-$(CONFIG_ASPEED_MDIO) += aspeed_mdio.o
-obj-$(CONFIG_BCM6348_ETH) += bcm6348-eth.o
-obj-$(CONFIG_BCM6368_ETH) += bcm6368-eth.o
-obj-$(CONFIG_BCMGENET) += bcmgenet.o
-obj-$(CONFIG_BCM_SF2_ETH) += bcm-sf2-eth.o
-obj-$(CONFIG_BCM_SF2_ETH_GMAC) += bcm-sf2-eth-gmac.o
-obj-$(CONFIG_BNXT_ETH) += bnxt/
-obj-$(CONFIG_CALXEDA_XGMAC) += calxedaxgmac.o
-obj-$(CONFIG_CORTINA_NI_ENET) += cortina_ni.o
-obj-$(CONFIG_DM_ETH_PHY) += eth-phy-uclass.o
-obj-$(CONFIG_DRIVER_DM9000) += dm9000x.o
-obj-$(CONFIG_DSA_SANDBOX) += dsa_sandbox.o
-obj-$(CONFIG_DWC_ETH_QOS) += dwc_eth_qos.o
-obj-$(CONFIG_DWC_ETH_QOS_IMX) += dwc_eth_qos_imx.o
-obj-$(CONFIG_DWC_ETH_QOS_QCOM) += dwc_eth_qos_qcom.o
-obj-$(CONFIG_E1000) += e1000.o
-obj-$(CONFIG_E1000_SPI) += e1000_spi.o
-obj-$(CONFIG_EEPRO100) += eepro100.o
-obj-$(CONFIG_ETHOC) += ethoc.o
-obj-$(CONFIG_ETH_DESIGNWARE) += designware.o
-obj-$(CONFIG_ETH_DESIGNWARE_MESON8B) += dwmac_meson8b.o
-obj-$(CONFIG_ETH_DESIGNWARE_S700) += dwmac_s700.o
-obj-$(CONFIG_ETH_DESIGNWARE_SOCFPGA) += dwmac_socfpga.o
-obj-$(CONFIG_ETH_SANDBOX) += sandbox.o
-obj-$(CONFIG_ETH_SANDBOX_RAW) += sandbox-raw-bus.o
-obj-$(CONFIG_ETH_SANDBOX_RAW) += sandbox-raw.o
-obj-$(CONFIG_FEC_MXC) += fec_mxc.o
-obj-$(CONFIG_FMAN_ENET) += fm/
-obj-$(CONFIG_FMAN_ENET) += fsl_mdio.o
-obj-$(CONFIG_FSLDMAFEC) += fsl_mcdmafec.o mcfmii.o
-obj-$(CONFIG_FSL_ENETC) += fsl_enetc.o fsl_enetc_mdio.o
-obj-$(CONFIG_FSL_LS_MDIO) += fsl_ls_mdio.o
-obj-$(CONFIG_FSL_MC_ENET) += fsl-mc/
-obj-$(CONFIG_FSL_MC_ENET) += ldpaa_eth/
-obj-$(CONFIG_FSL_MEMAC) += fm/memac_phy.o
-obj-$(CONFIG_FSL_PFE) += pfe_eth/
-obj-$(CONFIG_FTGMAC100) += ftgmac100.o
-obj-$(CONFIG_FTMAC100) += ftmac100.o
-obj-$(CONFIG_GMAC_ROCKCHIP) += gmac_rockchip.o
-obj-$(CONFIG_HIGMACV300_ETH) += higmacv300.o
-obj-$(CONFIG_KS8851_MLL) += ks8851_mll.o
-obj-$(CONFIG_KSZ9477) += ksz9477.o
-obj-$(CONFIG_LITEETH) += liteeth.o
-obj-$(CONFIG_MACB) += macb.o
-obj-$(CONFIG_MCFFEC) += mcffec.o mcfmii.o
-obj-$(CONFIG_MDIO_IPQ4019) += mdio-ipq4019.o
-obj-$(CONFIG_MDIO_MUX_I2CREG) += mdio_mux_i2creg.o
-obj-$(CONFIG_MDIO_MUX_MESON_G12A) += mdio_mux_meson_g12a.o
-obj-$(CONFIG_MDIO_MUX_MMIOREG) += mdio_mux_mmioreg.o
-obj-$(CONFIG_MDIO_MUX_SANDBOX) += mdio_mux_sandbox.o
-obj-$(CONFIG_MDIO_SANDBOX) += mdio_sandbox.o
-obj-$(CONFIG_MEDIATEK_ETH) += mtk_eth.o
-obj-$(CONFIG_MPC8XX_FEC) += mpc8xx_fec.o
-obj-$(CONFIG_MT7620_ETH) += mt7620-eth.o
-obj-$(CONFIG_MT7628_ETH) += mt7628-eth.o
-obj-$(CONFIG_MV88E6XXX) += mv88e6xxx.o
-obj-$(CONFIG_MVGBE) += mvgbe.o
-obj-$(CONFIG_MVMDIO) += mvmdio.o
-obj-$(CONFIG_MVNETA) += mvneta.o
-obj-$(CONFIG_MVPP2) += mvpp2.o
-obj-$(CONFIG_NETCONSOLE) += netconsole.o
-obj-$(CONFIG_NET_NPCM750) += npcm750_eth.o
-obj-$(CONFIG_NET_OCTEON) += octeon/
-obj-$(CONFIG_NET_OCTEONTX) += octeontx/
-obj-$(CONFIG_NET_OCTEONTX2) += octeontx2/
-obj-$(CONFIG_OCTEONTX2_CGX_INTF) += octeontx2/cgx_intf.o
-obj-$(CONFIG_OCTEONTX_SMI) += octeontx/smi.o
-obj-$(CONFIG_PCH_GBE) += pch_gbe.o
-obj-$(CONFIG_PCNET) += pcnet.o
-obj-$(CONFIG_PIC32_ETH) += pic32_mdio.o pic32_eth.o
-obj-$(CONFIG_RENESAS_RAVB) += ravb.o
-obj-$(CONFIG_RTL8139) += rtl8139.o
-obj-$(CONFIG_RTL8169) += rtl8169.o
-obj-$(CONFIG_SH_ETHER) += sh_eth.o
-obj-$(CONFIG_SJA1105) += sja1105.o
-obj-$(CONFIG_SMC911X) += smc911x.o
-obj-$(CONFIG_SNI_AVE) += sni_ave.o
-obj-$(CONFIG_SNI_NETSEC) += sni_netsec.o
-obj-$(CONFIG_SUN4I_EMAC) += sunxi_emac.o
-obj-$(CONFIG_SUN8I_EMAC) += sun8i_emac.o
-obj-$(CONFIG_TSEC_ENET) += tsec.o fsl_mdio.o
-obj-$(CONFIG_TULIP) += dc2114x.o
-obj-$(CONFIG_VSC7385_ENET) += vsc7385.o
-obj-$(CONFIG_XILINX_AXIEMAC) += xilinx_axi_emac.o
-obj-$(CONFIG_XILINX_AXIMRMAC) += xilinx_axi_mrmac.o
-obj-$(CONFIG_XILINX_EMACLITE) += xilinx_emaclite.o
-obj-$(CONFIG_ZYNQ_GEM) += zynq_gem.o
-obj-y += mscc_eswitch/
-obj-y += phy/
-obj-y += qe/
-obj-y += ti/
+LIB	:= $(obj)libnet.o
+
+COBJS-$(CONFIG_PPC4xx_EMAC) += 4xx_enet.o
+COBJS-$(CONFIG_ALTERA_TSE) += altera_tse.o
+COBJS-$(CONFIG_ARMADA100_FEC) += armada100_fec.o
+COBJS-$(CONFIG_DRIVER_AT91EMAC) += at91_emac.o
+COBJS-$(CONFIG_DRIVER_AX88180) += ax88180.o
+COBJS-$(CONFIG_BFIN_MAC) += bfin_mac.o
+COBJS-$(CONFIG_CALXEDA_XGMAC) += calxedaxgmac.o
+COBJS-$(CONFIG_CS8900) += cs8900.o
+COBJS-$(CONFIG_TULIP) += dc2114x.o
+COBJS-$(CONFIG_DESIGNWARE_ETH) += designware.o
+COBJS-$(CONFIG_DRIVER_DM9000) += dm9000x.o
+COBJS-$(CONFIG_DNET) += dnet.o
+COBJS-$(CONFIG_E1000) += e1000.o
+COBJS-$(CONFIG_E1000_SPI) += e1000_spi.o
+COBJS-$(CONFIG_EEPRO100) += eepro100.o
+COBJS-$(CONFIG_ENC28J60) += enc28j60.o
+COBJS-$(CONFIG_EP93XX) += ep93xx_eth.o
+COBJS-$(CONFIG_ETHOC) += ethoc.o
+COBJS-$(CONFIG_FEC_MXC) += fec_mxc.o
+COBJS-$(CONFIG_FSLDMAFEC) += fsl_mcdmafec.o mcfmii.o
+COBJS-$(CONFIG_FTGMAC100) += ftgmac100.o
+COBJS-$(CONFIG_FTMAC110) += ftmac110.o
+COBJS-$(CONFIG_FTMAC100) += ftmac100.o
+COBJS-$(CONFIG_GRETH) += greth.o
+COBJS-$(CONFIG_INCA_IP_SWITCH) += inca-ip_sw.o
+COBJS-$(CONFIG_DRIVER_KS8695ETH) += ks8695eth.o
+COBJS-$(CONFIG_KS8851_MLL) += ks8851_mll.o
+COBJS-$(CONFIG_LAN91C96) += lan91c96.o
+COBJS-$(CONFIG_MACB) += macb.o
+COBJS-$(CONFIG_MCFFEC) += mcffec.o mcfmii.o
+COBJS-$(CONFIG_MPC5xxx_FEC) += mpc5xxx_fec.o
+COBJS-$(CONFIG_MPC512x_FEC) += mpc512x_fec.o
+COBJS-$(CONFIG_MVGBE) += mvgbe.o
+COBJS-$(CONFIG_NATSEMI) += natsemi.o
+COBJS-$(CONFIG_DRIVER_NE2000) += ne2000.o ne2000_base.o
+COBJS-$(CONFIG_DRIVER_AX88796L) += ax88796.o ne2000_base.o
+COBJS-$(CONFIG_NETCONSOLE) += netconsole.o
+COBJS-$(CONFIG_NS8382X) += ns8382x.o
+COBJS-$(CONFIG_PCNET) += pcnet.o
+COBJS-$(CONFIG_PLB2800_ETHER) += plb2800_eth.o
+COBJS-$(CONFIG_RTL8139) += rtl8139.o
+COBJS-$(CONFIG_RTL8169) += rtl8169.o
+COBJS-$(CONFIG_SH_ETHER) += sh_eth.o
+COBJS-$(CONFIG_SMC91111) += smc91111.o
+COBJS-$(CONFIG_SMC911X) += smc911x.o
+COBJS-$(CONFIG_SUNXI_WEMAC) += sunxi_wemac.o
+COBJS-$(CONFIG_DRIVER_TI_EMAC) += davinci_emac.o
+COBJS-$(CONFIG_TSEC_ENET) += tsec.o fsl_mdio.o
+COBJS-$(CONFIG_DRIVER_TI_CPSW) += cpsw.o
+COBJS-$(CONFIG_FMAN_ENET) += fsl_mdio.o
+COBJS-$(CONFIG_TSI108_ETH) += tsi108_eth.o
+COBJS-$(CONFIG_ULI526X) += uli526x.o
+COBJS-$(CONFIG_VSC7385_ENET) += vsc7385.o
+COBJS-$(CONFIG_XILINX_AXIEMAC) += xilinx_axi_emac.o
+COBJS-$(CONFIG_XILINX_EMACLITE) += xilinx_emaclite.o
+COBJS-$(CONFIG_XILINX_LL_TEMAC) += xilinx_ll_temac.o xilinx_ll_temac_mdio.o \
+		xilinx_ll_temac_fifo.o xilinx_ll_temac_sdma.o
+COBJS-$(CONFIG_ZYNQ_GEM) += zynq_gem.o
+
+COBJS	:= $(sort $(COBJS-y))
+SRCS	:= $(COBJS:.o=.c)
+OBJS	:= $(addprefix $(obj),$(COBJS))
+
+all:	$(LIB)
+
+$(LIB):	$(obj).depend $(OBJS)
+	$(call cmd_link_o_target, $(OBJS))
+
+#########################################################################
+
+# defines $(obj).depend target
+include $(SRCTREE)/rules.mk
+
+sinclude $(obj).depend
+
+#########################################################################

@@ -1,73 +1,112 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
- * (C) Copyright 2014
+ * (C) Copyright 2013
  * Texas Instruments, <www.ti.com>
  *
  * Dan Murphy <dmurphy@ti.com>
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
  *
  * Derived work from spl_mmc.c
  */
 
 #include <common.h>
-#include <log.h>
 #include <spl.h>
 #include <asm/u-boot.h>
-#include <errno.h>
 #include <usb.h>
 #include <fat.h>
+#include <version.h>
+#include <image.h>
 
+DECLARE_GLOBAL_DATA_PTR;
+
+#ifdef CONFIG_USB_STORAGE
 static int usb_stor_curr_dev = -1; /* current device */
+#endif
 
-int spl_usb_load(struct spl_image_info *spl_image,
-		 struct spl_boot_device *bootdev, int partition,
-		 const char *filename)
+#ifdef CONFIG_SPL_FAT_SUPPORT
+static int usb_load_image_fat(const char *filename)
 {
-	int err = 0;
-	struct blk_desc *stor_dev;
-	static bool usb_init_pending = true;
+	int err;
+	struct image_header *header;
 
-	if (usb_init_pending) {
-		usb_stop();
-		err = usb_init();
-		usb_init_pending = false;
+	header = (struct image_header *)(CONFIG_SYS_TEXT_BASE -
+						sizeof(struct image_header));
+
+	err = file_fat_read(filename, header, sizeof(struct image_header));
+	if (err <= 0)
+		goto end;
+
+	spl_parse_image_header(header);
+
+	err = file_fat_read(filename, (u8 *)spl_image.load_addr, 0);
+
+end:
+#ifdef CONFIG_SPL_LIBCOMMON_SUPPORT
+	if (err <= 0)
+		printf("spl: error reading image %s, err - %d\n",
+		       filename, err);
+#endif
+
+	return (err <= 0);
+}
+
+#ifdef CONFIG_SPL_OS_BOOT
+static int usb_load_image_fat_os(struct usb_device *usb_dev)
+{
+	int err;
+
+	err = file_fat_read(CONFIG_SPL_FAT_LOAD_ARGS_NAME,
+			    (void *)CONFIG_SYS_SPL_ARGS_ADDR, 0);
+	if (err <= 0) {
+#ifdef CONFIG_SPL_LIBCOMMON_SUPPORT
+		printf("spl: error reading image %s, err - %d\n",
+		       CONFIG_SPL_FAT_LOAD_ARGS_NAME, err);
+#endif
+		return -1;
 	}
 
+	return usb_load_image_fat(CONFIG_SPL_FAT_LOAD_KERNEL_NAME);
+}
+#endif
+#endif
+void spl_usb_load_image(void)
+{
+	struct usb_device *usb_dev;
+	int err;
+	block_dev_desc_t *stor_dev;
+
+	usb_stop();
+	err = usb_init();
 	if (err) {
 #ifdef CONFIG_SPL_LIBCOMMON_SUPPORT
-		printf("%s: usb init failed: err - %d\n", __func__, err);
+		printf("spl: usb init failed: err - %d\n", err);
 #endif
-		return err;
+		hang();
+	} else {
+#ifdef CONFIG_USB_STORAGE
+		/* try to recognize storage devices immediately */
+		usb_stor_curr_dev = usb_stor_scan(1);
+		stor_dev = usb_stor_get_dev(usb_stor_curr_dev);
+#endif
 	}
-
-	/* try to recognize storage devices immediately */
-	usb_stor_curr_dev = usb_stor_scan(1);
-	stor_dev = blk_get_devnum_by_uclass_id(UCLASS_USB, usb_stor_curr_dev);
-	if (!stor_dev)
-		return -ENODEV;
 
 	debug("boot mode - FAT\n");
 
-#if CONFIG_IS_ENABLED(OS_BOOT)
-	if (spl_start_uboot() ||
-	    spl_load_image_fat_os(spl_image, bootdev, stor_dev, partition))
-#endif
-	{
-		err = spl_load_image_fat(spl_image, bootdev, stor_dev, partition, filename);
-	}
-
+	err = fat_register_device(stor_dev,
+			CONFIG_SYS_USB_FAT_BOOT_PARTITION);
 	if (err) {
-		puts("Error loading from USB device\n");
-		return err;
+#ifdef CONFIG_SPL_LIBCOMMON_SUPPORT
+		printf("spl: fat register err - %d\n", err);
+#endif
+		hang();
 	}
 
-	return 0;
+#ifdef CONFIG_SPL_OS_BOOT
+	if (spl_start_uboot() || usb_load_image_fat_os(usb_dev))
+#endif
+	err = usb_load_image_fat(CONFIG_SPL_FAT_LOAD_PAYLOAD_NAME);
+	if (err) {
+		puts("Error loading USB device\n");
+		hang();
+	}
 }
-
-static int spl_usb_load_image(struct spl_image_info *spl_image,
-			      struct spl_boot_device *bootdev)
-{
-	return spl_usb_load(spl_image, bootdev,
-			    CONFIG_SYS_USB_FAT_BOOT_PARTITION,
-			    CONFIG_SPL_FS_LOAD_PAYLOAD_NAME);
-}
-SPL_LOAD_IMAGE_METHOD("USB", 0, BOOT_DEVICE_USB, spl_usb_load_image);

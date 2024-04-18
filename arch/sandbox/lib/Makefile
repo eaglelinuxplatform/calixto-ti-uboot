@@ -1,11 +1,34 @@
-# SPDX-License-Identifier: GPL-2.0+
 #
 # Copyright (c) 2011 The Chromium OS Authors.
 #
 # (C) Copyright 2002-2006
 # Wolfgang Denk, DENX Software Engineering, wd@denx.de.
+#
+# SPDX-License-Identifier:	GPL-2.0+
+#
 
-obj-y	+= fdt_fixup.o interrupts.o sections.o
-obj-$(CONFIG_PCI)	+= pci_io.o
-obj-$(CONFIG_CMD_BOOTM) += bootm.o
-obj-$(CONFIG_CMD_BOOTZ) += bootm.o
+include $(TOPDIR)/config.mk
+
+LIB	= $(obj)lib$(ARCH).o
+
+COBJS-y	+= interrupts.o
+
+SRCS	:= $(COBJS-y:.o=.c)
+OBJS	:= $(addprefix $(obj),$(COBJS-y))
+
+# Always build libsandbox.o
+TARGETS	:= $(LIB)
+
+all:	$(TARGETS)
+
+$(LIB):	$(obj).depend $(OBJS)
+	$(call cmd_link_o_target, $(OBJS))
+
+#########################################################################
+
+# defines $(obj).depend target
+include $(SRCTREE)/rules.mk
+
+sinclude $(obj).depend
+
+#########################################################################
