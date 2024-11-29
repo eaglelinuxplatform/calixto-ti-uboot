@@ -47,7 +47,7 @@
 	"bootpart=0:2\0" \
 	"bootdir=/boot\0" \
 	"bootfile=zImage\0" \
-	"fdtfile=am335x-calixto-nxt.dtb\0" \
+	"fdtfile=am335x-calixto-versa-pru.dtb\0" \
 	"moduleconfig=csevm\0" \
         "fdtcustomfile=\0" \
 	"console=ttyO0,115200n8\0" \
