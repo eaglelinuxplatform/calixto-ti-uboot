@@ -18,7 +18,7 @@
 #define GIC400_ARB_END_ADDR             0x31007FFF
 #define APBH_DMA_ARB_BASE_ADDR          0x33000000
 #define APBH_DMA_ARB_END_ADDR           0x33007FFF
-#define M4_BOOTROM_BASE_ADDR            0x00180000
+#define MCU_BOOTROM_BASE_ADDR            0x00180000
 
 #define MXS_APBH_BASE			APBH_DMA_ARB_BASE_ADDR
 #define MXS_GPMI_BASE			(APBH_DMA_ARB_BASE_ADDR + 0x02000)
@@ -70,7 +70,6 @@
 #define SCU_BASE_ADDR                   ARM_PERIPHBASE
 #define GLOBAL_TIMER_BASE_ADDR          (ARM_PERIPHBASE + 0x0200)
 #define PRIVATE_TIMERS_WD_BASE_ADDR     (ARM_PERIPHBASE + 0x0600)
-
 
 /* Defines for Blocks connected via AIPS (SkyBlue) */
 #define AIPS_TZ1_BASE_ADDR              AIPS1_ARB_BASE_ADDR
@@ -1161,7 +1160,6 @@ struct rdc_sema_regs {
 #define	LCDIF_VDCTRL4_SYNC_SIGNALS_ON				(1 << 18)
 #define	LCDIF_VDCTRL4_DOTCLK_H_VALID_DATA_CNT_MASK		0x3ffff
 #define	LCDIF_VDCTRL4_DOTCLK_H_VALID_DATA_CNT_OFFSET		0
-
 
 extern void check_cpu_temperature(void);
 

@@ -2,11 +2,10 @@
 /*
  * mux.c
  *
- * Copyright (C) 2011, Texas Instruments, Incorporated - http://www.ti.com/
+ * Copyright (C) 2011, Texas Instruments, Incorporated - https://www.ti.com/
  * Copyright (C) 2018 Robert Bosch Power Tools GmbH
  */
 
-#include <common.h>
 #include <i2c.h>
 #include <asm/arch/hardware.h>
 #include <asm/arch/mux.h>

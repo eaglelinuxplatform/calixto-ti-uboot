@@ -64,7 +64,6 @@ struct eth_mac_regs {
 #define MII_REGMSK		(0x1F << 6)
 #define MII_ADDRMSK		(0x1F << 11)
 
-
 struct eth_dma_regs {
 	u32 busmode;		/* 0x00 */
 	u32 txpolldemand;	/* 0x04 */
@@ -241,6 +240,7 @@ struct dw_eth_dev {
 	int clock_count;	/* number of clock in clock list */
 #endif
 
+	struct udevice *dev;
 	struct phy_device *phydev;
 	struct mii_dev *bus;
 };

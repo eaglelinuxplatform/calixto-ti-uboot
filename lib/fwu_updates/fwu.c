@@ -10,47 +10,47 @@
 #include <event.h>
 #include <fwu.h>
 #include <fwu_mdata.h>
+#include <log.h>
 #include <malloc.h>
 
 #include <linux/errno.h>
 #include <linux/types.h>
 
+#include <u-boot/crc.h>
+
+struct fwu_data g_fwu_data;
+static struct udevice *g_dev;
 static u8 in_trial;
 static u8 boottime_check;
-
-#include <linux/errno.h>
-#include <linux/types.h>
-#include <u-boot/crc.h>
 
 enum {
 	IMAGE_ACCEPT_SET = 1,
 	IMAGE_ACCEPT_CLEAR,
 };
 
-enum {
-	PRIMARY_PART = 1,
-	SECONDARY_PART,
-	BOTH_PARTS,
-};
-
-static int fwu_get_dev_mdata(struct udevice **dev, struct fwu_mdata *mdata)
+/**
+ * fwu_bank_accepted() - Has the bank been accepted
+ * @data: Version agnostic FWU metadata information
+ * @bank: Update bank to check
+ *
+ * Check in the given bank if all the images have been accepted.
+ *
+ * Return: true if all images accepted, false otherwise
+ */
+bool fwu_bank_accepted(struct fwu_data *data, uint32_t bank)
 {
-	int ret;
+	u32 i;
+	struct fwu_image_entry *img_entry;
+	struct fwu_image_bank_info *img_bank_info;
 
-	ret = uclass_first_device_err(UCLASS_FWU_MDATA, dev);
-	if (ret) {
-		log_debug("Cannot find fwu device\n");
-		return ret;
+	img_entry = &data->fwu_images[0];
+	for (i = 0; i < CONFIG_FWU_NUM_IMAGES_PER_BANK; i++) {
+		img_bank_info = &img_entry[i].img_bank_info[bank];
+		if (!img_bank_info->accepted)
+			return false;
 	}
 
-	if (!mdata)
-		return 0;
-
-	ret = fwu_get_mdata(*dev, mdata);
-	if (ret < 0)
-		log_debug("Unable to get valid FWU metadata\n");
-
-	return ret;
+	return true;
 }
 
 static int trial_counter_update(u16 *trial_state_ctr)
@@ -113,8 +113,12 @@ static int fwu_trial_count_update(void)
 		ret = fwu_revert_boot_index();
 		if (ret)
 			log_err("Unable to revert active_index\n");
+
+		trial_counter_update(NULL);
 		ret = 1;
 	} else {
+		log_info("Trial State count: attempt %d out of %d\n",
+			 trial_state_ctr, CONFIG_FWU_TRIAL_STATE_CNT);
 		ret = trial_counter_update(&trial_state_ctr);
 		if (ret)
 			log_err("Unable to increment TrialStateCtr variable\n");
@@ -124,35 +128,19 @@ out:
 	return ret;
 }
 
-static int in_trial_state(struct fwu_mdata *mdata)
+static u32 in_trial_state(void)
 {
-	u32 i, active_bank;
-	struct fwu_image_entry *img_entry;
-	struct fwu_image_bank_info *img_bank_info;
-
-	active_bank = mdata->active_index;
-	img_entry = &mdata->img_entry[0];
-	for (i = 0; i < CONFIG_FWU_NUM_IMAGES_PER_BANK; i++) {
-		img_bank_info = &img_entry[i].img_bank_info[active_bank];
-		if (!img_bank_info->accepted) {
-			log_info("System booting in Trial State\n");
-			return 1;
-		}
-	}
-
-	return 0;
+	return g_fwu_data.trial_state;
 }
 
-static int fwu_get_image_type_id(u8 *image_index, efi_guid_t *image_type_id)
+static int fwu_get_image_type_id(u8 image_index, efi_guid_t *image_type_id)
 {
-	u8 index;
 	int i;
 	struct efi_fw_image *image;
 
-	index = *image_index;
 	image = update_info.images;
-	for (i = 0; i < num_image_type_guids; i++) {
-		if (index == image[i].image_index) {
+	for (i = 0; i < update_info.num_images; i++) {
+		if (image_index == image[i].image_index) {
 			guidcpy(image_type_id, &image[i].image_type_id);
 			return 0;
 		}
@@ -161,134 +149,210 @@ static int fwu_get_image_type_id(u8 *image_index, efi_guid_t *image_type_id)
 	return -ENOENT;
 }
 
+static int mdata_crc_check(struct fwu_mdata *mdata)
+{
+	int ret;
+	u32 calc_crc32;
+	uint32_t mdata_size;
+	void *buf = &mdata->version;
+
+	ret = fwu_get_mdata_size(&mdata_size);
+	if (ret)
+		return ret;
+
+	calc_crc32 = crc32(0, buf, mdata_size - sizeof(u32));
+	return calc_crc32 == mdata->crc32 ? 0 : -EINVAL;
+}
+
+static void fwu_data_crc_update(uint32_t crc32)
+{
+	g_fwu_data.crc32 = crc32;
+}
+
 /**
- * fwu_verify_mdata() - Verify the FWU metadata
- * @mdata: FWU metadata structure
- * @pri_part: FWU metadata partition is primary or secondary
+ * fwu_get_data() - Return the version agnostic FWU structure
  *
- * Verify the FWU metadata by computing the CRC32 for the metadata
- * structure and comparing it against the CRC32 value stored as part
- * of the structure.
+ * Return the pointer to the version agnostic FWU structure.
+ *
+ * Return: Pointer to the FWU data structure
+ */
+struct fwu_data *fwu_get_data(void)
+{
+	return &g_fwu_data;
+}
+
+static void fwu_populate_mdata_bank_index(struct fwu_data *fwu_data)
+{
+	struct fwu_mdata *mdata = fwu_data->fwu_mdata;
+
+	mdata->active_index = fwu_data->active_index;
+	mdata->previous_active_index = fwu_data->previous_active_index;
+}
+
+/**
+ * fwu_get_dev() - Return the FWU metadata device
+ *
+ * Return the pointer to the FWU metadata device.
+ *
+ * Return: Pointer to the FWU metadata dev
+ */
+struct udevice *fwu_get_dev(void)
+{
+	return g_dev;
+}
+
+/**
+ * fwu_sync_mdata() - Update given meta-data partition(s) with the copy provided
+ * @data: FWU Data structure
+ * @part: Bitmask of FWU metadata partitions to be written to
  *
  * Return: 0 if OK, -ve on error
- *
  */
-int fwu_verify_mdata(struct fwu_mdata *mdata, bool pri_part)
+int fwu_sync_mdata(struct fwu_mdata *mdata, int part)
 {
-	u32 calc_crc32;
-	void *buf;
+	int err;
+	uint mdata_size;
+	void *buf = &mdata->version;
 
-	buf = &mdata->version;
-	calc_crc32 = crc32(0, buf, sizeof(*mdata) - sizeof(u32));
+	if (part == BOTH_PARTS) {
+		err = fwu_sync_mdata(mdata, SECONDARY_PART);
+		if (err)
+			return err;
+		part = PRIMARY_PART;
+	}
 
-	if (calc_crc32 != mdata->crc32) {
-		log_debug("crc32 check failed for %s FWU metadata partition\n",
-			  pri_part ? "primary" : "secondary");
-		return -EINVAL;
+	err = fwu_get_mdata_size(&mdata_size);
+	if (err)
+		return err;
+
+	/*
+	 * Calculate the crc32 for the updated FWU metadata
+	 * and put the updated value in the FWU metadata crc32
+	 * field
+	 */
+	mdata->crc32 = crc32(0, buf, mdata_size - sizeof(u32));
+	fwu_data_crc_update(mdata->crc32);
+
+	err = fwu_write_mdata(g_dev, mdata, part == PRIMARY_PART, mdata_size);
+	if (err) {
+		log_err("Unable to write %s mdata\n",
+			part == PRIMARY_PART ?  "primary" : "secondary");
+		return err;
 	}
 
 	return 0;
 }
 
 /**
- * fwu_check_mdata_validity() - Check for validity of the FWU metadata copies
+ * fwu_mdata_copies_allocate() - Allocate memory for metadata
+ * @mdata_size: Size of the metadata structure
+ *
+ * Allocate memory for storing both the copies of the FWU metadata. The
+ * copies are then used as a cache for storing FWU metadata contents.
+ *
+ * Return: 0 if OK, -ve on error
+ */
+int fwu_mdata_copies_allocate(u32 mdata_size)
+{
+	if (g_fwu_data.fwu_mdata)
+		return 0;
+
+	/*
+	 * Allocate the total memory that would be needed for both
+	 * the copies.
+	 */
+	g_fwu_data.fwu_mdata = calloc(2, mdata_size);
+	if (!g_fwu_data.fwu_mdata) {
+		log_err("Unable to allocate space for FWU metadata\n");
+		return -ENOMEM;
+	}
+
+	return 0;
+}
+
+/**
+ * fwu_get_mdata() - Read, verify and return the FWU metadata
+ * @mdata: Output FWU metadata read or NULL
  *
  * Read both the metadata copies from the storage media, verify their checksum,
  * and ascertain that both copies match. If one of the copies has gone bad,
  * restore it from the good copy.
  *
  * Return: 0 if OK, -ve on error
- *
  */
-int fwu_check_mdata_validity(void)
+int fwu_get_mdata(struct fwu_mdata *mdata)
 {
-	int ret;
-	struct udevice *dev;
-	struct fwu_mdata pri_mdata;
-	struct fwu_mdata secondary_mdata;
-	uint mdata_parts[2];
-	uint valid_partitions, invalid_partitions;
+	int err;
+	uint32_t mdata_size;
+	bool parts_ok[2] = { false };
+	struct fwu_mdata *parts_mdata[2];
 
-	ret = fwu_get_dev_mdata(&dev, NULL);
-	if (ret)
-		return ret;
+	err = fwu_get_mdata_size(&mdata_size);
+	if (err)
+		return err;
 
-	/*
-	 * Check if the platform has defined its own
-	 * function to check the metadata partitions'
-	 * validity. If so, that takes precedence.
-	 */
-	ret = fwu_mdata_check(dev);
-	if (!ret || ret != -ENOSYS)
-		return ret;
-
-	/*
-	 * Two FWU metadata partitions are expected.
-	 * If we don't have two, user needs to create
-	 * them first
-	 */
-	valid_partitions = 0;
-	ret = fwu_get_mdata_part_num(dev, mdata_parts);
-	if (ret < 0) {
-		log_debug("Error getting the FWU metadata partitions\n");
-		return -ENOENT;
+	parts_mdata[0] = g_fwu_data.fwu_mdata;
+	if (!parts_mdata[0]) {
+		log_err("Memory not allocated for the FWU Metadata copies\n");
+		return -ENOMEM;
 	}
 
-	ret = fwu_read_mdata_partition(dev, &pri_mdata, mdata_parts[0]);
-	if (!ret) {
-		ret = fwu_verify_mdata(&pri_mdata, 1);
-		if (!ret)
-			valid_partitions |= PRIMARY_PART;
+	parts_mdata[1] = (struct fwu_mdata *)((char *)parts_mdata[0] +
+					      mdata_size);
+
+	/* if mdata already read and ready */
+	err = mdata_crc_check(parts_mdata[0]);
+	if (!err)
+		goto ret_mdata;
+
+	/* else read, verify and, if needed, fix mdata */
+	for (int i = 0; i < 2; i++) {
+		parts_ok[i] = false;
+		err = fwu_read_mdata(g_dev, parts_mdata[i], !i, mdata_size);
+		if (!err) {
+			err = mdata_crc_check(parts_mdata[i]);
+			if (!err)
+				parts_ok[i] = true;
+			else
+				log_debug("mdata : %s crc32 failed\n", i ? "secondary" : "primary");
+		}
 	}
 
-	ret = fwu_read_mdata_partition(dev, &secondary_mdata, mdata_parts[1]);
-	if (!ret) {
-		ret = fwu_verify_mdata(&secondary_mdata, 0);
-		if (!ret)
-			valid_partitions |= SECONDARY_PART;
-	}
-
-	if (valid_partitions == (PRIMARY_PART | SECONDARY_PART)) {
+	if (parts_ok[0] && parts_ok[1]) {
 		/*
 		 * Before returning, check that both the
-		 * FWU metadata copies are the same. If not,
-		 * populate the secondary partition from the
+		 * FWU metadata copies are the same.
+		 */
+		err = memcmp(parts_mdata[0], parts_mdata[1], mdata_size);
+		if (!err)
+			goto ret_mdata;
+
+		/*
+		 * If not, populate the secondary partition from the
 		 * primary partition copy.
 		 */
-		if (!memcmp(&pri_mdata, &secondary_mdata,
-			    sizeof(struct fwu_mdata))) {
-			ret = 0;
-		} else {
-			log_info("Both FWU metadata copies are valid but do not match.");
-			log_info(" Restoring the secondary partition from the primary\n");
-			ret = fwu_write_mdata_partition(dev, &pri_mdata,
-							mdata_parts[1]);
-			if (ret)
-				log_debug("Restoring secondary FWU metadata partition failed\n");
+		log_info("Both FWU metadata copies are valid but do not match.");
+		log_info(" Restoring the secondary partition from the primary\n");
+		parts_ok[1] = false;
+	}
+
+	for (int i = 0; i < 2; i++) {
+		if (parts_ok[i])
+			continue;
+
+		memcpy(parts_mdata[i], parts_mdata[1 - i], mdata_size);
+		err = fwu_sync_mdata(parts_mdata[i], i ? SECONDARY_PART : PRIMARY_PART);
+		if (err) {
+			log_debug("mdata : %s write failed\n", i ? "secondary" : "primary");
+			return err;
 		}
-		goto out;
 	}
 
-	if (!(valid_partitions & BOTH_PARTS)) {
-		log_info("Both FWU metadata partitions invalid\n");
-		ret = -EBADMSG;
-		goto out;
-	}
+ret_mdata:
+	if (!err && mdata)
+		memcpy(mdata, parts_mdata[0], mdata_size);
 
-	invalid_partitions = valid_partitions ^ BOTH_PARTS;
-	ret = fwu_write_mdata_partition(dev,
-					(invalid_partitions == PRIMARY_PART) ?
-					&secondary_mdata : &pri_mdata,
-					(invalid_partitions == PRIMARY_PART) ?
-					mdata_parts[0] : mdata_parts[1]);
-
-	if (ret)
-		log_debug("Restoring %s FWU metadata partition failed\n",
-			  (invalid_partitions == PRIMARY_PART) ?
-			  "primary" : "secondary");
-
-out:
-	return ret;
+	return err;
 }
 
 /**
@@ -303,19 +367,14 @@ out:
  */
 int fwu_get_active_index(uint *active_idx)
 {
-	int ret;
-	struct udevice *dev;
-	struct fwu_mdata mdata = { 0 };
-
-	ret = fwu_get_dev_mdata(&dev, &mdata);
-	if (ret)
-		return ret;
+	int ret = 0;
+	struct fwu_data *data = &g_fwu_data;
 
 	/*
 	 * Found the FWU metadata partition, now read the active_index
 	 * value
 	 */
-	*active_idx = mdata.active_index;
+	*active_idx = data->active_index;
 	if (*active_idx >= CONFIG_FWU_NUM_BANKS) {
 		log_debug("Active index value read is incorrect\n");
 		ret = -EINVAL;
@@ -336,30 +395,27 @@ int fwu_get_active_index(uint *active_idx)
 int fwu_set_active_index(uint active_idx)
 {
 	int ret;
-	struct udevice *dev;
-	struct fwu_mdata mdata = { 0 };
+	struct fwu_data *data =  &g_fwu_data;
 
 	if (active_idx >= CONFIG_FWU_NUM_BANKS) {
 		log_debug("Invalid active index value\n");
 		return -EINVAL;
 	}
 
-	ret = fwu_get_dev_mdata(&dev, &mdata);
-	if (ret)
-		return ret;
-
 	/*
 	 * Update the active index and previous_active_index fields
 	 * in the FWU metadata
 	 */
-	mdata.previous_active_index = mdata.active_index;
-	mdata.active_index = active_idx;
+	data->previous_active_index = data->active_index;
+	data->active_index = active_idx;
+
+	fwu_populate_mdata_bank_index(data);
 
 	/*
 	 * Now write this updated FWU metadata to both the
 	 * FWU metadata partitions
 	 */
-	ret = fwu_update_mdata(dev, &mdata);
+	ret = fwu_sync_mdata(data->fwu_mdata, BOTH_PARTS);
 	if (ret) {
 		log_debug("Failed to update FWU metadata partitions\n");
 		ret = -EIO;
@@ -369,34 +425,25 @@ int fwu_set_active_index(uint active_idx)
 }
 
 /**
- * fwu_get_image_index() - Get the Image Index to be used for capsule update
- * @image_index: The Image Index for the image
- *
- * The FWU multi bank update feature computes the value of image_index at
- * runtime, based on the bank to which the image needs to be written to.
- * Derive the image_index value for the image.
+ * fwu_get_dfu_alt_num() - Get the dfu_alt_num to be used for capsule update
+ * @image_index:	The Image Index for the image
+ * @alt_num:		pointer to store dfu_alt_num
  *
  * Currently, the capsule update driver uses the DFU framework for
  * the updates. This function gets the DFU alt number which is to
- * be used as the Image Index
+ * be used for capsule update.
  *
  * Return: 0 if OK, -ve on error
  *
  */
-int fwu_get_image_index(u8 *image_index)
+int fwu_get_dfu_alt_num(u8 image_index, u8 *alt_num)
 {
 	int ret, i;
-	u8 alt_num;
 	uint update_bank;
 	efi_guid_t *image_guid, image_type_id;
-	struct udevice *dev;
-	struct fwu_mdata mdata = { 0 };
+	struct fwu_data *data = &g_fwu_data;
 	struct fwu_image_entry *img_entry;
 	struct fwu_image_bank_info *img_bank_info;
-
-	ret = fwu_get_dev_mdata(&dev, &mdata);
-	if (ret)
-		return ret;
 
 	ret = fwu_plat_get_update_index(&update_bank);
 	if (ret) {
@@ -407,37 +454,35 @@ int fwu_get_image_index(u8 *image_index)
 	ret = fwu_get_image_type_id(image_index, &image_type_id);
 	if (ret) {
 		log_debug("Unable to get image_type_id for image_index %u\n",
-			  *image_index);
+			  image_index);
 		goto out;
 	}
 
 	ret = -EINVAL;
 	/*
-	 * The FWU metadata has been read. Now get the image_uuid for the
+	 * The FWU metadata has been read. Now get the image_guid for the
 	 * image with the update_bank.
 	 */
 	for (i = 0; i < CONFIG_FWU_NUM_IMAGES_PER_BANK; i++) {
 		if (!guidcmp(&image_type_id,
-			     &mdata.img_entry[i].image_type_uuid)) {
-			img_entry = &mdata.img_entry[i];
+			     &data->fwu_images[i].image_type_guid)) {
+			img_entry = &data->fwu_images[i];
 			img_bank_info = &img_entry->img_bank_info[update_bank];
-			image_guid = &img_bank_info->image_uuid;
-			ret = fwu_plat_get_alt_num(dev, image_guid, &alt_num);
-			if (ret) {
+			image_guid = &img_bank_info->image_guid;
+			ret = fwu_plat_get_alt_num(g_dev, image_guid, alt_num);
+			if (ret)
 				log_debug("alt_num not found for partition with GUID %pUs\n",
 					  image_guid);
-			} else {
+			else
 				log_debug("alt_num %d for partition %pUs\n",
-					  alt_num, image_guid);
-				*image_index = alt_num + 1;
-			}
+					  *alt_num, image_guid);
 
 			goto out;
 		}
 	}
 
-	log_debug("Partition with the image type %pUs not found\n",
-		  &image_type_id);
+	log_err("Partition with the image type %pUs not found\n",
+		&image_type_id);
 
 out:
 	return ret;
@@ -457,26 +502,23 @@ int fwu_revert_boot_index(void)
 {
 	int ret;
 	u32 cur_active_index;
-	struct udevice *dev;
-	struct fwu_mdata mdata = { 0 };
-
-	ret = fwu_get_dev_mdata(&dev, &mdata);
-	if (ret)
-		return ret;
+	struct fwu_data *data =  &g_fwu_data;
 
 	/*
 	 * Swap the active index and previous_active_index fields
 	 * in the FWU metadata
 	 */
-	cur_active_index = mdata.active_index;
-	mdata.active_index = mdata.previous_active_index;
-	mdata.previous_active_index = cur_active_index;
+	cur_active_index = data->active_index;
+	data->active_index = data->previous_active_index;
+	data->previous_active_index = cur_active_index;
+
+	fwu_populate_mdata_bank_index(data);
 
 	/*
 	 * Now write this updated FWU metadata to both the
 	 * FWU metadata partitions
 	 */
-	ret = fwu_update_mdata(dev, &mdata);
+	ret = fwu_sync_mdata(data->fwu_mdata, BOTH_PARTS);
 	if (ret) {
 		log_debug("Failed to update FWU metadata partitions\n");
 		ret = -EIO;
@@ -503,25 +545,21 @@ int fwu_revert_boot_index(void)
 static int fwu_clrset_image_accept(efi_guid_t *img_type_id, u32 bank, u8 action)
 {
 	int ret, i;
-	struct udevice *dev;
-	struct fwu_mdata mdata = { 0 };
+	struct fwu_data *data = &g_fwu_data;
 	struct fwu_image_entry *img_entry;
 	struct fwu_image_bank_info *img_bank_info;
 
-	ret = fwu_get_dev_mdata(&dev, &mdata);
-	if (ret)
-		return ret;
-
-	img_entry = &mdata.img_entry[0];
+	img_entry = &data->fwu_images[0];
 	for (i = 0; i < CONFIG_FWU_NUM_IMAGES_PER_BANK; i++) {
-		if (!guidcmp(&img_entry[i].image_type_uuid, img_type_id)) {
+		if (!guidcmp(&img_entry[i].image_type_guid, img_type_id)) {
 			img_bank_info = &img_entry[i].img_bank_info[bank];
 			if (action == IMAGE_ACCEPT_SET)
 				img_bank_info->accepted |= FWU_IMAGE_ACCEPTED;
 			else
 				img_bank_info->accepted = 0;
 
-			ret = fwu_update_mdata(dev, &mdata);
+			fwu_populate_mdata_image_info(data);
+			ret = fwu_sync_mdata(data->fwu_mdata, BOTH_PARTS);
 			goto out;
 		}
 	}
@@ -600,6 +638,24 @@ __weak int fwu_plat_get_update_index(uint *update_idx)
 }
 
 /**
+ * fwu_plat_get_bootidx() - Get the value of the boot index
+ * @boot_idx: Boot index value
+ *
+ * Get the value of the bank(partition) from which the platform
+ * has booted. This value is passed to U-Boot from the earlier
+ * stage bootloader which loads and boots all the relevant
+ * firmware images
+ */
+__weak void fwu_plat_get_bootidx(uint *boot_idx)
+{
+	int ret;
+
+	ret = fwu_get_active_index(boot_idx);
+	if (ret < 0)
+		*boot_idx = 0; /* Dummy value */
+}
+
+/**
  * fwu_update_checks_pass() - Check if FWU update can be done
  *
  * Check if the FWU update can be executed. The updates are
@@ -652,12 +708,16 @@ int fwu_trial_state_ctr_start(void)
 	return ret;
 }
 
-static int fwu_boottime_checks(void *ctx, struct event *event)
+static int fwu_boottime_checks(void)
 {
 	int ret;
 	u32 boot_idx, active_idx;
-	struct udevice *dev;
-	struct fwu_mdata mdata = { 0 };
+
+	ret = uclass_first_device_err(UCLASS_FWU_MDATA, &g_dev);
+	if (ret) {
+		log_debug("Cannot find fwu device\n");
+		return ret;
+	}
 
 	/* Don't have boot time checks on sandbox */
 	if (IS_ENABLED(CONFIG_SANDBOX)) {
@@ -665,9 +725,11 @@ static int fwu_boottime_checks(void *ctx, struct event *event)
 		return 0;
 	}
 
-	ret = fwu_check_mdata_validity();
-	if (ret)
-		return 0;
+	ret = fwu_init();
+	if (ret) {
+		log_debug("fwu_init() failed\n");
+		return ret;
+	}
 
 	/*
 	 * Get the Boot Index, i.e. the bank from
@@ -696,24 +758,18 @@ static int fwu_boottime_checks(void *ctx, struct event *event)
 		ret = fwu_set_active_index(boot_idx);
 		if (!ret)
 			boottime_check = 1;
-
-		return 0;
 	}
 
 	if (efi_init_obj_list() != EFI_SUCCESS)
 		return 0;
 
-	ret = fwu_get_dev_mdata(&dev, &mdata);
-	if (ret)
-		return ret;
+	in_trial = in_trial_state();
 
-	in_trial = in_trial_state(&mdata);
-	if (!in_trial || (ret = fwu_trial_count_update()) > 0)
-		ret = trial_counter_update(NULL);
+	ret = in_trial ? fwu_trial_count_update() : trial_counter_update(NULL);
 
 	if (!ret)
 		boottime_check = 1;
 
 	return 0;
 }
-EVENT_SPY(EVT_MAIN_LOOP, fwu_boottime_checks);
+EVENT_SPY_SIMPLE(EVT_MAIN_LOOP, fwu_boottime_checks);

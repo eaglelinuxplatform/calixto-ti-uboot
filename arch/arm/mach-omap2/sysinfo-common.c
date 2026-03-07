@@ -22,6 +22,9 @@ u32 get_device_type(void)
 	 */
 	return (readl(OMAP34XX_CTRL_BASE + 0x2f0) & DEVICE_TYPE_MASK) >>
 		DEVICE_TYPE_SHIFT;
+#elif defined(CONFIG_OMAP54XX)
+	return (readl(OMAP54XX_CTRL_BASE + 0x134) & DEVICE_TYPE_MASK) >>
+		DEVICE_TYPE_SHIFT;
 #else
 	return (readl((*ctrl)->control_status) & DEVICE_TYPE_MASK) >>
 		DEVICE_TYPE_SHIFT;

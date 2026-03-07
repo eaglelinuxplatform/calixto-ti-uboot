@@ -13,6 +13,7 @@ struct menu *menu_create(char *title, int timeout, int prompt,
 				void (*display_statusline)(struct menu *),
 				void (*item_data_print)(void *),
 				char *(*item_choice)(void *),
+				bool (*need_reprint)(void *),
 				void *item_choice_data);
 int menu_default_set(struct menu *m, char *item_key);
 int menu_get_choice(struct menu *m, void **choice);
@@ -39,6 +40,7 @@ int menu_show(int bootdelay);
 struct bootmenu_data {
 	int delay;			/* delay for autoboot */
 	int active;			/* active menu entry */
+	int last_active;		/* last active menu entry */
 	int count;			/* total count of menu entries */
 	struct bootmenu_entry *first;	/* first menu entry */
 };
@@ -50,12 +52,17 @@ enum bootmenu_key {
 	BKEY_DOWN,
 	BKEY_SELECT,
 	BKEY_QUIT,
+	BKEY_SAVE,
+
+	/* 'extra' keys, which are used by menus but not cedit */
 	BKEY_PLUS,
 	BKEY_MINUS,
 	BKEY_SPACE,
-	BKEY_SAVE,
 
 	BKEY_COUNT,
+
+	/* Keys from here on are not used by cedit */
+	BKEY_FIRST_EXTRA = BKEY_PLUS,
 };
 
 /**

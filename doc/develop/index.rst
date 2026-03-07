@@ -9,14 +9,19 @@ General
 .. toctree::
    :maxdepth: 1
 
+   board_best_practices
    codingstyle
    designprinciples
+   docstyle
+   kconfig
+   memory
    patman
    process
    release_cycle
    security
    sending_patches
    system_configuration
+   ide_integration
 
 Implementation
 --------------
@@ -26,7 +31,7 @@ Implementation
 
    directories
    bloblist
-   bootstd
+   bootstd/index
    ci_testing
    commands
    config_binding
@@ -35,7 +40,9 @@ Implementation
    distro
    driver-model/index
    environment
+   init
    expo
+   cedit
    event
    global_data
    logging
@@ -44,6 +51,7 @@ Implementation
    printf
    smbios
    spl
+   falcon
    uefi/index
    vbe
    version
@@ -55,6 +63,7 @@ Debugging
    :maxdepth: 1
 
    crash_dumps
+   gdb
    trace
 
 Packaging
@@ -75,6 +84,7 @@ Testing
    py_testing
    tests_writing
    tests_sandbox
+   binman_tests
 
 Refactoring
 -----------
@@ -84,7 +94,7 @@ Refactoring
 
    checkpatch
    coccinelle
-   moveconfig
+   qconfig
 
 Code quality
 ------------
@@ -93,3 +103,11 @@ Code quality
    :maxdepth: 1
 
    python_cq
+
+Historical documentation
+------------------------
+
+.. toctree::
+   :maxdepth: 2
+
+   historical/index

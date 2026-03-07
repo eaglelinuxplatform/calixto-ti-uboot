@@ -5,7 +5,6 @@
  *  Kyungmin Park <kyungmin.park@samsung.com>
  */
 
-#include <common.h>
 #include <env.h>
 #include <log.h>
 #include <spi.h>
@@ -265,7 +264,7 @@ static int init_pmic_lcd(void)
 	return 0;
 }
 
-int exynos_init(void)
+void exynos_init(void)
 {
 	gd->bd->bi_arch_number = MACH_TYPE_UNIVERSAL_C210;
 
@@ -293,6 +292,4 @@ int exynos_init(void)
 
 	check_hw_revision();
 	printf("HW Revision:\t0x%x\n", board_rev);
-
-	return 0;
 }

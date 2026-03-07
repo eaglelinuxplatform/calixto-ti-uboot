@@ -5,7 +5,6 @@
  * Based on Linux driver
  */
 
-#include <common.h>
 #include <dm.h>
 #include <generic-phy.h>
 #include <reset.h>
@@ -184,8 +183,8 @@ static int hsphy_probe(struct udevice *dev)
 	struct hsphy_priv *priv = dev_get_priv(dev);
 	int ret;
 
-	priv->base = (void *)dev_read_addr(dev);
-	if ((ulong)priv->base == FDT_ADDR_T_NONE)
+	priv->base = dev_read_addr_ptr(dev);
+	if (!priv->base)
 		return -EINVAL;
 
 	ret = reset_get_by_name(dev, "phy", &priv->phy_rst);

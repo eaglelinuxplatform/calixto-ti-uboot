@@ -9,16 +9,16 @@
  *		Dave Liu <daveliu@freescale.com>
  */
 
-#include <common.h>
+#define LOG_CATEGORY UCLASS_AHCI
+
 #include <ahci.h>
 #include <blk.h>
 #include <dm.h>
+#include <log.h>
 #include <part.h>
 #include <sata.h>
-
-#ifndef CONFIG_AHCI
-struct blk_desc sata_dev_desc[CONFIG_SYS_SATA_MAX_DEVICE];
-#endif
+#include <dm/device-internal.h>
+#include <dm/uclass-internal.h>
 
 int sata_reset(struct udevice *dev)
 {
@@ -50,14 +50,42 @@ int sata_scan(struct udevice *dev)
 	return ops->scan(dev);
 }
 
-#ifndef CONFIG_AHCI
-#ifdef CONFIG_PARTITIONS
-struct blk_desc *sata_get_dev(int dev)
+int sata_rescan(bool verbose)
 {
-	return (dev < CONFIG_SYS_SATA_MAX_DEVICE) ? &sata_dev_desc[dev] : NULL;
+	struct uclass *uc;
+	struct udevice *dev; /* SATA controller */
+	int ret;
+
+	if (verbose)
+		printf("scanning bus for devices...\n");
+
+	ret = uclass_get(UCLASS_AHCI, &uc);
+	if (ret)
+		return ret;
+
+	/* Remove all children of SATA devices (blk and bootdev) */
+	uclass_foreach_dev(dev, uc) {
+		log_debug("unbind %s\n", dev->name);
+		ret = device_chld_remove(dev, NULL, DM_REMOVE_NORMAL);
+		if (!ret)
+			ret = device_chld_unbind(dev, NULL);
+		if (ret && verbose) {
+			log_err("Unbinding from %s failed (%dE)\n",
+				dev->name, ret);
+		}
+	}
+
+	if (verbose)
+		printf("Rescanning SATA bus for devices...\n");
+
+	uclass_foreach_dev_probe(UCLASS_AHCI, dev) {
+		ret = sata_scan(dev);
+		if (ret && verbose)
+			log_err("Scanning %s failed (%dE)\n", dev->name, ret);
+	}
+
+	return 0;
 }
-#endif
-#endif
 
 static unsigned long sata_bread(struct udevice *dev, lbaint_t start,
 				lbaint_t blkcnt, void *dst)
@@ -70,51 +98,6 @@ static unsigned long sata_bwrite(struct udevice *dev, lbaint_t start,
 {
 	return -ENOSYS;
 }
-
-#ifndef CONFIG_AHCI
-int __sata_initialize(void)
-{
-	int rc, ret = -1;
-	int i;
-
-	for (i = 0; i < CONFIG_SYS_SATA_MAX_DEVICE; i++) {
-		memset(&sata_dev_desc[i], 0, sizeof(struct blk_desc));
-		sata_dev_desc[i].uclass_id = UCLASS_AHCI;
-		sata_dev_desc[i].devnum = i;
-		sata_dev_desc[i].part_type = PART_TYPE_UNKNOWN;
-		sata_dev_desc[i].type = DEV_TYPE_HARDDISK;
-		sata_dev_desc[i].lba = 0;
-		sata_dev_desc[i].blksz = 512;
-		sata_dev_desc[i].log2blksz = LOG2(sata_dev_desc[i].blksz);
-		rc = init_sata(i);
-		if (!rc) {
-			rc = scan_sata(i);
-			if (!rc && sata_dev_desc[i].lba > 0 &&
-			    sata_dev_desc[i].blksz > 0) {
-				part_init(&sata_dev_desc[i]);
-				ret = i;
-			}
-		}
-	}
-
-	return ret;
-}
-int sata_initialize(void) __attribute__((weak, alias("__sata_initialize")));
-
-__weak int __sata_stop(void)
-{
-	int i, err = 0;
-
-	for (i = 0; i < CONFIG_SYS_SATA_MAX_DEVICE; i++)
-		err |= reset_sata(i);
-
-	if (err)
-		printf("Could not reset some SATA devices\n");
-
-	return err;
-}
-int sata_stop(void) __attribute__((weak, alias("__sata_stop")));
-#endif
 
 static const struct blk_ops sata_blk_ops = {
 	.read	= sata_bread,

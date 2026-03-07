@@ -3,11 +3,10 @@
  * OMAP ulpi viewport support
  * Based on drivers/usb/ulpi/ulpi-viewport.c
  *
- * Copyright (C) 2011 Texas Instruments Incorporated - http://www.ti.com
+ * Copyright (C) 2011 Texas Instruments Incorporated - https://www.ti.com
  * Author: Govindraj R <govindraj.raja@ti.com>
  */
 
-#include <common.h>
 #include <log.h>
 #include <asm/io.h>
 #include <linux/delay.h>

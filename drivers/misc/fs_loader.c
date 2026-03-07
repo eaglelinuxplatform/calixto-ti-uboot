@@ -6,7 +6,6 @@
 
 #define LOG_CATEGORY UCLASS_FS_FIRMWARE_LOADER
 
-#include <common.h>
 #include <dm.h>
 #include <env.h>
 #include <errno.h>
@@ -316,7 +315,7 @@ int get_fs_loader(struct udevice **dev)
 		return ret;
 
 	/* Just create a new device */
-	ret = device_bind(dm_root(), DM_DRIVER_GET(fs_loader), "default-loader",
+	ret = device_bind(dm_root(), DM_DRIVER_REF(fs_loader), "default-loader",
 			  &default_plat, ofnode_null(), dev);
 	if (ret)
 		return ret;

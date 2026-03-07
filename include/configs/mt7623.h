@@ -11,15 +11,6 @@
 
 #include <linux/sizes.h>
 
-/* Miscellaneous configurable options */
-
-/* Environment */
-
-/* Preloader -> Uboot */
-
-/* MMC */
-#define MMC_SUPPORTS_TUNING
-
 /* DRAM */
 #define CFG_SYS_SDRAM_BASE		0x80000000
 
@@ -31,8 +22,6 @@
 	"kernel_addr_r=0x84000000\0"			\
 	"fdt_addr_r=" FDT_HIGH "\0"			\
 	"fdtfile=" CONFIG_DEFAULT_FDT_FILE "\0"
-
-/* Ethernet */
 
 #ifdef CONFIG_DISTRO_DEFAULTS
 

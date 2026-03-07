@@ -119,7 +119,7 @@ FDT_DATA = '''
 '''
 
 @pytest.mark.buildconfigspec('bootm_efi')
-@pytest.mark.buildconfigspec('cmd_bootefi_hello_compile')
+@pytest.mark.buildconfigspec('BOOTEFI_HELLO_COMPILE')
 @pytest.mark.buildconfigspec('fit')
 @pytest.mark.notbuildconfigspec('generate_acpi_table')
 @pytest.mark.requiredtool('dtc')
@@ -431,13 +431,20 @@ def test_efi_fit_launch(u_boot_console):
     cons = u_boot_console
     # Array slice removes leading/trailing quotes.
     sys_arch = cons.config.buildconfig.get('config_sys_arch', '"sandbox"')[1:-1]
+    if sys_arch == 'arm':
+        arm64 = cons.config.buildconfig.get('config_arm64')
+        if arm64:
+            sys_arch = 'arm64'
+
     is_sandbox = sys_arch == 'sandbox'
+
+    if is_sandbox:
+        old_dtb = cons.config.dtb
 
     try:
         if is_sandbox:
             # Use our own device tree file, will be restored afterwards.
             control_dtb = make_dtb('internal', False)
-            old_dtb = cons.config.dtb
             cons.config.dtb = control_dtb
 
         # Run tests

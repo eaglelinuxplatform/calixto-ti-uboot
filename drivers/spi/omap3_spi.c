@@ -6,7 +6,7 @@
  * Copyright (C) 2010 Dirk Behme <dirk.behme@googlemail.com>
  *
  * Driver for McSPI controller on OMAP3. Based on davinci_spi.c
- * Copyright (C) 2009 Texas Instruments Incorporated - http://www.ti.com/
+ * Copyright (C) 2009 Texas Instruments Incorporated - https://www.ti.com/
  *
  * Copyright (C) 2007 Atmel Corporation
  *
@@ -16,9 +16,9 @@
  * Modified by Ruslan Araslanov <ruslan.araslanov@vitecmm.com>
  */
 
-#include <common.h>
 #include <dm.h>
 #include <spi.h>
+#include <time.h>
 #include <malloc.h>
 #include <asm/global_data.h>
 #include <asm/io.h>
@@ -393,7 +393,7 @@ static int omap3_spi_claim_bus(struct udevice *dev)
 	struct omap3_spi_priv *priv = dev_get_priv(bus);
 	struct dm_spi_slave_plat *slave_plat = dev_get_parent_plat(dev);
 
-	priv->cs = slave_plat->cs;
+	priv->cs = slave_plat->cs[0];
 	if (!priv->freq)
 		priv->freq = slave_plat->max_hz;
 
@@ -422,7 +422,7 @@ static int omap3_spi_set_wordlen(struct udevice *dev, unsigned int wordlen)
 	struct omap3_spi_priv *priv = dev_get_priv(bus);
 	struct dm_spi_slave_plat *slave_plat = dev_get_parent_plat(dev);
 
-	priv->cs = slave_plat->cs;
+	priv->cs = slave_plat->cs[0];
 	priv->wordlen = wordlen;
 	_omap3_spi_set_wordlen(priv);
 

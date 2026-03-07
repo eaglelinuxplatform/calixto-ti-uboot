@@ -6,11 +6,14 @@
 #include "imx8mp-u-boot.dtsi"
 
 / {
-	firmware {
-		optee {
-			compatible = "linaro,optee-tz";
-			method = "smc";
-		};
+	aliases {
+		eeprom0 = &eeprom_module;
+		eeprom1 = &eeprom_carrier_board;
+		eeprom2 = &eeprom_display_adapter;
+	};
+
+	sysinfo {
+		compatible = "toradex,sysinfo";
 	};
 
 	wdt-reboot {
@@ -20,12 +23,6 @@
 	};
 };
 
-&{/aliases} {
-	eeprom0 = &eeprom_module;
-	eeprom1 = &eeprom_carrier_board;
-	eeprom2 = &eeprom_display_adapter;
-};
-
 &clk {
 	bootph-all;
 	bootph-pre-ram;
@@ -33,16 +30,6 @@
 	/delete-property/ assigned-clock-parents;
 	/delete-property/ assigned-clock-rates;
 
-};
-
-&crypto {
-	bootph-pre-ram;
-};
-
-&eqos {
-	/delete-property/ assigned-clocks;
-	/delete-property/ assigned-clock-parents;
-	/delete-property/ assigned-clock-rates;
 };
 
 &gpio1 {
@@ -68,6 +55,14 @@
 
 &gpio4 {
 	bootph-pre-ram;
+
+	ctrl-sleep-moci-hog {
+		bootph-pre-ram;
+		gpio-hog;
+		output-high;
+		gpios = <29 GPIO_ACTIVE_HIGH>;
+		line-name = "CTRL_SLEEP_MOCI#";
+	};
 };
 
 &gpio5 {
@@ -112,6 +107,10 @@
 	bootph-pre-ram;
 };
 
+&pinctrl_ctrl_sleep_moci {
+	bootph-pre-ram;
+};
+
 &pinctrl_i2c1 {
 	bootph-pre-ram;
 };
@@ -142,18 +141,6 @@
 };
 
 &reg_usdhc2_vmmc {
-	bootph-pre-ram;
-};
-
-&sec_jr0 {
-	bootph-pre-ram;
-};
-
-&sec_jr1 {
-	bootph-pre-ram;
-};
-
-&sec_jr2 {
 	bootph-pre-ram;
 };
 

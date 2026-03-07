@@ -8,8 +8,8 @@
  * Pavel Herrmann <morpheus.ibis@gmail.com>
  */
 
-#include <common.h>
 #include <cpu_func.h>
+#include <errno.h>
 #include <event.h>
 #include <log.h>
 #include <asm/global_data.h>
@@ -33,6 +33,7 @@
 #include <linux/err.h>
 #include <linux/list.h>
 #include <power-domain.h>
+#include <linux/printk.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -57,7 +58,7 @@ static int device_bind_common(struct udevice *parent, const struct driver *drv,
 
 	ret = uclass_get(drv->id, &uc);
 	if (ret) {
-		debug("Missing uclass for driver %s\n", drv->name);
+		dm_warn("Missing uclass for driver %s\n", drv->name);
 		return ret;
 	}
 
@@ -598,9 +599,10 @@ int device_probe(struct udevice *dev)
 
 	ret = device_notify(dev, EVT_DM_POST_PROBE);
 	if (ret)
-		return ret;
+		goto fail_event;
 
 	return 0;
+fail_event:
 fail_uclass:
 	if (device_remove(dev, DM_REMOVE_NORMAL)) {
 		dm_warn("%s: Device '%s' failed to remove on error path\n",

@@ -5,7 +5,6 @@
 
 #define LOG_CATEGORY UCLASS_I2C_EMUL
 
-#include <common.h>
 #include <dm.h>
 #include <i2c.h>
 #include <log.h>
@@ -46,7 +45,7 @@ int i2c_emul_find(struct udevice *dev, struct udevice **emulp)
 	struct udevice *emul;
 	int ret;
 
-	if (!CONFIG_IS_ENABLED(OF_PLATDATA)) {
+	if (CONFIG_IS_ENABLED(OF_REAL)) {
 		ret = uclass_find_device_by_phandle(UCLASS_I2C_EMUL, dev,
 						    "sandbox,emul", &emul);
 	} else {

@@ -7,11 +7,20 @@
 #ifndef __ASM_ARCH_AM64_HARDWARE_H
 #define __ASM_ARCH_AM64_HARDWARE_H
 
+#include <config.h>
+#ifndef __ASSEMBLY__
+#include <linux/bitops.h>
+#endif
+
 #define PADCFG_MMR1_BASE				0x000f0000
 #define MCU_PADCFG_MMR1_BASE				0x04080000
 #define WKUP_CTRL_MMR0_BASE				0x43000000
 #define MCU_CTRL_MMR0_BASE				0x04500000
 #define CTRL_MMR0_BASE					0x43000000
+
+#define CTRLMMR_WKUP_JTAG_DEVICE_ID		(WKUP_CTRL_MMR0_BASE + 0x18)
+#define JTAG_DEV_SPEED_MASK			GENMASK(10, 6)
+#define JTAG_DEV_SPEED_SHIFT			6
 
 #define CTRLMMR_MAIN_DEVSTAT				(CTRL_MMR0_BASE + 0x30)
 
@@ -40,5 +49,25 @@
 
 /* Use Last 2K as Scratch pad */
 #define TI_SRAM_SCRATCH_BOARD_EEPROM_START		0x7019f800
+
+#if defined(CONFIG_SYS_K3_SPL_ATF) && !defined(__ASSEMBLY__)
+
+#define AM64X_DEV_RTI8			127
+#define AM64X_DEV_RTI9			128
+
+static const u32 put_device_ids[] = {
+	AM64X_DEV_RTI9,
+	AM64X_DEV_RTI8,
+};
+
+#endif
+
+#define AM64X_DEV_R5FSS0_CORE0		121
+#define AM64X_DEV_R5FSS0_CORE1		122
+
+static const u32 put_core_ids[] = {
+	AM64X_DEV_R5FSS0_CORE1,
+	AM64X_DEV_R5FSS0_CORE0, /* Handle CPU0 after CPU1 */
+};
 
 #endif /* __ASM_ARCH_DRA8_HARDWARE_H */

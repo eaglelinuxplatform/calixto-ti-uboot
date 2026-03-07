@@ -4,7 +4,7 @@
  * Copyright (c) 2012, Google Inc.
  */
 
-#include <common.h>
+#include <stdio.h>
 #include <fs.h>
 #include <malloc.h>
 #include <os.h>
@@ -57,7 +57,11 @@ static int smh_fs_write_at(const char *filename, loff_t pos, void *buffer,
 {
 	long fd, size, ret;
 
+	/* Try to open existing file */
 	fd = smh_open(filename, MODE_READ | MODE_BINARY | MODE_PLUS);
+	if (fd < 0)
+		/* Create new file */
+		fd = smh_open(filename, MODE_WRITE | MODE_BINARY);
 	if (fd < 0)
 		return fd;
 	ret = smh_seek(fd, pos);

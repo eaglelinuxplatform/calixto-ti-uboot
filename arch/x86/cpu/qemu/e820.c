@@ -6,12 +6,12 @@
  * (C) Copyright 2019 Bin Meng <bmeng.cn@gmail.com>
  */
 
-#include <common.h>
 #include <env_internal.h>
 #include <malloc.h>
 #include <asm/e820.h>
 #include <asm/arch/qemu.h>
 #include <asm/global_data.h>
+#include <linux/sizes.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 

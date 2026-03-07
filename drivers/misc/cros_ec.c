@@ -15,7 +15,6 @@
 
 #define LOG_CATEGORY UCLASS_CROS_EC
 
-#include <common.h>
 #include <command.h>
 #include <dm.h>
 #include <i2c.h>
@@ -24,6 +23,7 @@
 #include <log.h>
 #include <malloc.h>
 #include <spi.h>
+#include <time.h>
 #include <linux/delay.h>
 #include <linux/errno.h>
 #include <asm/io.h>
@@ -1100,8 +1100,11 @@ int cros_ec_get_sku_id(struct udevice *dev)
 
 	ret = ec_command_inptr(dev, EC_CMD_GET_SKU_ID, 0, NULL, 0,
 			       (uint8_t **)&r, sizeof(*r));
-	if (ret != sizeof(*r))
-		return -ret;
+	if (ret != sizeof(*r)) {
+		if (ret >= 0)
+			ret = -EIO;
+		return ret;
+	}
 
 	return r->sku_id;
 }

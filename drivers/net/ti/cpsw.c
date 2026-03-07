@@ -2,10 +2,9 @@
 /*
  * CPSW Ethernet Switch Driver
  *
- * Copyright (C) 2010-2018 Texas Instruments Incorporated - http://www.ti.com/
+ * Copyright (C) 2010-2018 Texas Instruments Incorporated - https://www.ti.com/
  */
 
-#include <common.h>
 #include <command.h>
 #include <cpu_func.h>
 #include <log.h>
@@ -24,6 +23,7 @@
 #include <phy.h>
 #include <asm/arch/cpu.h>
 #include <dm.h>
+#include <linux/printk.h>
 
 #include "cpsw_mdio.h"
 

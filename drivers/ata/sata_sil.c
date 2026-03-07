@@ -5,7 +5,6 @@
  * Author: Tang Yuantian <b29983@freescale.com>
  */
 
-#include <common.h>
 #include <blk.h>
 #include <cpu_func.h>
 #include <dm.h>
@@ -730,7 +729,8 @@ static int sil_pci_probe(struct udevice *dev)
 	for (i = sata_info.portbase; i < sata_info.maxport; i++) {
 		snprintf(sata_name, sizeof(sata_name), "sil_sata%d", i);
 		ret = blk_create_devicef(dev, "sata_sil_blk", sata_name,
-					 UCLASS_AHCI, -1, 512, 0, &blk);
+					 UCLASS_AHCI, -1, DEFAULT_BLKSZ,
+					 0, &blk);
 		if (ret) {
 			debug("Can't create device\n");
 			return ret;

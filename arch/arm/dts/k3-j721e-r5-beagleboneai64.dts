@@ -12,101 +12,127 @@
 #include "k3-j721e-ddr.dtsi"
 
 #include "k3-j721e-beagleboneai64-u-boot.dtsi"
+#include "k3-j721e-r5.dtsi"
 
-/ {
-	aliases {
-		remoteproc0 = &sysctrler;
-		remoteproc1 = &a72_0;
-		serial0 = &wkup_uart0;
-		serial3 = &main_uart1;
-	};
 
-	chosen {
-		stdout-path = "serial2:115200n8";
-		tick-timer = &timer1;
-	};
-
-	a72_0: a72@0 {
-		compatible = "ti,am654-rproc";
-		reg = <0x0 0x00a90000 0x0 0x10>;
-		power-domains = <&k3_pds 61 TI_SCI_PD_EXCLUSIVE>,
-				<&k3_pds 202 TI_SCI_PD_EXCLUSIVE>,
-				<&k3_pds 4 TI_SCI_PD_EXCLUSIVE>;
-		resets = <&k3_reset 202 0>;
-		clocks = <&k3_clks 61 1>;
-		assigned-clocks = <&k3_clks 202 2>, <&k3_clks 61 1>;
-		assigned-clock-rates = <2000000000>, <200000000>;
-		ti,sci = <&dmsc>;
-		ti,sci-proc-id = <32>;
-		ti,sci-host-id = <10>;
-		bootph-pre-ram;
-	};
-
-};
-
-&cbass_mcu_wakeup {
-	mcu_secproxy: secproxy@28380000 {
-		bootph-pre-ram;
-		compatible = "ti,am654-secure-proxy";
-		reg = <0x0 0x2a380000 0x0 0x80000>,
-		      <0x0 0x2a400000 0x0 0x80000>,
-		      <0x0 0x2a480000 0x0 0x80000>;
-		reg-names = "rt", "scfg", "target_data";
-		#mbox-cells = <1>;
-	};
-
-	sysctrler: sysctrler {
-		bootph-pre-ram;
-		compatible = "ti,am654-system-controller";
-		mboxes= <&mcu_secproxy 4>, <&mcu_secproxy 5>;
-		mbox-names = "tx", "rx";
-	};
-
-	wkup_vtm0: wkup_vtm@42040000 {
-		compatible = "ti,am654-vtm", "ti,j721e-avs", "ti,j721e-vtm";
-		reg = <0x0 0x42040000 0x0 0x330>,
-		      <0x00 0x42050000 0x00 0x350>,
-		      <0x00 0x43000300 0x00 0x10>;
-		power-domains = <&k3_pds 154 TI_SCI_PD_EXCLUSIVE>;
-		#thermal-sensor-cells = <1>;
-	};
-
-	dm_tifs: dm-tifs {
-		compatible = "ti,j721e-dm-sci";
-		ti,host-id = <3>;
-		ti,secure-host;
-		mbox-names = "rx", "tx";
-		mboxes= <&mcu_secproxy 21>,
-				<&mcu_secproxy 23>;
-		bootph-pre-ram;
-	};
-};
-
-&cbass_main {
-	main_esm: esm@700000 {
-		compatible = "ti,j721e-esm";
-		reg = <0x0 0x700000 0x0 0x1000>;
-		ti,esm-pins = <344>, <345>;
-		bootph-pre-ram;
-	};
-};
-
-&dmsc {
-	mboxes= <&mcu_secproxy 8>, <&mcu_secproxy 6>, <&mcu_secproxy 5>;
-	mbox-names = "tx", "rx", "notify";
-	ti,host-id = <4>;
-	ti,secure-host;
-};
-
-&mcu_ringacc {
-	ti,sci = <&dm_tifs>;
-};
-
-&mcu_udmap {
-	ti,sci = <&dm_tifs>;
-};
-
-/* EEPROM might be read before SYSFW is available */
 &wkup_i2c0 {
-	/delete-property/ power-domains;
+	bootph-pre-ram;
+};
+
+&binman {
+	tiboot3-j721e-gp-evm.bin {
+		filename = "tiboot3-j721e-gp-evm.bin";
+		symlink = "tiboot3.bin";
+		ti-secure-rom {
+			content = <&u_boot_spl_unsigned>;
+			core = "public";
+			load = <CONFIG_SPL_TEXT_BASE>;
+			sw-rev = <CONFIG_K3_X509_SWRV>;
+			keyfile = "ti-degenerate-key.pem";
+		};
+		u_boot_spl_unsigned: u-boot-spl {
+			no-expanded;
+		};
+	};
+
+	sysfw_gp {
+		filename = "sysfw.bin_gp";
+		ti-secure-rom {
+			content = <&ti_fs>;
+			core = "secure";
+			load = <0x40000>;
+			sw-rev = <CONFIG_K3_X509_SWRV>;
+			keyfile = "ti-degenerate-key.pem";
+		};
+		ti_fs: ti-fs.bin {
+			filename = "ti-sysfw/ti-fs-firmware-j721e-gp.bin";
+			type = "blob-ext";
+			optional;
+		};
+	};
+
+	itb_gp {
+		filename = "sysfw-j721e-gp-evm.itb";
+		symlink = "sysfw.itb";
+		fit {
+			description = "SYSFW and Config fragments";
+			#address-cells = <1>;
+			images {
+				sysfw.bin {
+					description = "sysfw";
+					type = "firmware";
+					arch = "arm";
+					compression = "none";
+					blob-ext {
+					    filename = "sysfw.bin_gp";
+					};
+				};
+				board-cfg.bin {
+					description = "board-cfg";
+					type = "firmware";
+					arch = "arm";
+					compression = "none";
+					blob-ext {
+						filename = "board-cfg.bin";
+					};
+				};
+				pm-cfg.bin {
+					description = "pm-cfg";
+					type = "firmware";
+					arch = "arm";
+					compression = "none";
+					blob-ext {
+						filename = "pm-cfg.bin";
+					};
+				};
+				rm-cfg.bin {
+					description = "rm-cfg";
+					type = "firmware";
+					arch = "arm";
+					compression = "none";
+					blob-ext {
+						filename = "rm-cfg.bin";
+					};
+				};
+				sec-cfg.bin {
+					description = "sec-cfg";
+					type = "firmware";
+					arch = "arm";
+					compression = "none";
+					blob-ext {
+						filename = "sec-cfg.bin";
+					};
+				};
+			};
+		};
+	};
+};
+
+#include "k3-binman-capsule-r5.dtsi"
+
+// Capsue update GUIDs.  See beagleboneai64.h.
+#define BEAGLEBONEAI64_TIBOOT3_IMAGE_GUID_STR "772a4810-2194-4923-8754-0115870ef367"
+#define BEAGLEBONEAI64_SYSFW_IMAGE_GUID_STR "dfc9c683-49b7-46bd-b3c1-3a3b2fdb135b"
+
+&capsule_tiboot3 {
+	efi-capsule {
+		image-guid = BEAGLEBONEAI64_TIBOOT3_IMAGE_GUID_STR;
+	};
+};
+
+&binman {
+	capsule-sysfw {
+		filename = "sysfw-capsule.bin";
+		efi-capsule {
+			image-index = <0x4>;
+			image-guid = BEAGLEBONEAI64_SYSFW_IMAGE_GUID_STR;
+			private-key = "arch/arm/mach-k3/keys/custMpk.pem";
+			public-key-cert = "arch/arm/mach-k3/keys/custMpk.crt";
+			monotonic-count = <0x1>;
+
+			blob {
+				filename = "sysfw.itb";
+			};
+		};
+	};
 };

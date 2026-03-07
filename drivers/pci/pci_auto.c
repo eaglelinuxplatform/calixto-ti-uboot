@@ -8,7 +8,7 @@
  * Copyright (c) 2021  Maciej W. Rozycki <macro@orcam.me.uk>
  */
 
-#include <common.h>
+#include <config.h>
 #include <dm.h>
 #include <errno.h>
 #include <log.h>
@@ -579,10 +579,6 @@ int dm_pciauto_config_device(struct udevice *dev)
 					hose->pci_prefetch, hose->pci_io);
 		break;
 #endif
-
-	case PCI_CLASS_PROCESSOR_POWERPC: /* an agent or end-point */
-		debug("PCI AutoConfig: Found PowerPC device\n");
-		/* fall through */
 
 	default:
 		dm_pciauto_setup_device(dev, pci_mem, pci_prefetch, pci_io);

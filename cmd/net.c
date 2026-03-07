@@ -9,10 +9,10 @@
 /*
  * Boot support
  */
-#include <common.h>
 #include <bootstage.h>
 #include <command.h>
 #include <dm.h>
+#include <dm/devres.h>
 #include <env.h>
 #include <image.h>
 #include <log.h>
@@ -97,7 +97,6 @@ U_BOOT_CMD(
 );
 #endif
 
-
 #ifdef CONFIG_CMD_RARP
 int do_rarpb(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 {
@@ -109,6 +108,29 @@ U_BOOT_CMD(
 	"boot image via network using RARP/TFTP protocol",
 	"[loadAddress] [[hostIPaddr:]bootfilename]"
 );
+#endif
+
+#if defined(CONFIG_CMD_DHCP6)
+static int do_dhcp6(struct cmd_tbl *cmdtp, int flag, int argc,
+		    char *const argv[])
+{
+	int i;
+	int dhcp_argc;
+	char *dhcp_argv[] = {NULL, NULL, NULL, NULL};
+
+	/* Add -ipv6 flag for autoload */
+	for (i = 0; i < argc; i++)
+		dhcp_argv[i] = argv[i];
+	dhcp_argc = argc + 1;
+	dhcp_argv[dhcp_argc - 1] =  USE_IP6_CMD_PARAM;
+
+	return netboot_common(DHCP6, cmdtp, dhcp_argc, dhcp_argv);
+}
+
+U_BOOT_CMD(dhcp6,	3,	1,	do_dhcp6,
+	   "boot image via network using DHCPv6/TFTP protocol.\n"
+	   "Use IPv6 hostIPaddr framed with [] brackets",
+	   "[loadAddress] [[hostIPaddr:]bootfilename]");
 #endif
 
 #if defined(CONFIG_CMD_DHCP)
@@ -186,7 +208,7 @@ U_BOOT_CMD(
 
 static void netboot_update_env(void)
 {
-	char tmp[22];
+	char tmp[46];
 
 	if (net_gateway.s_addr) {
 		ip_to_string(net_gateway, tmp);
@@ -247,6 +269,27 @@ static void netboot_update_env(void)
 		env_set("ntpserverip", tmp);
 	}
 #endif
+
+	if (IS_ENABLED(CONFIG_IPV6)) {
+		if (!ip6_is_unspecified_addr(&net_ip6) ||
+		    net_prefix_length != 0) {
+			if (net_prefix_length != 0)
+				snprintf(tmp, sizeof(tmp), "%pI6c/%d", &net_ip6, net_prefix_length);
+			else
+				snprintf(tmp, sizeof(tmp), "%pI6c", &net_ip6);
+			env_set("ip6addr", tmp);
+		}
+
+		if (!ip6_is_unspecified_addr(&net_server_ip6)) {
+			snprintf(tmp, sizeof(tmp), "%pI6c", &net_server_ip6);
+			env_set("serverip6", tmp);
+		}
+
+		if (!ip6_is_unspecified_addr(&net_gateway6)) {
+			snprintf(tmp, sizeof(tmp), "%pI6c", &net_gateway6);
+			env_set("gatewayip6", tmp);
+		}
+	}
 }
 
 /**
@@ -631,67 +674,3 @@ U_BOOT_CMD(
 );
 
 #endif  /* CONFIG_CMD_LINK_LOCAL */
-
-static int do_net_list(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
-{
-	const struct udevice *current = eth_get_dev();
-	unsigned char env_enetaddr[ARP_HLEN];
-	const struct udevice *dev;
-	struct uclass *uc;
-
-	uclass_id_foreach_dev(UCLASS_ETH, dev, uc) {
-		eth_env_get_enetaddr_by_index("eth", dev_seq(dev), env_enetaddr);
-		printf("eth%d : %s %pM %s\n", dev_seq(dev), dev->name, env_enetaddr,
-		       current == dev ? "active" : "");
-	}
-	return CMD_RET_SUCCESS;
-}
-
-static struct cmd_tbl cmd_net[] = {
-	U_BOOT_CMD_MKENT(list, 1, 0, do_net_list, "", ""),
-};
-
-static int do_net(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
-{
-	struct cmd_tbl *cp;
-
-	cp = find_cmd_tbl(argv[1], cmd_net, ARRAY_SIZE(cmd_net));
-
-	/* Drop the net command */
-	argc--;
-	argv++;
-
-	if (!cp || argc > cp->maxargs)
-		return CMD_RET_USAGE;
-	if (flag == CMD_FLAG_REPEAT && !cmd_is_repeatable(cp))
-		return CMD_RET_SUCCESS;
-
-	return cp->cmd(cmdtp, flag, argc, argv);
-}
-
-U_BOOT_CMD(
-	net, 2, 1, do_net,
-	"NET sub-system",
-	"list - list available devices\n"
-);
-
-#if defined(CONFIG_CMD_NCSI)
-static int do_ncsi(struct cmd_tbl *cmdtp, int flag, int argc, char * const argv[])
-{
-	if (!phy_interface_is_ncsi() || !ncsi_active()) {
-		printf("Device not configured for NC-SI\n");
-		return CMD_RET_FAILURE;
-	}
-
-	if (net_loop(NCSI) < 0)
-		return CMD_RET_FAILURE;
-
-	return CMD_RET_SUCCESS;
-}
-
-U_BOOT_CMD(
-	ncsi,	1,	1,	do_ncsi,
-	"Configure attached NIC via NC-SI",
-	""
-);
-#endif  /* CONFIG_CMD_NCSI */

@@ -1,13 +1,12 @@
-/* SPDX-License-Identifier: GPL-2.0+ */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 /*
  * K3: J784S4 SoC definitions, structures etc.
  *
- * Copyright (C) 2022 Texas Instruments Incorporated - https://www.ti.com/
+ * Copyright (C) 2023-2024 Texas Instruments Incorporated - https://www.ti.com/
  */
 #ifndef __ASM_ARCH_J784S4_HARDWARE_H
 #define __ASM_ARCH_J784S4_HARDWARE_H
 
-#include <config.h>
 #ifndef __ASSEMBLY__
 #include <linux/bitops.h>
 #endif
@@ -29,7 +28,7 @@
 #define CTRLMMR_WKUP_DEVSTAT				(WKUP_CTRL_MMR0_BASE + 0x30)
 #define WKUP_DEVSTAT_PRIMARY_BOOTMODE_MASK		GENMASK(5, 3)
 #define WKUP_DEVSTAT_PRIMARY_BOOTMODE_SHIFT		3
-#define WKUP_DEVSTAT_MCU_OMLY_MASK			BIT(6)
+#define WKUP_DEVSTAT_MCU_ONLY_MASK			BIT(6)
 #define WKUP_DEVSTAT_MCU_ONLY_SHIFT			6
 
 /* ROM HANDOFF Structure location */
@@ -37,5 +36,25 @@
 
 /* MCU SCRATCHPAD usage */
 #define TI_SRAM_SCRATCH_BOARD_EEPROM_START	CONFIG_SYS_K3_MCU_SCRATCHPAD_BASE
+
+#if defined(CONFIG_SYS_K3_SPL_ATF) && !defined(__ASSEMBLY__)
+
+#define J784S4_DEV_MCU_RTI0			367
+#define J784S4_DEV_MCU_RTI1			368
+
+static const u32 put_device_ids[] = {
+	J784S4_DEV_MCU_RTI0,
+	J784S4_DEV_MCU_RTI1,
+};
+
+#endif
+
+#define J784S4_DEV_MCU_ARMSS0_CPU0		346
+#define J784S4_DEV_MCU_ARMSS0_CPU1		347
+
+static const u32 put_core_ids[] = {
+	J784S4_DEV_MCU_ARMSS0_CPU1,
+	J784S4_DEV_MCU_ARMSS0_CPU0,     /* Handle CPU0 after CPU1 */
+};
 
 #endif /* __ASM_ARCH_J784S4_HARDWARE_H */

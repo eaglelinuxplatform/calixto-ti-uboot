@@ -6,7 +6,7 @@
  * Wolfgang Denk, DENX Software Engineering, wd@denx.de.
  */
 
-#include <common.h>
+#include <config.h>
 #include <init.h>
 #include <asm/global_data.h>
 
@@ -22,7 +22,7 @@ int arch_setup_bdinfo(void)
 	bd->bi_busfreq = gd->bus_clk;	/* Bus Freq,      in Hz */
 
 	if (IS_ENABLED(CONFIG_PCI))
-		bd->bi_pcifreq = gd->pci_clk;
+		bd->bi_pcifreq = gd->arch.pci_clk;
 
 #if defined(CONFIG_EXTRA_CLOCK)
 	bd->bi_inpfreq = gd->arch.inp_clk;	/* input Freq in Hz */

@@ -14,7 +14,6 @@
  * Stefan Roese <sr@denx.de>
  */
 
-#include <common.h>
 #include <dm.h>
 #include <fdtdec.h>
 #include <asm/global_data.h>
@@ -23,6 +22,7 @@
 #include <linux/libfdt.h>
 #include <malloc.h>
 #include <sdhci.h>
+#include <linux/printk.h>
 #include <power/regulator.h>
 
 DECLARE_GLOBAL_DATA_PTR;
@@ -537,7 +537,7 @@ static int xenon_sdhci_of_to_plat(struct udevice *dev)
 	host->ioaddr = dev_read_addr_ptr(dev);
 
 	if (device_is_compatible(dev, "marvell,armada-3700-sdhci"))
-		priv->pad_ctrl_reg = (void *)devfdt_get_addr_index(dev, 1);
+		priv->pad_ctrl_reg = devfdt_get_addr_index_ptr(dev, 1);
 
 	name = fdt_getprop(gd->fdt_blob, dev_of_offset(dev), "marvell,pad-type",
 			   NULL);

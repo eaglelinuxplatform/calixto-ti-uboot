@@ -13,7 +13,6 @@
  * copyrights here, so I can't add them here.
  */
 
-#include <common.h>
 #include <cpu_func.h>
 #include <dm.h>
 #include <log.h>
@@ -28,6 +27,7 @@
 #include <linux/bitops.h>
 #include <linux/delay.h>
 #include <linux/err.h>
+#include <linux/printk.h>
 
 /* Ethernet frame engine register */
 #define PDMA_RELATED		0x0800

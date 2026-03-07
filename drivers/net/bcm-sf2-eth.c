@@ -3,12 +3,12 @@
  * Copyright 2014 Broadcom Corporation.
  */
 
-#include <common.h>
 #include <log.h>
 #include <malloc.h>
 #include <net.h>
 #include <config.h>
 #include <linux/delay.h>
+#include <linux/printk.h>
 
 #include <phy.h>
 #include <miiphy.h>

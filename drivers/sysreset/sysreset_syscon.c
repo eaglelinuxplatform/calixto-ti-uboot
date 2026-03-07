@@ -7,13 +7,13 @@
  *	Author: Feng Kan <fkan@apm.com>
  */
 
-#include <common.h>
 #include <dm.h>
 #include <errno.h>
 #include <regmap.h>
 #include <sysreset.h>
 #include <syscon.h>
 #include <linux/err.h>
+#include <linux/printk.h>
 
 struct syscon_reboot_priv {
 	struct regmap *regmap;

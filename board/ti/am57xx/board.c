@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Copyright (C) 2014 Texas Instruments Incorporated - http://www.ti.com
+ * Copyright (C) 2014 Texas Instruments Incorporated - https://www.ti.com
  *
  * Author: Felipe Balbi <balbi@ti.com>
  *
  * Based on board/ti/dra7xx/evm.c
  */
 
-#include <common.h>
+#include <config.h>
 #include <env.h>
 #include <fastboot.h>
 #include <fdt_support.h>
@@ -42,6 +42,7 @@
 
 #include "../common/board_detect.h"
 #include "../common/cape_detect.h"
+#include "../common/fdt_ops.h"
 #include "mux_data.h"
 
 #ifdef CONFIG_SUPPORT_EMMC_BOOT
@@ -194,162 +195,6 @@ static const u32 beagle_x15_emif1_ddr3_ext_phy_ctrl_const_regs[] = {
 	0x0
 };
 
-static const u32 AM571x_DDR3L_666MHz_TI_AM571x_IDK_emif1_ext_phy_regs[] = {
-	0x04040100,     /* EMIF1_EXT_PHY_CTRL_1  */
-	0x006B00C0,     /* EMIF1_EXT_PHY_CTRL_2  */
-	0x006B00BC,     /* EMIF1_EXT_PHY_CTRL_3  */
-	0x006B00C7,     /* EMIF1_EXT_PHY_CTRL_4  */
-	0x006B00C3,     /* EMIF1_EXT_PHY_CTRL_5  */
-	0x006B00D1,     /* EMIF1_EXT_PHY_CTRL_6  */
-	0x002F002F,     /* EMIF1_EXT_PHY_CTRL_7  */
-	0x002F002F,     /* EMIF1_EXT_PHY_CTRL_8  */
-	0x002F002F,     /* EMIF1_EXT_PHY_CTRL_9  */
-	0x002F002F,     /* EMIF1_EXT_PHY_CTRL_10 */
-	0x002F002F,     /* EMIF1_EXT_PHY_CTRL_11 */
-	0x00600071,     /* EMIF1_EXT_PHY_CTRL_12 */
-	0x00600075,     /* EMIF1_EXT_PHY_CTRL_13 */
-	0x0060007E,     /* EMIF1_EXT_PHY_CTRL_14 */
-	0x00600082,     /* EMIF1_EXT_PHY_CTRL_15 */
-	0x00600086,     /* EMIF1_EXT_PHY_CTRL_16 */
-	0x00400051,     /* EMIF1_EXT_PHY_CTRL_17 */
-	0x00400055,     /* EMIF1_EXT_PHY_CTRL_18 */
-	0x0040005E,     /* EMIF1_EXT_PHY_CTRL_19 */
-	0x00400062,     /* EMIF1_EXT_PHY_CTRL_20 */
-	0x00400066,     /* EMIF1_EXT_PHY_CTRL_21 */
-	0x00800080,     /* EMIF1_EXT_PHY_CTRL_22 */
-	0x00800080,     /* EMIF1_EXT_PHY_CTRL_23 */
-	0x40010080,     /* EMIF1_EXT_PHY_CTRL_24 */
-	0x08102040,     /* EMIF1_EXT_PHY_CTRL_25 */
-	0x000000B0,     /* EMIF1_EXT_PHY_CTRL_26 */
-	0x000000AC,     /* EMIF1_EXT_PHY_CTRL_27 */
-	0x000000B7,     /* EMIF1_EXT_PHY_CTRL_28 */
-	0x000000B3,     /* EMIF1_EXT_PHY_CTRL_29 */
-	0x000000C1,     /* EMIF1_EXT_PHY_CTRL_30 */
-	0x00000041,     /* EMIF1_EXT_PHY_CTRL_31 */
-	0x00000045,     /* EMIF1_EXT_PHY_CTRL_32 */
-	0x0000004E,     /* EMIF1_EXT_PHY_CTRL_33 */
-	0x00000052,     /* EMIF1_EXT_PHY_CTRL_34 */
-	0x00000056,     /* EMIF1_EXT_PHY_CTRL_35 */
-	0x00000077      /* EMIF1_EXT_PHY_CTRL_36 */
-};
-
-static const u32 AM572x_DDR3L_532MHz_TI_AM572x_EVM_emif1_ext_phy_regs[] = {
-	0x04040100,     /* EMIF1_EXT_PHY_CTRL_1  */
-	0x006B0081,     /* EMIF1_EXT_PHY_CTRL_2  */
-	0x006B0080,     /* EMIF1_EXT_PHY_CTRL_3  */
-	0x006B0086,     /* EMIF1_EXT_PHY_CTRL_4  */
-	0x006B0084,     /* EMIF1_EXT_PHY_CTRL_5  */
-	0x006B006B,     /* EMIF1_EXT_PHY_CTRL_6  */
-	0x00320032,     /* EMIF1_EXT_PHY_CTRL_7  */
-	0x00320032,     /* EMIF1_EXT_PHY_CTRL_8  */
-	0x00320032,     /* EMIF1_EXT_PHY_CTRL_9  */
-	0x00320032,     /* EMIF1_EXT_PHY_CTRL_10 */
-	0x00320032,     /* EMIF1_EXT_PHY_CTRL_11 */
-	0x00600065,     /* EMIF1_EXT_PHY_CTRL_12 */
-	0x00600066,     /* EMIF1_EXT_PHY_CTRL_13 */
-	0x0060006A,     /* EMIF1_EXT_PHY_CTRL_14 */
-	0x0060006C,     /* EMIF1_EXT_PHY_CTRL_15 */
-	0x00600060,     /* EMIF1_EXT_PHY_CTRL_16 */
-	0x00400045,     /* EMIF1_EXT_PHY_CTRL_17 */
-	0x00400046,     /* EMIF1_EXT_PHY_CTRL_18 */
-	0x0040004A,     /* EMIF1_EXT_PHY_CTRL_19 */
-	0x0040004C,     /* EMIF1_EXT_PHY_CTRL_20 */
-	0x00400040,     /* EMIF1_EXT_PHY_CTRL_21 */
-	0x00800080,     /* EMIF1_EXT_PHY_CTRL_22 */
-	0x00800080,     /* EMIF1_EXT_PHY_CTRL_23 */
-	0x40010080,     /* EMIF1_EXT_PHY_CTRL_24 */
-	0x08102040,     /* EMIF1_EXT_PHY_CTRL_25 */
-	0x00000071,     /* EMIF1_EXT_PHY_CTRL_26 */
-	0x00000070,     /* EMIF1_EXT_PHY_CTRL_27 */
-	0x00000076,     /* EMIF1_EXT_PHY_CTRL_28 */
-	0x00000074,     /* EMIF1_EXT_PHY_CTRL_29 */
-	0x00000000,     /* EMIF1_EXT_PHY_CTRL_30 */
-	0x00000035,     /* EMIF1_EXT_PHY_CTRL_31 */
-	0x00000036,     /* EMIF1_EXT_PHY_CTRL_32 */
-	0x0000003A,     /* EMIF1_EXT_PHY_CTRL_33 */
-	0x0000003C,     /* EMIF1_EXT_PHY_CTRL_34 */
-	0x00000000,     /* EMIF1_EXT_PHY_CTRL_35 */
-	0x00000077      /* EMIF1_EXT_PHY_CTRL_36 */
-};
-
-static const u32 AM572x_DDR3L_532MHz_TI_AM572x_IDK_emif1_ext_phy_regs[] = {
-	0x04040100,     /* EMIF1_EXT_PHY_CTRL_1  */
-	0x006B00AF,     /* EMIF1_EXT_PHY_CTRL_2  */
-	0x006B00AB,     /* EMIF1_EXT_PHY_CTRL_3  */
-	0x006B00B4,     /* EMIF1_EXT_PHY_CTRL_4  */
-	0x006B00B1,     /* EMIF1_EXT_PHY_CTRL_5  */
-	0x006B00BD,     /* EMIF1_EXT_PHY_CTRL_6  */
-	0x00320032,     /* EMIF1_EXT_PHY_CTRL_7  */
-	0x00320032,     /* EMIF1_EXT_PHY_CTRL_8  */
-	0x00320032,     /* EMIF1_EXT_PHY_CTRL_9  */
-	0x00320032,     /* EMIF1_EXT_PHY_CTRL_10 */
-	0x00320032,     /* EMIF1_EXT_PHY_CTRL_11 */
-	0x0060006E,     /* EMIF1_EXT_PHY_CTRL_12 */
-	0x00600071,     /* EMIF1_EXT_PHY_CTRL_13 */
-	0x00600078,     /* EMIF1_EXT_PHY_CTRL_14 */
-	0x0060007B,     /* EMIF1_EXT_PHY_CTRL_15 */
-	0x0060007F,     /* EMIF1_EXT_PHY_CTRL_16 */
-	0x0040004E,     /* EMIF1_EXT_PHY_CTRL_17 */
-	0x00400051,     /* EMIF1_EXT_PHY_CTRL_18 */
-	0x00400058,     /* EMIF1_EXT_PHY_CTRL_19 */
-	0x0040005B,     /* EMIF1_EXT_PHY_CTRL_20 */
-	0x0040005F,     /* EMIF1_EXT_PHY_CTRL_21 */
-	0x00800080,     /* EMIF1_EXT_PHY_CTRL_22 */
-	0x00800080,     /* EMIF1_EXT_PHY_CTRL_23 */
-	0x40010080,     /* EMIF1_EXT_PHY_CTRL_24 */
-	0x08102040,     /* EMIF1_EXT_PHY_CTRL_25 */
-	0x0000009F,     /* EMIF1_EXT_PHY_CTRL_26 */
-	0x0000009B,     /* EMIF1_EXT_PHY_CTRL_27 */
-	0x000000A4,     /* EMIF1_EXT_PHY_CTRL_28 */
-	0x000000A1,     /* EMIF1_EXT_PHY_CTRL_29 */
-	0x000000AD,     /* EMIF1_EXT_PHY_CTRL_30 */
-	0x0000003E,     /* EMIF1_EXT_PHY_CTRL_31 */
-	0x00000041,     /* EMIF1_EXT_PHY_CTRL_32 */
-	0x00000048,     /* EMIF1_EXT_PHY_CTRL_33 */
-	0x0000004B,     /* EMIF1_EXT_PHY_CTRL_34 */
-	0x0000004F,     /* EMIF1_EXT_PHY_CTRL_35 */
-	0x00000077      /* EMIF1_EXT_PHY_CTRL_36 */
-};
-
-static const u32 AM574x_DDR3L_666MHz_TI_AM574x_IDK_emif1_ext_phy_regs[] = {
-	0x04040100,     /* EMIF1_EXT_PHY_CTRL_1  */
-	0x006B00C0,     /* EMIF1_EXT_PHY_CTRL_2  */
-	0x006B00BC,     /* EMIF1_EXT_PHY_CTRL_3  */
-	0x006B00C7,     /* EMIF1_EXT_PHY_CTRL_4  */
-	0x006B00C3,     /* EMIF1_EXT_PHY_CTRL_5  */
-	0x006B00D1,     /* EMIF1_EXT_PHY_CTRL_6  */
-	0x002F002F,     /* EMIF1_EXT_PHY_CTRL_7  */
-	0x002F002F,     /* EMIF1_EXT_PHY_CTRL_8  */
-	0x002F002F,     /* EMIF1_EXT_PHY_CTRL_9  */
-	0x002F002F,     /* EMIF1_EXT_PHY_CTRL_10 */
-	0x002F002F,     /* EMIF1_EXT_PHY_CTRL_11 */
-	0x00600071,     /* EMIF1_EXT_PHY_CTRL_12 */
-	0x00600075,     /* EMIF1_EXT_PHY_CTRL_13 */
-	0x0060007E,     /* EMIF1_EXT_PHY_CTRL_14 */
-	0x00600082,     /* EMIF1_EXT_PHY_CTRL_15 */
-	0x00600086,     /* EMIF1_EXT_PHY_CTRL_16 */
-	0x00400051,     /* EMIF1_EXT_PHY_CTRL_17 */
-	0x00400055,     /* EMIF1_EXT_PHY_CTRL_18 */
-	0x0040005E,     /* EMIF1_EXT_PHY_CTRL_19 */
-	0x00400062,     /* EMIF1_EXT_PHY_CTRL_20 */
-	0x00400066,     /* EMIF1_EXT_PHY_CTRL_21 */
-	0x00800080,     /* EMIF1_EXT_PHY_CTRL_22 */
-	0x00800080,     /* EMIF1_EXT_PHY_CTRL_23 */
-	0x40010080,     /* EMIF1_EXT_PHY_CTRL_24 */
-	0x08102040,     /* EMIF1_EXT_PHY_CTRL_25 */
-	0x000000B0,     /* EMIF1_EXT_PHY_CTRL_26 */
-	0x000000AC,     /* EMIF1_EXT_PHY_CTRL_27 */
-	0x000000B7,     /* EMIF1_EXT_PHY_CTRL_28 */
-	0x000000B3,     /* EMIF1_EXT_PHY_CTRL_29 */
-	0x000000C1,     /* EMIF1_EXT_PHY_CTRL_30 */
-	0x00000041,     /* EMIF1_EXT_PHY_CTRL_31 */
-	0x00000045,     /* EMIF1_EXT_PHY_CTRL_32 */
-	0x0000004E,     /* EMIF1_EXT_PHY_CTRL_33 */
-	0x00000052,     /* EMIF1_EXT_PHY_CTRL_34 */
-	0x00000056,     /* EMIF1_EXT_PHY_CTRL_35 */
-	0x00000077      /* EMIF1_EXT_PHY_CTRL_36 */
-};
-
 static const struct emif_regs beagle_x15_emif2_ddr3_532mhz_emif_regs = {
 	.sdram_config_init		= 0x61851b32,
 	.sdram_config			= 0x61851b32,
@@ -411,123 +256,6 @@ static const u32 beagle_x15_emif2_ddr3_ext_phy_ctrl_const_regs[] = {
 	0x0,
 	0x0,
 	0x0
-};
-
-static const u32 AM572x_DDR3L_532MHz_TI_AM572x_EVM_emif2_ext_phy_regs[] = {
-	0x04040100,     /* EMIF2_EXT_PHY_CTRL_1  */
-	0x006B0084,     /* EMIF2_EXT_PHY_CTRL_2  */
-	0x006B0087,     /* EMIF2_EXT_PHY_CTRL_3  */
-	0x006B007F,     /* EMIF2_EXT_PHY_CTRL_4  */
-	0x006B0080,     /* EMIF2_EXT_PHY_CTRL_5  */
-	0x006B006B,     /* EMIF2_EXT_PHY_CTRL_6  */
-	0x00320032,     /* EMIF2_EXT_PHY_CTRL_7  */
-	0x00320032,     /* EMIF2_EXT_PHY_CTRL_8  */
-	0x00320032,     /* EMIF2_EXT_PHY_CTRL_9  */
-	0x00320032,     /* EMIF2_EXT_PHY_CTRL_10 */
-	0x00320032,     /* EMIF2_EXT_PHY_CTRL_11 */
-	0x0060006A,     /* EMIF2_EXT_PHY_CTRL_12 */
-	0x00600067,     /* EMIF2_EXT_PHY_CTRL_13 */
-	0x00600065,     /* EMIF2_EXT_PHY_CTRL_14 */
-	0x00600064,     /* EMIF2_EXT_PHY_CTRL_15 */
-	0x00600060,     /* EMIF2_EXT_PHY_CTRL_16 */
-	0x0040004A,     /* EMIF2_EXT_PHY_CTRL_17 */
-	0x00400047,     /* EMIF2_EXT_PHY_CTRL_18 */
-	0x00400045,     /* EMIF2_EXT_PHY_CTRL_19 */
-	0x00400044,     /* EMIF2_EXT_PHY_CTRL_20 */
-	0x00400040,     /* EMIF2_EXT_PHY_CTRL_21 */
-	0x00800080,     /* EMIF2_EXT_PHY_CTRL_22 */
-	0x00800080,     /* EMIF2_EXT_PHY_CTRL_23 */
-	0x40010080,     /* EMIF2_EXT_PHY_CTRL_24 */
-	0x08102040,     /* EMIF2_EXT_PHY_CTRL_25 */
-	0x00000074,     /* EMIF2_EXT_PHY_CTRL_26 */
-	0x00000077,     /* EMIF2_EXT_PHY_CTRL_27 */
-	0x0000006F,     /* EMIF2_EXT_PHY_CTRL_28 */
-	0x00000070,     /* EMIF2_EXT_PHY_CTRL_29 */
-	0x00000000,     /* EMIF2_EXT_PHY_CTRL_30 */
-	0x0000003A,     /* EMIF2_EXT_PHY_CTRL_31 */
-	0x00000037,     /* EMIF2_EXT_PHY_CTRL_32 */
-	0x00000035,     /* EMIF2_EXT_PHY_CTRL_33 */
-	0x00000034,     /* EMIF2_EXT_PHY_CTRL_34 */
-	0x00000000,     /* EMIF2_EXT_PHY_CTRL_35 */
-	0x00000077      /* EMIF2_EXT_PHY_CTRL_36 */
-};
-
-static const u32 AM572x_DDR3L_532MHz_TI_AM572x_IDK_emif2_ext_phy_regs[] = {
-	0x04040100,     /* EMIF2_EXT_PHY_CTRL_1  */
-	0x006B00AB,     /* EMIF2_EXT_PHY_CTRL_2  */
-	0x006B00AB,     /* EMIF2_EXT_PHY_CTRL_3  */
-	0x006B00B4,     /* EMIF2_EXT_PHY_CTRL_4  */
-	0x006B00B2,     /* EMIF2_EXT_PHY_CTRL_5  */
-	0x006B006B,     /* EMIF2_EXT_PHY_CTRL_6  */
-	0x00320032,     /* EMIF2_EXT_PHY_CTRL_7  */
-	0x00320032,     /* EMIF2_EXT_PHY_CTRL_8  */
-	0x00320032,     /* EMIF2_EXT_PHY_CTRL_9  */
-	0x00320032,     /* EMIF2_EXT_PHY_CTRL_10 */
-	0x00320032,     /* EMIF2_EXT_PHY_CTRL_11 */
-	0x00600073,     /* EMIF2_EXT_PHY_CTRL_12 */
-	0x00600074,     /* EMIF2_EXT_PHY_CTRL_13 */
-	0x00600078,     /* EMIF2_EXT_PHY_CTRL_14 */
-	0x0060007A,     /* EMIF2_EXT_PHY_CTRL_15 */
-	0x00600060,     /* EMIF2_EXT_PHY_CTRL_16 */
-	0x00400053,     /* EMIF2_EXT_PHY_CTRL_17 */
-	0x00400054,     /* EMIF2_EXT_PHY_CTRL_18 */
-	0x00400058,     /* EMIF2_EXT_PHY_CTRL_19 */
-	0x0040005A,     /* EMIF2_EXT_PHY_CTRL_20 */
-	0x00400040,     /* EMIF2_EXT_PHY_CTRL_21 */
-	0x00800080,     /* EMIF2_EXT_PHY_CTRL_22 */
-	0x00800080,     /* EMIF2_EXT_PHY_CTRL_23 */
-	0x40010080,     /* EMIF2_EXT_PHY_CTRL_24 */
-	0x08102040,     /* EMIF2_EXT_PHY_CTRL_25 */
-	0x0000009B,     /* EMIF2_EXT_PHY_CTRL_26 */
-	0x0000009B,     /* EMIF2_EXT_PHY_CTRL_27 */
-	0x000000A4,     /* EMIF2_EXT_PHY_CTRL_28 */
-	0x000000A2,     /* EMIF2_EXT_PHY_CTRL_29 */
-	0x00000000,     /* EMIF2_EXT_PHY_CTRL_30 */
-	0x00000043,     /* EMIF2_EXT_PHY_CTRL_31 */
-	0x00000044,     /* EMIF2_EXT_PHY_CTRL_32 */
-	0x00000048,     /* EMIF2_EXT_PHY_CTRL_33 */
-	0x0000004A,     /* EMIF2_EXT_PHY_CTRL_34 */
-	0x00000000,     /* EMIF2_EXT_PHY_CTRL_35 */
-	0x00000077      /* EMIF2_EXT_PHY_CTRL_36 */
-};
-
-static const u32 AM574x_DDR3L_666MHz_TI_AM574x_IDK_emif2_ext_phy_regs[] = {
-	0x04040100,     /* EMIF2_EXT_PHY_CTRL_1  */
-	0x006B00BC,     /* EMIF2_EXT_PHY_CTRL_2  */
-	0x006B00BB,     /* EMIF2_EXT_PHY_CTRL_3  */
-	0x006B00C7,     /* EMIF2_EXT_PHY_CTRL_4  */
-	0x006B00C4,     /* EMIF2_EXT_PHY_CTRL_5  */
-	0x006B006B,     /* EMIF2_EXT_PHY_CTRL_6  */
-	0x002F002F,     /* EMIF2_EXT_PHY_CTRL_7  */
-	0x002F002F,     /* EMIF2_EXT_PHY_CTRL_8  */
-	0x002F002F,     /* EMIF2_EXT_PHY_CTRL_9  */
-	0x002F002F,     /* EMIF2_EXT_PHY_CTRL_10 */
-	0x002F002F,     /* EMIF2_EXT_PHY_CTRL_11 */
-	0x00600078,     /* EMIF2_EXT_PHY_CTRL_12 */
-	0x00600079,     /* EMIF2_EXT_PHY_CTRL_13 */
-	0x0060007E,     /* EMIF2_EXT_PHY_CTRL_14 */
-	0x00600081,     /* EMIF2_EXT_PHY_CTRL_15 */
-	0x00600060,     /* EMIF2_EXT_PHY_CTRL_16 */
-	0x00400058,     /* EMIF2_EXT_PHY_CTRL_17 */
-	0x00400059,     /* EMIF2_EXT_PHY_CTRL_18 */
-	0x0040005E,     /* EMIF2_EXT_PHY_CTRL_19 */
-	0x00400061,     /* EMIF2_EXT_PHY_CTRL_20 */
-	0x00400040,     /* EMIF2_EXT_PHY_CTRL_21 */
-	0x00800080,     /* EMIF2_EXT_PHY_CTRL_22 */
-	0x00800080,     /* EMIF2_EXT_PHY_CTRL_23 */
-	0x40010080,     /* EMIF2_EXT_PHY_CTRL_24 */
-	0x08102040,     /* EMIF2_EXT_PHY_CTRL_25 */
-	0x000000AC,     /* EMIF2_EXT_PHY_CTRL_26 */
-	0x000000AB,     /* EMIF2_EXT_PHY_CTRL_27 */
-	0x000000B7,     /* EMIF2_EXT_PHY_CTRL_28 */
-	0x000000B4,     /* EMIF2_EXT_PHY_CTRL_29 */
-	0x00000000,     /* EMIF2_EXT_PHY_CTRL_30 */
-	0x00000048,     /* EMIF2_EXT_PHY_CTRL_31 */
-	0x00000049,     /* EMIF2_EXT_PHY_CTRL_32 */
-	0x0000004E,     /* EMIF2_EXT_PHY_CTRL_33 */
-	0x00000051,     /* EMIF2_EXT_PHY_CTRL_34 */
-	0x00000000,     /* EMIF2_EXT_PHY_CTRL_35 */
-	0x00000077      /* EMIF2_EXT_PHY_CTRL_36 */
 };
 
 static const struct emif_regs am571x_emif1_ddr3_666mhz_emif_regs = {
@@ -607,44 +335,12 @@ void emif_get_ext_phy_ctrl_const_regs(u32 emif_nr, const u32 **regs, u32 *size)
 {
 	switch (emif_nr) {
 	case 1:
-		if (board_is_am572x_evm()) {
-			*regs = AM572x_DDR3L_532MHz_TI_AM572x_EVM_emif1_ext_phy_regs;
-			*size = ARRAY_SIZE
-				(AM572x_DDR3L_532MHz_TI_AM572x_EVM_emif1_ext_phy_regs);
-		} else if (board_is_am574x_idk()) {
-			*regs = AM574x_DDR3L_666MHz_TI_AM574x_IDK_emif1_ext_phy_regs;
-			*size = ARRAY_SIZE
-				(AM574x_DDR3L_666MHz_TI_AM574x_IDK_emif1_ext_phy_regs);
-		} else if (board_is_am572x_idk()) {
-			*regs = AM572x_DDR3L_532MHz_TI_AM572x_IDK_emif1_ext_phy_regs;
-			*size = ARRAY_SIZE
-				(AM572x_DDR3L_532MHz_TI_AM572x_IDK_emif1_ext_phy_regs);
-		} else if (board_is_am571x_idk()) {
-			*regs = AM571x_DDR3L_666MHz_TI_AM571x_IDK_emif1_ext_phy_regs;
-			*size = ARRAY_SIZE
-				(AM571x_DDR3L_666MHz_TI_AM571x_IDK_emif1_ext_phy_regs);
-		} else {
-			*regs = beagle_x15_emif1_ddr3_ext_phy_ctrl_const_regs;
-			*size = ARRAY_SIZE(beagle_x15_emif1_ddr3_ext_phy_ctrl_const_regs);
-		}
+		*regs = beagle_x15_emif1_ddr3_ext_phy_ctrl_const_regs;
+		*size = ARRAY_SIZE(beagle_x15_emif1_ddr3_ext_phy_ctrl_const_regs);
 		break;
 	case 2:
-		if (board_is_am572x_evm()) {
-			*regs = AM572x_DDR3L_532MHz_TI_AM572x_EVM_emif2_ext_phy_regs;
-			*size = ARRAY_SIZE
-				(AM572x_DDR3L_532MHz_TI_AM572x_EVM_emif2_ext_phy_regs);
-		} else if (board_is_am574x_idk()) {
-			*regs = AM574x_DDR3L_666MHz_TI_AM574x_IDK_emif2_ext_phy_regs;
-			*size = ARRAY_SIZE
-				(AM574x_DDR3L_666MHz_TI_AM574x_IDK_emif2_ext_phy_regs);
-		} else if (board_is_am572x_idk()) {
-			*regs = AM572x_DDR3L_532MHz_TI_AM572x_IDK_emif2_ext_phy_regs;
-			*size = ARRAY_SIZE
-				(AM572x_DDR3L_532MHz_TI_AM572x_IDK_emif2_ext_phy_regs);
-		} else {
-			*regs = beagle_x15_emif2_ddr3_ext_phy_ctrl_const_regs;
-			*size = ARRAY_SIZE(beagle_x15_emif2_ddr3_ext_phy_ctrl_const_regs);
-		}
+		*regs = beagle_x15_emif2_ddr3_ext_phy_ctrl_const_regs;
+		*size = ARRAY_SIZE(beagle_x15_emif2_ddr3_ext_phy_ctrl_const_regs);
 		break;
 	}
 }
@@ -820,8 +516,7 @@ int get_voltrail_opp(int rail_offset)
 	return opp;
 }
 
-
-#ifdef CONFIG_SPL_BUILD
+#ifdef CONFIG_XPL_BUILD
 /* No env to setup for SPL */
 static inline void setup_board_eeprom_env(void) { }
 
@@ -844,7 +539,7 @@ void do_board_detect(void)
 #endif
 }
 
-#else	/* CONFIG_SPL_BUILD */
+#else	/* CONFIG_XPL_BUILD */
 
 /* Override function to read eeprom information: actual i2c read done by SPL*/
 void do_board_detect(void)
@@ -883,6 +578,23 @@ void do_board_detect(void)
 			 "Board: %s REV %s\n", bname, board_ti_get_rev());
 }
 
+static struct ti_fdt_map ti_omap_am57_evm_fdt_map[] = {
+	{"omap5_uevm", "ti/omap/omap5-uevm.dtb"},
+	{"dra7xx", "ti/omap/dra7-evm.dtb"},
+	{"dra72x-revc", "ti/omap/dra72-evm-revc.dtb"},
+	{"dra72x", "ti/omap/dra72-evm.dtb"},
+	{"dra71x", "ti/omap/dra71-evm.dtb"},
+	{"dra76x_acd", "ti/omap/dra76-evm.dtb"},
+	{"beagle_x15", "ti/omap/am57xx-beagle-x15.dtb"},
+	{"beagle_x15_revb1", "ti/omap/am57xx-beagle-x15-revb1.dtb"},
+	{"beagle_x15_revc", "ti/omap/am57xx-beagle-x15-revc.dtb"},
+	{"am5729_beagleboneai", "ti/omap/am5729-beagleboneai.dtb"},
+	{"am572x_idk", "ti/omap/am572x-idk.dtb"},
+	{"am574x_idk", "ti/omap/am574x-idk.dtb"},
+	{"am57xx_evm", "ti/omap/am57xx-beagle-x15.dtb"},
+	{"am57xx_evm_reva3", "ti/omap/am57xx-beagle-x15.dtb"},
+	{"am571x_idk", "ti/omap/am571x-idk.dtb"},
+};
 static void setup_board_eeprom_env(void)
 {
 	char *name = "beagle_x15";
@@ -920,9 +632,10 @@ static void setup_board_eeprom_env(void)
 
 invalid_eeprom:
 	set_board_info_env(name);
+	ti_set_fdt_env(name, ti_omap_am57_evm_fdt_map);
 }
 
-#endif	/* CONFIG_SPL_BUILD */
+#endif	/* CONFIG_XPL_BUILD */
 
 void vcores_init(void)
 {
@@ -1089,7 +802,7 @@ int board_late_init(void)
 	if (board_is_bbai())
 		env_set("console", "ttyS0,115200n8");
 
-#if !defined(CONFIG_SPL_BUILD)
+#if !defined(CONFIG_XPL_BUILD)
 	board_ti_set_ethaddr(2);
 #endif
 
@@ -1241,7 +954,7 @@ const struct mmc_platform_fixups *platform_fixups_mmc(uint32_t addr)
 }
 #endif
 
-#if defined(CONFIG_SPL_BUILD) && defined(CONFIG_SPL_OS_BOOT)
+#if defined(CONFIG_XPL_BUILD) && defined(CONFIG_SPL_OS_BOOT)
 int spl_start_uboot(void)
 {
 	/* break into full u-boot on 'c' */

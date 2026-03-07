@@ -7,22 +7,39 @@
 #include "rk356x-u-boot.dtsi"
 
 / {
-	chosen {
-		stdout-path = &uart2;
-		u-boot,spl-boot-order = "same-as-spl", &sdmmc0, &sdhci;
+	leds {
+		led-0 {
+			default-state = "on";
+		};
 	};
 };
 
-&sdmmc2 {
-	status = "disabled";
+&pcie3x2 {
+	pinctrl-0 = <&pcie3x2_reset_h>;
 };
 
-&uart1 {
-	status = "disabled";
+&pinctrl {
+	pcie {
+		pcie3x2_reset_h: pcie3x2-reset-h {
+			rockchip,pins = <2 RK_PD6 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+	};
 };
 
-&uart2 {
-	clock-frequency = <24000000>;
-	u-boot,dm-pre-reloc;
-	status = "okay";
+&sdhci {
+	cap-mmc-highspeed;
+	mmc-hs200-1_8v;
+	mmc-hs400-1_8v;
+	mmc-hs400-enhanced-strobe;
+};
+
+&sfc {
+	flash@0 {
+		bootph-pre-ram;
+		bootph-some-ram;
+	};
+};
+
+&usb_host0_ohci {
+	status = "disabled";
 };

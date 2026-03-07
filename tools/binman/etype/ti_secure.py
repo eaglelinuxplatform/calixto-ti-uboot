@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0+
-# Copyright (c) 2022 Texas Instruments Incorporated - https://www.ti.com/
+# Copyright (c) 2022-2023 Texas Instruments Incorporated - https://www.ti.com/
 # Written by Neha Malcom Francis <n-francis@ti.com>
 #
 
@@ -16,14 +16,18 @@ class Firewall():
     id: int
     region: int
     control : int
-    permissions: list[hex]
+    permissions: list
     start_address: str
     end_address: str
 
-    def __post_init__(self):
+    def ensure_props(self, etype, name):
+        missing_props = []
         for key, val in self.__dict__.items():
             if val is None:
-                raise Exception(f"{key} can't be None in firewall node")
+                missing_props += [key]
+
+        if len(missing_props):
+            etype.Raise(f"Subnode '{name}' is missing properties: {','.join(missing_props)}")
 
     def get_certificate(self) -> str:
         unique_identifier = f"{self.id}{self.region}"
@@ -49,10 +53,11 @@ class Entry_ti_secure(Entry_x509_cert):
         - keyfile: Filename of file containing key to sign binary with
         - sha: Hash function to be used for signing
         - auth-in-place: This is an integer field that contains two pieces
-          of information
-            Lower Byte - Remains 0x02 as per our use case
-            ( 0x02: Move the authenticated binary back to the header )
-            Upper Byte - The Host ID of the core owning the firewall
+          of information:
+
+            - Lower Byte - Remains 0x02 as per our use case
+              ( 0x02: Move the authenticated binary back to the header )
+            - Upper Byte - The Host ID of the core owning the firewall
 
     Output files:
         - input.<unique_name> - input file passed to openssl
@@ -65,29 +70,29 @@ class Entry_ti_secure(Entry_x509_cert):
     firewall nodes that describe the configurations of firewall that TIFS
     will be doing after reading the certificate.
 
-    The syntax of the firewall nodes are as such:
+    The syntax of the firewall nodes are as such::
 
-    firewall-257-0 {
-        id = <257>;           /* The ID of the firewall being configured */
-        region = <0>;         /* Region number to configure */
+        firewall-257-0 {
+            id = <257>;           /* The ID of the firewall being configured */
+            region = <0>;         /* Region number to configure */
 
-        control =             /* The control register */
-            <(FWCTRL_EN | FWCTRL_LOCK | FWCTRL_BG | FWCTRL_CACHE)>;
+            control =             /* The control register */
+                <(FWCTRL_EN | FWCTRL_LOCK | FWCTRL_BG | FWCTRL_CACHE)>;
 
-        permissions =         /* The permission registers */
-            <((FWPRIVID_ALL << FWPRIVID_SHIFT) |
-                        FWPERM_SECURE_PRIV_RWCD |
-                        FWPERM_SECURE_USER_RWCD |
-                        FWPERM_NON_SECURE_PRIV_RWCD |
-                        FWPERM_NON_SECURE_USER_RWCD)>;
+            permissions =         /* The permission registers */
+                <((FWPRIVID_ALL << FWPRIVID_SHIFT) |
+                            FWPERM_SECURE_PRIV_RWCD |
+                            FWPERM_SECURE_USER_RWCD |
+                            FWPERM_NON_SECURE_PRIV_RWCD |
+                            FWPERM_NON_SECURE_USER_RWCD)>;
 
-        /* More defines can be found in k3-security.h */
+            /* More defines can be found in k3-security.h */
 
-        start_address =        /* The Start Address of the firewall */
-            <0x0 0x0>;
-        end_address =          /* The End Address of the firewall */
-            <0xff 0xffffffff>;
-    };
+            start_address =        /* The Start Address of the firewall */
+                <0x0 0x0>;
+            end_address =          /* The End Address of the firewall */
+                <0xff 0xffffffff>;
+        };
 
 
     openssl signs the provided data, using the TI templated config file and
@@ -111,6 +116,7 @@ class Entry_ti_secure(Entry_x509_cert):
         if auth_in_place:
             self.firewall_cert_data['auth_in_place'] = auth_in_place
             self.ReadFirewallNode()
+        self.ReadLoadableCoreNode()
         self.sha = fdt_util.GetInt(self._node, 'sha', 512)
         self.req_dist_name = {'C': 'US',
                 'ST': 'TX',
@@ -119,6 +125,24 @@ class Entry_ti_secure(Entry_x509_cert):
                 'OU': 'Processors',
                 'CN': 'TI Support',
                 'emailAddress': 'support@ti.com'}
+        self.debug = fdt_util.GetBool(self._node, 'debug', False)
+
+    def ReadLoadableCoreNode(self):
+        boot_ext_props = ['proc_id', 'flags_set', 'flags_clr', 'reset_vector']
+        load_ext_props = ['dest_addr', 'auth_type']
+
+        self.boot_ext = self.ReadDictFromList(boot_ext_props)
+        self.load_ext = self.ReadDictFromList(load_ext_props)
+
+    def ReadDictFromList(self, props):
+        props_dict = dict.fromkeys(props)
+        for prop in props:
+            val = fdt_util.GetInt(self._node, prop)
+            if val is None:
+                return None
+            else:
+                props_dict[prop] = val
+        return props_dict
 
     def ReadFirewallNode(self):
         self.firewall_cert_data['certificate'] = ""
@@ -133,6 +157,7 @@ class Entry_ti_secure(Entry_x509_cert):
                      fdt_util.GetInt64(node, 'start_address'),
                      fdt_util.GetInt64(node, 'end_address'),
                 )
+                firewall.ensure_props(self, node.name)
                 self.firewall_cert_data['num_firewalls'] += 1
                 self.firewall_cert_data['certificate'] += firewall.get_certificate()
 
@@ -161,8 +186,6 @@ class Entry_ti_secure(Entry_x509_cert):
     def ProcessContents(self):
         # The blob may have changed due to WriteSymbols()
         data = self.data
-        if data is None:
-            data = self.GetCertificate(True)
         return self.ProcessContentsUpdate(data)
 
     def AddBintools(self, btools):

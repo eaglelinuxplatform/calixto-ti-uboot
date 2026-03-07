@@ -4,13 +4,14 @@
  * Written by Simon Glass <sjg@chromium.org>
  */
 
-#include <common.h>
 #include <command.h>
 #include <efi.h>
+#include <efi_api.h>
 #include <errno.h>
 #include <log.h>
 #include <malloc.h>
 #include <sort.h>
+#include <u-boot/uuid.h>
 #include <asm/global_data.h>
 
 DECLARE_GLOBAL_DATA_PTR;
@@ -273,8 +274,34 @@ done:
 	return ret ? CMD_RET_FAILURE : 0;
 }
 
+static int do_efi_tables(struct cmd_tbl *cmdtp, int flag, int argc,
+			 char *const argv[])
+{
+	struct efi_system_table *systab;
+
+	if (IS_ENABLED(CONFIG_EFI_APP)) {
+		systab = efi_get_sys_table();
+		if (!systab) {
+			printf("Cannot read system table\n");
+			return CMD_RET_FAILURE;
+		}
+	} else {
+		int size;
+		int ret;
+
+		ret = efi_info_get(EFIET_SYS_TABLE, (void **)&systab, &size);
+		if (ret)  /* this should not happen */
+			return CMD_RET_FAILURE;
+	}
+
+	efi_show_tables(systab);
+
+	return 0;
+}
+
 static struct cmd_tbl efi_commands[] = {
 	U_BOOT_CMD_MKENT(mem, 1, 1, do_efi_mem, "", ""),
+	U_BOOT_CMD_MKENT(tables, 1, 1, do_efi_tables, "", ""),
 };
 
 static int do_efi(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
@@ -298,5 +325,6 @@ static int do_efi(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 U_BOOT_CMD(
 	efi,     3,      1,      do_efi,
 	"EFI access",
-	"mem [all]        Dump memory information [include boot services]"
+	"mem [all]        Dump memory information [include boot services]\n"
+	"tables               Dump tables"
 );

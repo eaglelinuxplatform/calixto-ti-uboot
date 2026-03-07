@@ -3,7 +3,7 @@
  * Copyright 2019-2022 NXP
  */
 
-#include <common.h>
+#include <config.h>
 #include <display_options.h>
 #include <init.h>
 #include <malloc.h>
@@ -20,9 +20,6 @@
 #include <asm/arch-fsl-layerscape/fsl_icid.h>
 #include <i2c.h>
 #include <asm/arch/soc.h>
-#ifdef CONFIG_FSL_LS_PPA
-#include <asm/arch/ppa.h>
-#endif
 #include <fsl_immap.h>
 #include <netdev.h>
 
@@ -74,10 +71,6 @@ u32 get_lpuart_clk(void)
 
 int board_init(void)
 {
-#ifdef CONFIG_FSL_LS_PPA
-	ppa_init();
-#endif
-
 #ifndef CONFIG_SYS_EARLY_PCI_INIT
 	pci_init();
 #endif
@@ -130,7 +123,7 @@ int board_early_init_f(void)
 	u8 uart;
 #endif
 
-#if defined(CONFIG_SYS_I2C_EARLY_INIT) && defined(CONFIG_SPL_BUILD)
+#if defined(CONFIG_SYS_I2C_EARLY_INIT) && defined(CONFIG_XPL_BUILD)
 	i2c_early_init_f();
 #endif
 

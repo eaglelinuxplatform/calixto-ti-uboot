@@ -7,7 +7,7 @@
  * Author: Uri Mashiach <uri.mashiach@compulab.co.il>
  */
 
-#include <common.h>
+#include <config.h>
 #include <env.h>
 #include <init.h>
 #include <mmc.h>
@@ -86,7 +86,7 @@ int board_mmc_init(struct bd_info *bis)
 	int i, ret;
 	/*
 	 * According to the board_mmc_init() the following map is done:
-	 * (U-boot device node)    (Physical Port)
+	 * (U-Boot device node)    (Physical Port)
 	 * mmc0                    USDHC1
 	 * mmc2                    USDHC3 (eMMC)
 	 */

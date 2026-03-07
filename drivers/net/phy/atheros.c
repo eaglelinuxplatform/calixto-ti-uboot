@@ -6,7 +6,6 @@
  * author Andy Fleming
  * Copyright (c) 2019 Michael Walle <michael@walle.cc>
  */
-#include <common.h>
 #include <phy.h>
 #include <dm/device_compat.h>
 #include <linux/bitfield.h>
@@ -333,7 +332,7 @@ static int ar803x_config(struct phy_device *phydev)
 	return 0;
 }
 
-static struct phy_driver AR8021_driver =  {
+U_BOOT_PHY_DRIVER(AR8021) = {
 	.name = "AR8021",
 	.uid = AR8021_PHY_ID,
 	.mask = 0xfffffff0,
@@ -343,7 +342,7 @@ static struct phy_driver AR8021_driver =  {
 	.shutdown = genphy_shutdown,
 };
 
-static struct phy_driver AR8031_driver =  {
+U_BOOT_PHY_DRIVER(AR8031) = {
 	.name = "AR8031/AR8033",
 	.uid = AR8031_PHY_ID,
 	.mask = 0xffffffef,
@@ -353,7 +352,7 @@ static struct phy_driver AR8031_driver =  {
 	.shutdown = genphy_shutdown,
 };
 
-static struct phy_driver AR8035_driver =  {
+U_BOOT_PHY_DRIVER(AR8035) = {
 	.name = "AR8035",
 	.uid = AR8035_PHY_ID,
 	.mask = 0xffffffef,
@@ -362,12 +361,3 @@ static struct phy_driver AR8035_driver =  {
 	.startup = genphy_startup,
 	.shutdown = genphy_shutdown,
 };
-
-int phy_atheros_init(void)
-{
-	phy_register(&AR8021_driver);
-	phy_register(&AR8031_driver);
-	phy_register(&AR8035_driver);
-
-	return 0;
-}

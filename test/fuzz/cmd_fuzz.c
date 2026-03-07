@@ -5,7 +5,6 @@
  */
 
 #include <command.h>
-#include <common.h>
 #include <dm.h>
 #include <fuzzing_engine.h>
 #include <test/fuzz.h>
@@ -70,11 +69,8 @@ static int do_fuzz(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[]
 	return 1;
 }
 
-#ifdef CONFIG_SYS_LONGHELP
-static char fuzz_help_text[] =
-	"[fuzz-test-name] - execute the named fuzz test\n"
-	;
-#endif /* CONFIG_SYS_LONGHELP */
+U_BOOT_LONGHELP(fuzz,
+	"[fuzz-test-name] - execute the named fuzz test\n");
 
 U_BOOT_CMD(
 	fuzz, CONFIG_SYS_MAXARGS, 1, do_fuzz,

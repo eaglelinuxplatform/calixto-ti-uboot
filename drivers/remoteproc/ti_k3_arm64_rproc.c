@@ -2,12 +2,11 @@
 /*
  * Texas Instruments' K3 ARM64 Remoteproc driver
  *
- * Copyright (C) 2018 Texas Instruments Incorporated - http://www.ti.com/
+ * Copyright (C) 2018 Texas Instruments Incorporated - https://www.ti.com/
  *	Lokesh Vutla <lokeshvutla@ti.com>
  *
  */
 
-#include <common.h>
 #include <dm.h>
 #include <remoteproc.h>
 #include <errno.h>

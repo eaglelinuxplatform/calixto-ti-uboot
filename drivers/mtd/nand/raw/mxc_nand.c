@@ -5,7 +5,7 @@
  * Copyright 2009 Ilya Yanok, <yanok@emcraft.com>
  */
 
-#include <common.h>
+#include <config.h>
 #include <log.h>
 #include <nand.h>
 #include <linux/delay.h>
@@ -15,6 +15,7 @@
 #if defined(CONFIG_MX51) || defined(CONFIG_MX53)
 #include <asm/arch/imx-regs.h>
 #endif
+#include <linux/printk.h>
 #include "mxc_nand.h"
 
 #define DRIVER_NAME "mxc_nand"

@@ -1,10 +1,13 @@
 .. SPDX-License-Identifier: GPL-2.0+:
 
+.. index::
+   single: bootdev (command)
+
 bootdev command
 ===============
 
-Synopis
--------
+Synopsis
+--------
 
 ::
 
@@ -19,7 +22,7 @@ Description
 The `bootdev` command is used to manage bootdevs. It can list available
 bootdevs, select one and obtain information about it.
 
-See :doc:`../../develop/bootstd` for more information about bootdevs in general.
+See :doc:`/develop/bootstd/index` for more information about bootdevs in general.
 
 
 bootdev list
@@ -76,7 +79,7 @@ name is provided, all hunters are run.
 
 
 bootdev select
-~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~
 
 Use this to select a particular bootdev. You can select it by the sequence
 number or name, as shown in `bootdev list`.
@@ -89,7 +92,7 @@ unselected.
 
 
 bootdev info
-~~~~~~~~~~~~~~~
+~~~~~~~~~~~~
 
 This shows information on the current bootdev, with the format looking like
 this:

@@ -444,7 +444,7 @@ static int toc0_verify_cert_item(const uint8_t *buf, uint32_t len, RSA *fw_key,
 
 	/* If a digest was provided, compare it to the embedded digest. */
 	extension = &totalSequence->mainSequence.explicit3.extension;
-	if (digest && memcmp(&extension->digest, digest, SHA256_DIGEST_LENGTH)) {
+	if (memcmp(&extension->digest, digest, SHA256_DIGEST_LENGTH)) {
 		pr_err("Wrong firmware digest in certificate\n");
 		goto err;
 	}
@@ -757,7 +757,7 @@ static const char *toc0_item_name(uint32_t name)
 	return "(unknown)";
 }
 
-static void toc0_print_header(const void *buf)
+static void toc0_print_header(const void *buf, struct image_tool_params *params)
 {
 	const struct toc0_main_info *main_info = buf;
 	const struct toc0_item_info *item_info = (void *)(main_info + 1);

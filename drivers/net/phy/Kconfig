@@ -11,7 +11,7 @@ config MV88E6352_SWITCH
 
 menuconfig PHYLIB
 	bool "Ethernet PHY (physical media interface) support"
-	depends on NET
+	depends on NET || NET_LWIP
 	help
 	  Enable Ethernet PHY (physical media interface) support.
 
@@ -22,6 +22,15 @@ config PHY_ADDR_ENABLE
 	default y if ARCH_SUNXI
 	help
 	  Select this if you want to control which phy address is used
+
+config PHY_ANEG_TIMEOUT
+	int "PHY auto-negotiation timeout"
+	default 4000
+	help
+	  Value of PHY auto-negotiation timeout with the base being
+	  "decimal" and the unit being "millisecond". This can be
+	  overridden by the "phy_aneg_timeout" environment variable
+	  that has the same base (decimal) and unit (millisecond).
 
 if PHY_ADDR_ENABLE
 config PHY_ADDR
@@ -106,6 +115,9 @@ config PHY_AQUANTIA_FW_NAME
 config PHY_ATHEROS
 	bool "Atheros Ethernet PHYs support"
 
+config SPL_PHY_ATHEROS
+	bool "Atheros Ethernet PHYs support (SPL)"
+
 config PHY_BROADCOM
 	bool "Broadcom Ethernet PHYs support"
 
@@ -171,6 +183,11 @@ config PHY_LXT
 config PHY_MARVELL
 	bool "Marvell Ethernet PHYs support"
 
+config PHY_MARVELL_10G
+	bool "Marvell Alaska 10Gbit PHYs"
+	help
+	  Support for the Marvell Alaska MV88X3310 and compatible PHYs.
+
 config PHY_MESON_GXL
 	bool "Amlogic Meson GXL Internal PHY support"
 
@@ -211,6 +228,12 @@ config PHY_MICREL_KSZ8XXX
 	  KSZ8031, KSZ8051, KSZ8081, KSZ8895, KSZ886x, and KSZ8721.
 
 endif # PHY_MICREL
+
+config PHY_MOTORCOMM
+	tristate "Motorcomm PHYs"
+	help
+	  Enables support for Motorcomm network PHYs.
+	  Currently supports the YT8511 and YT8531 Gigabit Ethernet PHYs.
 
 config PHY_MSCC
 	bool "Microsemi Corp Ethernet PHYs support"
@@ -298,6 +321,10 @@ config PHY_TI_DP83867
 	---help---
 	  Adds support for the TI DP83867 1Gbit PHY.
 
+config SPL_PHY_TI_DP83867
+	select PHY_TI
+	bool "Texas Instruments Ethernet DP83867 PHY support (SPL)"
+
 config PHY_TI_DP83869
 	select PHY_TI
 	bool "Texas Instruments Ethernet DP83869 PHY support"
@@ -348,6 +375,7 @@ config PHY_FIXED
 
 config PHY_NCSI
 	bool "NC-SI based PHY"
+	depends on NET
 
 endif #PHYLIB
 

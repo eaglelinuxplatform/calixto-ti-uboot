@@ -22,16 +22,14 @@ static int dm_test_pwm_cmd(struct unit_test_state *uts)
 	ut_assertok(uclass_get_device(UCLASS_PWM, 0, &dev));
 	ut_assertnonnull(dev);
 
-	ut_assertok(console_record_reset_enable());
-
 	/* pwm <invert> <pwm_dev_num> <channel> <polarity> */
 	/* cros-ec-pwm doesn't support invert */
 	ut_asserteq(1, run_command("pwm invert 0 0 1", 0));
-	ut_assert_nextline("error(-38)")
+	ut_assert_nextline("error(-38)");
 	ut_assert_console_end();
 
 	ut_asserteq(1, run_command("pwm invert 0 0 0", 0));
-	ut_assert_nextline("error(-38)")
+	ut_assert_nextline("error(-38)");
 	ut_assert_console_end();
 
 	/* pwm <config> <pwm_dev_num> <channel> <period_ns> <duty_ns> */
@@ -48,8 +46,6 @@ static int dm_test_pwm_cmd(struct unit_test_state *uts)
 	/* sandbox-pwm */
 	ut_assertok(uclass_get_device(UCLASS_PWM, 1, &dev));
 	ut_assertnonnull(dev);
-
-	ut_assertok(console_record_reset_enable());
 
 	/* pwm <invert> <pwm_dev_num> <channel> <polarity> */
 	ut_assertok(run_command("pwm invert 1 0 1", 0));
@@ -71,5 +67,4 @@ static int dm_test_pwm_cmd(struct unit_test_state *uts)
 
 	return 0;
 }
-
-DM_TEST(dm_test_pwm_cmd, UT_TESTF_SCAN_PDATA | UT_TESTF_SCAN_FDT | UT_TESTF_CONSOLE_REC);
+DM_TEST(dm_test_pwm_cmd, UTF_SCAN_PDATA | UTF_SCAN_FDT | UTF_CONSOLE);

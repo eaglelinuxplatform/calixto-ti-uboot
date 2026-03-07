@@ -5,7 +5,6 @@
 
 #define LOG_CATEGORY UCLASS_RAM
 
-#include <common.h>
 #include <command.h>
 #include <console.h>
 #include <cli.h>
@@ -391,7 +390,7 @@ bool stm32mp1_ddr_interactive(void *priv,
 	if (next_step < 0)
 		return false;
 
-	if (step < 0 || step > ARRAY_SIZE(step_str)) {
+	if (step < 0 || step >= ARRAY_SIZE(step_str)) {
 		printf("** step %d ** INVALID\n", step);
 		return false;
 	}

@@ -3,10 +3,18 @@
  * Copyright 2020-2022 Toradex
  */
 
-&{/aliases} {
-	/* SDHCI instance order: eMMC, SD/MMC */
-	mmc0 = &usdhc3;
-	mmc1 = &usdhc1;
+#include "imx7s-u-boot.dtsi"
+
+/ {
+	aliases {
+		/* SDHCI instance order: eMMC, SD/MMC */
+		mmc0 = &usdhc3;
+		mmc1 = &usdhc1;
+	};
+
+	sysinfo {
+		compatible = "toradex,sysinfo";
+	};
 };
 
 &lcdif {
@@ -42,4 +50,8 @@
 			};
 		};
 	};
+};
+
+&wdog1 {
+	bootph-pre-ram;
 };

@@ -5,7 +5,6 @@
  */
 
 #include <clk.h>
-#include <common.h>
 #include <debug_uart.h>
 #include <dm.h>
 #include <errno.h>
@@ -153,7 +152,7 @@ static int zynq_serial_setbrg(struct udevice *dev, int baudrate)
 	return 0;
 }
 
-#if !defined(CONFIG_SPL_BUILD)
+#if !defined(CONFIG_XPL_BUILD)
 static int zynq_serial_setconfig(struct udevice *dev, uint serial_config)
 {
 	struct zynq_uart_plat *plat = dev_get_plat(dev);
@@ -259,9 +258,9 @@ static int zynq_serial_of_to_plat(struct udevice *dev)
 {
 	struct zynq_uart_plat *plat = dev_get_plat(dev);
 
-	plat->regs = (struct uart_zynq *)dev_read_addr(dev);
-	if (IS_ERR(plat->regs))
-		return PTR_ERR(plat->regs);
+	plat->regs = dev_read_addr_ptr(dev);
+	if (!plat->regs)
+		return -EINVAL;
 
 	return 0;
 }

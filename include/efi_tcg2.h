@@ -18,6 +18,7 @@
 
 #include <efi_api.h>
 #include <tpm-v2.h>
+#include <tpm_tcg2.h>
 
 /* TPMV2 only */
 #define TCG2_EVENT_LOG_FORMAT_TCG_2 0x00000002
@@ -25,14 +26,6 @@
 #define PE_COFF_IMAGE 0x0000000000000010
 
 #define EFI_TCG2_MAX_PCR_INDEX 23
-
-/* Algorithm Registry */
-#define EFI_TCG2_BOOT_HASH_ALG_SHA1    0x00000001
-#define EFI_TCG2_BOOT_HASH_ALG_SHA256  0x00000002
-#define EFI_TCG2_BOOT_HASH_ALG_SHA384  0x00000004
-#define EFI_TCG2_BOOT_HASH_ALG_SHA512  0x00000008
-#define EFI_TCG2_BOOT_HASH_ALG_SM3_256 0x00000010
-
 #define EFI_TCG2_FINAL_EVENTS_TABLE_VERSION 1
 
 #define TPM2_EVENT_LOG_SIZE CONFIG_EFI_TCG2_PROTOCOL_EVENTLOG_SIZE
@@ -129,50 +122,6 @@ struct efi_tcg2_boot_service_capability {
 #define BOOT_SERVICE_CAPABILITY_MIN \
 	offsetof(struct efi_tcg2_boot_service_capability, number_of_pcr_banks)
 
-#define TCG_EFI_SPEC_ID_EVENT_SIGNATURE_03 "Spec ID Event03"
-#define TCG_EFI_SPEC_ID_EVENT_SPEC_VERSION_MAJOR_TPM2 2
-#define TCG_EFI_SPEC_ID_EVENT_SPEC_VERSION_MINOR_TPM2 0
-#define TCG_EFI_SPEC_ID_EVENT_SPEC_VERSION_ERRATA_TPM2 2
-
-/**
- *  struct TCG_EfiSpecIdEventAlgorithmSize - hashing algorithm information
- *
- *  @algorithm_id:	algorithm defined in enum tpm2_algorithms
- *  @digest_size:	size of the algorithm
- */
-struct tcg_efi_spec_id_event_algorithm_size {
-	u16      algorithm_id;
-	u16      digest_size;
-} __packed;
-
-/**
- * struct TCG_EfiSpecIDEventStruct - content of the event log header
- *
- * @signature:			signature, set to Spec ID Event03
- * @platform_class:		class defined in TCG ACPI Specification
- *				Client  Common Header.
- * @spec_version_minor:		minor version
- * @spec_version_major:		major version
- * @spec_version_errata:	major version
- * @uintn_size:			size of the efi_uintn_t fields used in various
- *				data structures used in this specification.
- *				0x01 indicates u32  and 0x02  indicates u64
- * @number_of_algorithms:	hashing algorithms used in this event log
- * @digest_sizes:		array of number_of_algorithms pairs
- *				1st member defines the algorithm id
- *				2nd member defines the algorithm size
- */
-struct tcg_efi_spec_id_event {
-	u8 signature[16];
-	u32 platform_class;
-	u8 spec_version_minor;
-	u8 spec_version_major;
-	u8 spec_errata;
-	u8 uintn_size;
-	u32 number_of_algorithms;
-	struct tcg_efi_spec_id_event_algorithm_size digest_sizes[];
-} __packed;
-
 /**
  * struct tdEFI_TCG2_FINAL_EVENTS_TABLE - log entries after Get Event Log
  * @version:		version number for this structure
@@ -194,16 +143,14 @@ struct efi_tcg2_final_events_table {
  *				the variable.
  * @variable_data_length:	The size of the variable data.
  * @unicode_name:		The CHAR16 unicode name of the variable
- *				without NULL-terminator.
- * @variable_data:		The data parameter of the efi variable
- *				in the GetVariable() API.
+ *				without NULL-terminator followed by data.
  */
 struct efi_tcg2_uefi_variable_data {
 	efi_guid_t variable_name;
 	u64 unicode_name_length;
 	u64 variable_data_length;
-	u16 unicode_name[1];
-	u8 variable_data[1];
+	u16 unicode_name[];
+	// u8 variable_data[];
 };
 
 /**

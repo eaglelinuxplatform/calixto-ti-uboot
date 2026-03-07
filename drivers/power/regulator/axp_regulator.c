@@ -173,6 +173,49 @@ static const struct axp_regulator_plat axp22x_regulators[] = {
 	{ }
 };
 
+/*
+ * The "dcdc1" regulator has another range, beyond 1.54V up to 3.4V, in
+ * steps of 100mV. We cannot model this easily, but also don't need that,
+ * since it's typically only used for ~1.1V anyway, so just ignore it.
+ * Also the DCDC3 regulator is described wrongly in the (available) manual,
+ * experiments show that the split point is at 1200mV, as for DCDC1/2.
+ */
+static const struct axp_regulator_plat axp313_regulators[] = {
+	{ "dcdc1", 0x10, BIT(0), 0x13, 0x7f,  500, 1540,  10, 70 },
+	{ "dcdc2", 0x10, BIT(1), 0x14, 0x7f,  500, 1540,  10, 70 },
+	{ "dcdc3", 0x10, BIT(2), 0x15, 0x7f,  500, 1840,  10, 70 },
+	{ "aldo1", 0x10, BIT(3), 0x16, 0x1f,  500, 3500, 100, NA },
+	{ "dldo1", 0x10, BIT(4), 0x17, 0x1f,  500, 3500, 100, NA },
+	{ }
+};
+
+/*
+ * The "dcdc2" regulator has another range, beyond 1.54V up to 3.4V, in
+ * steps of 100mV. We cannot model this easily, but also don't need that,
+ * since it's typically only used for lower voltages anyway, so just ignore it.
+ */
+static const struct axp_regulator_plat axp717_regulators[] = {
+	{ "dcdc1", 0x80, BIT(0), 0x83, 0x7f,  500, 1540,  10, 70 },
+	{ "dcdc2", 0x80, BIT(1), 0x84, 0x7f,  500, 1540,  10, 70 },
+	{ "dcdc3", 0x80, BIT(2), 0x85, 0x7f,  500, 1840,  10, 70 },
+	{ "dcdc4", 0x80, BIT(3), 0x86, 0x7f, 1000, 3700, 100, NA },
+	{ "aldo1", 0x90, BIT(0), 0x93, 0x1f,  500, 3500, 100, NA },
+	{ "aldo2", 0x90, BIT(1), 0x94, 0x1f,  500, 3500, 100, NA },
+	{ "aldo3", 0x90, BIT(2), 0x95, 0x1f,  500, 3500, 100, NA },
+	{ "aldo4", 0x90, BIT(3), 0x96, 0x1f,  500, 3500, 100, NA },
+	{ "bldo1", 0x90, BIT(4), 0x97, 0x1f,  500, 3500, 100, NA },
+	{ "bldo2", 0x90, BIT(5), 0x98, 0x1f,  500, 3500, 100, NA },
+	{ "bldo3", 0x90, BIT(6), 0x99, 0x1f,  500, 3500, 100, NA },
+	{ "bldo4", 0x90, BIT(7), 0x9a, 0x1f,  500, 3500, 100, NA },
+	{ "cldo1", 0x91, BIT(0), 0x9b, 0x1f,  500, 3500, 100, NA },
+	{ "cldo2", 0x91, BIT(1), 0x9c, 0x1f,  500, 3500, 100, NA },
+	{ "cldo3", 0x91, BIT(2), 0x9d, 0x1f,  500, 3500, 100, NA },
+	{ "cldo4", 0x91, BIT(3), 0x9e, 0x1f,  500, 3500, 100, NA },
+	{"cpusldo",0x91, BIT(4), 0x9f, 0x1f,  500, 1400,  50, NA },
+	{" boost", 0x19, BIT(4), 0x1e, 0xf0, 4550, 5510,  64, NA },
+	{ }
+};
+
 static const struct axp_regulator_plat axp803_regulators[] = {
 	{ "dcdc1", 0x10, BIT(0), 0x20, 0x1f, 1600, 3400, 100, NA },
 	{ "dcdc2", 0x10, BIT(1), 0x21, 0x7f,  500, 1300,  10, 70 },
@@ -274,6 +317,8 @@ static const struct axp_regulator_plat *const axp_regulators[] = {
 	[AXP209_ID]	= axp20x_regulators,
 	[AXP221_ID]	= axp22x_regulators,
 	[AXP223_ID]	= axp22x_regulators,
+	[AXP313_ID]	= axp313_regulators,
+	[AXP717_ID]	= axp717_regulators,
 	[AXP803_ID]	= axp803_regulators,
 	[AXP806_ID]	= axp806_regulators,
 	[AXP809_ID]	= axp809_regulators,

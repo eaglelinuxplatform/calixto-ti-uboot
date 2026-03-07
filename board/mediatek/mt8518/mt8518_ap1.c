@@ -3,11 +3,12 @@
  * Copyright (C) 2019 MediaTek Inc.
  */
 
-#include <common.h>
+#include <config.h>
 #include <dm.h>
 #include <init.h>
 #include <log.h>
 #include <asm/global_data.h>
+#include <linux/printk.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 

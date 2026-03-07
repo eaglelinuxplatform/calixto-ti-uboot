@@ -4,11 +4,23 @@
  * and sandbox64 builds.
  */
 
+#include <config.h>
 #include <dt-bindings/input/input.h>
 
 #define USB_CLASS_HUB			9
 
 / {
+	reserved-memory {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		event_log: tcg_event_log {
+			no-map;
+			reg = <(CFG_SYS_SDRAM_SIZE - 0x2000) 0x2000>;
+		};
+	};
+
 	binman {
 	};
 
@@ -30,6 +42,12 @@
 	bootstd {
 		compatible = "u-boot,boot-std";
 		filename-prefixes = "./";
+
+		cedit-theme {
+			font-size = <30>;
+			menu-inset = <3>;
+			menuitem-gap-y = <1>;
+		};
 	};
 
 	buttons {
@@ -115,7 +133,7 @@
 			reg = <0x43>;
 			compatible = "sandbox-rtc";
 			sandbox,emul = <&emul0>;
-			bootph-all;
+			bootph-pre-ram;
 		};
 		sandbox_pmic: sandbox_pmic {
 			reg = <0x40>;
@@ -126,7 +144,7 @@
 		};
 
 		i2c_emul: emul {
-			bootph-all;
+			bootph-pre-ram;
 			reg = <0xff>;
 			compatible = "sandbox,i2c-emul-parent";
 			emul_eeprom: emul-eeprom {
@@ -136,7 +154,7 @@
 				#emul-cells = <0>;
 			};
 			emul0: emul0 {
-				bootph-all;
+				bootph-pre-ram;
 				compatible = "sandbox,i2c-rtc-emul";
 				#emul-cells = <0>;
 			};
@@ -213,23 +231,25 @@
 	};
 
 	pinctrl {
+		bootph-some-ram;
 		compatible = "sandbox,pinctrl";
 		status = "okay";
 
 		pinctrl_i2c0: i2c0 {
-			groups = "i2c";
-			function = "i2c";
+			groups = "I2C_UART";
+			function = "I2C";
 			bias-pull-up;
 		};
 
 		pinctrl_serial0: uart0 {
-			groups = "serial_a";
-			function = "serial";
+			bootph-some-ram;
+			groups = "I2C_UART";
+			function = "UART";
 		};
 
 		pinctrl_onewire0: onewire0 {
-			groups = "w1";
-			function = "w1";
+			pins = "P8";
+			function = "ONEWIRE";
 			bias-pull-up;
 		};
 	};
@@ -336,6 +356,7 @@
 
 	tpm2 {
 		compatible = "sandbox,tpm2";
+		memory-region = <&event_log>;
 	};
 
 	triangle {
@@ -400,17 +421,16 @@
 		#size-cells = <0x1>;
 		pm8916@0 {
 			compatible = "qcom,spmi-pmic";
-			reg = <0x0 0x1>;
+			reg = <0x0 0x0>;
 			#address-cells = <0x1>;
-			#size-cells = <0x1>;
+			#size-cells = <0x0>;
 
 			spmi_gpios: gpios@c000 {
 				compatible = "qcom,pm8916-gpio";
-				reg = <0xc000 0x400>;
+				reg = <0xc000>;
 				gpio-controller;
-				gpio-count = <4>;
+				gpio-ranges = <&spmi_gpios 0 0 4>;
 				#gpio-cells = <2>;
-				gpio-bank-name="spmi";
 			};
 		};
 	};
@@ -445,6 +465,15 @@
 	thermal {
 		compatible = "sandbox,thermal";
 	};
+
+	arm-ffa-emul {
+		compatible = "sandbox,arm-ffa-emul";
+
+		sandbox-arm-ffa {
+				compatible = "sandbox,arm-ffa";
+		};
+	};
+
 };
 
 &cros_ec {

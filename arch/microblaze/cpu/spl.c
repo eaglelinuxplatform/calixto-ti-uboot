@@ -2,16 +2,14 @@
 /*
  * (C) Copyright 2013 - 2014 Xilinx, Inc
  *
- * Michal Simek <michal.simek@xilinx.com>
+ * Michal Simek <michal.simek@amd.com>
  */
 
-#include <common.h>
 #include <command.h>
 #include <image.h>
 #include <log.h>
 #include <spl.h>
 #include <asm/io.h>
-#include <asm/u-boot.h>
 #include <linux/stringify.h>
 
 void board_boot_order(u32 *spl_boot_list)

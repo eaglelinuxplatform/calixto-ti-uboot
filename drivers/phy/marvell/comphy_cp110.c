@@ -3,7 +3,6 @@
  * Copyright (C) 2015-2016 Marvell International Ltd.
  */
 
-#include <common.h>
 #include <fdtdec.h>
 #include <log.h>
 #include <asm/global_data.h>
@@ -12,6 +11,8 @@
 #include <asm/arch/cpu.h>
 #include <asm/arch/soc.h>
 #include <linux/delay.h>
+#include <linux/errno.h>
+#include <linux/printk.h>
 
 #include "comphy_core.h"
 #include "sata.h"
@@ -25,7 +26,7 @@ DECLARE_GLOBAL_DATA_PTR;
 #define MV_SIP_COMPHY_PLL_LOCK	0x82000003
 #define MV_SIP_COMPHY_XFI_TRAIN	0x82000004
 
-/* Used to distinguish between different possible callers (U-boot/Linux) */
+/* Used to distinguish between different possible callers (U-Boot/Linux) */
 #define COMPHY_CALLER_UBOOT			(0x1 << 21)
 
 #define COMPHY_FW_MODE_FORMAT(mode)		((mode) << 12)

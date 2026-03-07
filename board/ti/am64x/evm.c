@@ -7,84 +7,74 @@
  *
  */
 
-#include <common.h>
+#include <efi_loader.h>
 #include <asm/io.h>
 #include <dm/uclass.h>
 #include <k3-ddrss.h>
-#include <net.h>
 #include <spl.h>
 #include <fdt_support.h>
-#include <asm/gpio.h>
 #include <asm/arch/hardware.h>
-#include <asm/arch/sys_proto.h>
 #include <env.h>
+#include <asm/arch/k3-ddr.h>
 
 #include "../common/board_detect.h"
+#include "../common/fdt_ops.h"
 
 #define board_is_am64x_gpevm() (board_ti_k3_is("AM64-GPEVM") || \
+				board_ti_k3_is("AM64-EVM") || \
 				board_ti_k3_is("AM64-HSEVM"))
 
 #define board_is_am64x_skevm() (board_ti_k3_is("AM64-SKEVM") || \
 				board_ti_k3_is("AM64B-SKEVM"))
 
-#define AM64X_MAX_DAUGHTER_CARDS	8
+DECLARE_GLOBAL_DATA_PTR;
 
-/* Daughter card presence detection signals */
-enum {
-	AM64X_EVM_HSE_BRD_DET,
-	AM64X_EVM_BRD_DET_COUNT,
+struct efi_fw_image fw_images[] = {
+	{
+		.image_type_id = AM64X_SK_TIBOOT3_IMAGE_GUID,
+		.fw_name = u"AM64X_SK_TIBOOT3",
+		.image_index = 1,
+	},
+	{
+		.image_type_id = AM64X_SK_SPL_IMAGE_GUID,
+		.fw_name = u"AM64X_SK_SPL",
+		.image_index = 2,
+	},
+	{
+		.image_type_id = AM64X_SK_UBOOT_IMAGE_GUID,
+		.fw_name = u"AM64X_SK_UBOOT",
+		.image_index = 3,
+	}
 };
 
-#define AM642_NAND_DTBO		"k3-am642-evm-nand.dtbo"
+struct efi_capsule_update_info update_info = {
+	.dfu_string = "sf 0:0=tiboot3.bin raw 0 100000;"
+	"tispl.bin raw 100000 200000;u-boot.img raw 300000 400000",
+	.num_images = ARRAY_SIZE(fw_images),
+	.images = fw_images,
+};
 
-static struct gpio_desc board_det_gpios[AM64X_EVM_BRD_DET_COUNT];
-
-/* Max number of MAC addresses that are parsed/processed per daughter card */
-#define DAUGHTER_CARD_NO_OF_MAC_ADDR	8
-
-DECLARE_GLOBAL_DATA_PTR;
+#if IS_ENABLED(CONFIG_SET_DFU_ALT_INFO)
+void set_dfu_alt_info(char *interface, char *devstr)
+{
+	if (IS_ENABLED(CONFIG_EFI_HAVE_CAPSULE_SUPPORT))
+		env_set("dfu_alt_info", update_info.dfu_string);
+}
+#endif
 
 int board_init(void)
 {
 	return 0;
 }
 
-int dram_init(void)
-{
-	s32 ret;
-
-	ret = fdtdec_setup_mem_size_base();
-	if (ret)
-		printf("Error setting up mem size and base. %d\n", ret);
-
-	return ret;
-}
-
-int dram_init_banksize(void)
-{
-	s32 ret;
-
-	ret = fdtdec_setup_memory_banksize();
-	if (ret)
-		printf("Error setting up memory banksize. %d\n", ret);
-
-	return ret;
-}
-
-static bool is_nand;
 #if defined(CONFIG_SPL_LOAD_FIT)
 int board_fit_config_name_match(const char *name)
 {
 	bool eeprom_read = board_ti_was_eeprom_read();
 
 	if (!eeprom_read || board_is_am64x_gpevm()) {
-		if (is_nand) {
-			if (!strcmp(name, "k3-am642-r5-evm") || !strcmp(name, "k3-am642-evm-nand"))
-				return 0;
-		} else {
-			if (!strcmp(name, "k3-am642-r5-evm") || !strcmp(name, "k3-am642-evm"))
-				return 0;
-		}
+		if (!strcmp(name, "k3-am642-r5-evm") || !strcmp(name, "k3-am642-evm"))
+			return 0;
 	} else if (board_is_am64x_skevm()) {
 		if (!strcmp(name, "k3-am642-r5-sk") || !strcmp(name, "k3-am642-sk"))
 			return 0;
@@ -94,7 +84,7 @@ int board_fit_config_name_match(const char *name)
 }
 #endif
 
-#if defined(CONFIG_SPL_BUILD)
+#if defined(CONFIG_XPL_BUILD)
 #if CONFIG_IS_ENABLED(USB_STORAGE)
 static int fixup_usb_boot(const void *fdt_blob)
 {
@@ -121,52 +111,14 @@ static int fixup_usb_boot(const void *fdt_blob)
 }
 #endif
 
-#if defined(CONFIG_K3_AM64_DDRSS)
-static void fixup_ddr_driver_for_ecc(struct spl_image_info *spl_image)
-{
-	struct udevice *dev;
-	int ret;
-
-	dram_init_banksize();
-
-	ret = uclass_get_device(UCLASS_RAM, 0, &dev);
-	if (ret)
-		panic("Cannot get RAM device for ddr size fixup: %d\n", ret);
-
-	ret = k3_ddrss_ddr_fdt_fixup(dev, spl_image->fdt_addr, gd->bd);
-	if (ret)
-		printf("Error fixing up ddr node for ECC use! %d\n", ret);
-}
-#else
-static void fixup_memory_node(struct spl_image_info *spl_image)
-{
-	u64 start[CONFIG_NR_DRAM_BANKS];
-	u64 size[CONFIG_NR_DRAM_BANKS];
-	int bank;
-	int ret;
-
-	dram_init();
-	dram_init_banksize();
-
-	for (bank = 0; bank < CONFIG_NR_DRAM_BANKS; bank++) {
-		start[bank] =  gd->bd->bi_dram[bank].start;
-		size[bank] = gd->bd->bi_dram[bank].size;
-	}
-
-	/* dram_init functions use SPL fdt, and we must fixup u-boot fdt */
-	ret = fdt_fixup_memory_banks(spl_image->fdt_addr, start, size, CONFIG_NR_DRAM_BANKS);
-	if (ret)
-		printf("Error fixing up memory node! %d\n", ret);
-}
-#endif
-
 void spl_perform_fixups(struct spl_image_info *spl_image)
 {
-#if defined(CONFIG_K3_AM64_DDRSS)
-	fixup_ddr_driver_for_ecc(spl_image);
-#else
-	fixup_memory_node(spl_image);
-#endif
+	if (IS_ENABLED(CONFIG_K3_DDRSS)) {
+		if (IS_ENABLED(CONFIG_K3_INLINE_ECC))
+			fixup_ddr_driver_for_ecc(spl_image);
+	} else {
+		fixup_memory_node(spl_image);
+	}
 
 #if CONFIG_IS_ENABLED(USB_STORAGE)
 	fixup_usb_boot(spl_image->fdt_addr);
@@ -205,6 +157,12 @@ int checkboard(void)
 }
 
 #ifdef CONFIG_BOARD_LATE_INIT
+static struct ti_fdt_map ti_am64_evm_fdt_map[] = {
+	{"am64x_gpevm", "ti/k3-am642-evm.dtb"},
+	{"am64x_skevm", "ti/k3-am642-sk.dtb"},
+	{ /* Sentinel. */ }
+};
+
 static void setup_board_eeprom_env(void)
 {
 	char *name = "am64x_gpevm";
@@ -222,6 +180,7 @@ static void setup_board_eeprom_env(void)
 
 invalid_eeprom:
 	set_board_info_env_am6(name);
+	ti_set_fdt_env(name, ti_am64_evm_fdt_map);
 }
 
 static void setup_serial(void)
@@ -246,167 +205,6 @@ static void setup_serial(void)
 #endif
 #endif
 
-static const char *k3_dtbo_list[AM64X_MAX_DAUGHTER_CARDS] = {NULL};
-
-static int init_daughtercard_det_gpio(char *gpio_name, struct gpio_desc *desc)
-{
-	int ret;
-
-	memset(desc, 0, sizeof(*desc));
-
-	ret = dm_gpio_lookup_name(gpio_name, desc);
-	if (ret < 0) {
-		pr_err("Failed to lookup gpio %s: %d\n", gpio_name, ret);
-		return ret;
-	}
-
-	/* Request GPIO, simply re-using the name as label */
-	ret = dm_gpio_request(desc, gpio_name);
-	if (ret < 0) {
-		pr_err("Failed to request gpio %s: %d\n", gpio_name, ret);
-		return ret;
-	}
-
-	return dm_gpio_set_dir_flags(desc, GPIOD_IS_IN);
-}
-
-static int probe_daughtercards(void)
-{
-	struct ti_am6_eeprom ep;
-	char mac_addr[DAUGHTER_CARD_NO_OF_MAC_ADDR][TI_EEPROM_HDR_ETH_ALEN];
-	u8 mac_addr_cnt;
-	char name_overlays[1024] = { 0 };
-	int i, nb_dtbos = 0;
-	int ret;
-
-	/*
-	 * Daughter card presence detection signal name to GPIO (via I2C I/O
-	 * expander @ address 0x38) name and EEPROM I2C address mapping.
-	 */
-	const struct {
-		char *gpio_name;
-		u8 i2c_addr;
-	} slot_map[AM64X_EVM_BRD_DET_COUNT] = {
-		{ "gpio@38_0", 0x52, },	/* AM64X_EVM_HSE_BRD_DET */
-	};
-
-	/* Declaration of daughtercards to probe */
-	const struct {
-		u8 slot_index;		/* Slot the card is installed */
-		char *card_name;	/* EEPROM-programmed card name */
-		char *dtbo_name;	/* Device tree overlay to apply */
-		u8 eth_offset;		/* ethXaddr MAC address index offset */
-	} cards[] = {
-		{
-			AM64X_EVM_HSE_BRD_DET,
-			"TMDS64DC02EVM",
-			AM642_NAND_DTBO,
-			0,
-		},
-	};
-
-	/*
-	 * Initialize GPIO used for daughtercard slot presence detection and
-	 * keep the resulting handles in local array for easier access.
-	 */
-	for (i = 0; i < AM64X_EVM_BRD_DET_COUNT; i++) {
-		ret = init_daughtercard_det_gpio(slot_map[i].gpio_name,
-						 &board_det_gpios[i]);
-		if (ret < 0)
-			return ret;
-	}
-
-	memset(k3_dtbo_list, 0, sizeof(k3_dtbo_list));
-	for (i = 0; i < ARRAY_SIZE(cards); i++) {
-		/* Obtain card-specific slot index and associated I2C address */
-		u8 slot_index = cards[i].slot_index;
-		u8 i2c_addr = slot_map[slot_index].i2c_addr;
-		const char *dtboname;
-
-		/*
-		 * The presence detection signal is active-low, hence skip
-		 * over this card slot if anything other than 0 is returned.
-		 */
-		ret = dm_gpio_get_value(&board_det_gpios[slot_index]);
-		if (ret < 0)
-			return ret;
-		else if (ret)
-			continue;
-
-		/* Get and parse the daughter card EEPROM record */
-		ret = ti_i2c_eeprom_am6_get(CONFIG_EEPROM_BUS_ADDRESS, i2c_addr,
-					    &ep,
-					    (char **)mac_addr,
-					    DAUGHTER_CARD_NO_OF_MAC_ADDR,
-					    &mac_addr_cnt);
-		if (ret) {
-			pr_err("Reading daughtercard EEPROM at 0x%02x failed %d\n",
-			       i2c_addr, ret);
-			/*
-			 * Even this is pretty serious let's just skip over
-			 * this particular daughtercard, rather than ending
-			 * the probing process altogether.
-			 */
-			continue;
-		}
-
-		/* Only process the parsed data if we found a match */
-		if (strncmp(ep.name, cards[i].card_name, sizeof(ep.name)))
-			continue;
-
-		printf("Detected: %s rev %s\n", ep.name, ep.version);
-
-#ifndef CONFIG_SPL_BUILD
-		int j;
-		/*
-		 * Populate any MAC addresses from daughtercard into the U-Boot
-		 * environment, starting with a card-specific offset so we can
-		 * have multiple cards contribute to the MAC pool in a well-
-		 * defined manner.
-		 */
-		for (j = 0; j < mac_addr_cnt; j++) {
-			if (!is_valid_ethaddr((u8 *)mac_addr[j]))
-				continue;
-
-			eth_env_set_enetaddr_by_index("eth",
-						      cards[i].eth_offset + j,
-						      (uchar *)mac_addr[j]);
-		}
-#endif
-
-		/* Skip if no overlays are to be added */
-		if (!strlen(cards[i].dtbo_name))
-			continue;
-
-		dtboname = cards[i].dtbo_name;
-		k3_dtbo_list[nb_dtbos++] = dtboname;
-
-		if (!strcmp(dtboname, AM642_NAND_DTBO))
-			is_nand = true;
-
-		/*
-		 * Make sure we are not running out of buffer space by checking
-		 * if we can fit the new overlay, a trailing space to be used
-		 * as a separator, plus the terminating zero.
-		 */
-		if (strlen(name_overlays) + strlen(dtboname) + 2 >
-		    sizeof(name_overlays))
-			return -ENOMEM;
-
-		/* Append to our list of overlays */
-		strcat(name_overlays, dtboname);
-		strcat(name_overlays, " ");
-	}
-
-#ifndef CONFIG_SPL_BUILD
-	/* Apply device tree overlay(s) to the U-Boot environment, if any */
-	if (strlen(name_overlays))
-		return env_set("name_overlays", name_overlays);
-#endif
-
-	return 0;
-}
-
 #ifdef CONFIG_BOARD_LATE_INIT
 int board_late_init(void)
 {
@@ -422,10 +220,6 @@ int board_late_init(void)
 		 * an index of 1.
 		 */
 		board_ti_am6_set_ethaddr(1, ep->mac_addr_cnt);
-
-		/* Check for and probe any plugged-in daughtercards */
-		if (board_is_am64x_gpevm())
-			probe_daughtercards();
 	}
 
 	return 0;
@@ -446,9 +240,5 @@ void spl_board_init(void)
 
 	/* Init DRAM size for R5/A53 SPL */
 	dram_init_banksize();
-
-	/* Check for and probe any plugged-in daughtercards */
-	if (board_is_am64x_gpevm())
-		probe_daughtercards();
 }
 #endif

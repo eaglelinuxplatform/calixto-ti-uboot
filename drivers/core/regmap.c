@@ -6,7 +6,6 @@
 
 #define LOG_CATEGORY	LOGC_DM
 
-#include <common.h>
 #include <dm.h>
 #include <errno.h>
 #include <log.h>
@@ -18,6 +17,7 @@
 #include <asm/io.h>
 #include <dm/of_addr.h>
 #include <dm/devres.h>
+#include <dm/util.h>
 #include <linux/ioport.h>
 #include <linux/compat.h>
 #include <linux/err.h>
@@ -79,7 +79,7 @@ static struct regmap *regmap_alloc(int count)
 }
 
 #if CONFIG_IS_ENABLED(OF_PLATDATA)
-int regmap_init_mem_plat(struct udevice *dev, fdt_val_t *reg, int count,
+int regmap_init_mem_plat(struct udevice *dev, void *reg, int size, int count,
 			 struct regmap **mapp)
 {
 	struct regmap_range *range;
@@ -89,9 +89,24 @@ int regmap_init_mem_plat(struct udevice *dev, fdt_val_t *reg, int count,
 	if (!map)
 		return -ENOMEM;
 
-	for (range = map->ranges; count > 0; reg += 2, range++, count--) {
-		range->start = *reg;
-		range->size = reg[1];
+	if (size == sizeof(fdt32_t)) {
+		fdt32_t *ptr = (fdt32_t *)reg;
+
+		for (range = map->ranges; count > 0;
+		     ptr += 2, range++, count--) {
+			range->start = *ptr;
+			range->size = ptr[1];
+		}
+	} else if (size == sizeof(fdt64_t)) {
+		fdt64_t *ptr = (fdt64_t *)reg;
+
+		for (range = map->ranges; count > 0;
+		     ptr += 2, range++, count--) {
+			range->start = *ptr;
+			range->size = ptr[1];
+		}
+	} else {
+		return -EINVAL;
 	}
 
 	*mapp = map;
@@ -125,8 +140,8 @@ static int init_range(ofnode node, struct regmap_range *range, int addr_len,
 		ret = of_address_to_resource(ofnode_to_np(node),
 					     index, &r);
 		if (ret) {
-			debug("%s: Could not read resource of range %d (ret = %d)\n",
-			      ofnode_get_name(node), index, ret);
+			dm_warn("%s: Could not read resource of range %d (ret = %d)\n",
+				ofnode_get_name(node), index, ret);
 			return ret;
 		}
 
@@ -140,8 +155,8 @@ static int init_range(ofnode node, struct regmap_range *range, int addr_len,
 							  addr_len, size_len,
 							  &sz, true);
 		if (range->start == FDT_ADDR_T_NONE) {
-			debug("%s: Could not read start of range %d\n",
-			      ofnode_get_name(node), index);
+			dm_warn("%s: Could not read start of range %d\n",
+				ofnode_get_name(node), index);
 			return -EINVAL;
 		}
 
@@ -153,21 +168,24 @@ static int init_range(ofnode node, struct regmap_range *range, int addr_len,
 
 int regmap_init_mem_index(ofnode node, struct regmap **mapp, int index)
 {
+	ofnode parent;
 	struct regmap *map;
 	int addr_len, size_len;
 	int ret;
 
-	addr_len = ofnode_read_simple_addr_cells(ofnode_get_parent(node));
+	parent = ofnode_get_parent(node);
+
+	addr_len = ofnode_read_simple_addr_cells(parent);
 	if (addr_len < 0) {
-		debug("%s: Error while reading the addr length (ret = %d)\n",
-		      ofnode_get_name(node), addr_len);
+		dm_warn("%s: Error while reading the addr length (ret = %d)\n",
+			ofnode_get_name(node), addr_len);
 		return addr_len;
 	}
 
-	size_len = ofnode_read_simple_size_cells(ofnode_get_parent(node));
+	size_len = ofnode_read_simple_size_cells(parent);
 	if (size_len < 0) {
-		debug("%s: Error while reading the size length: (ret = %d)\n",
-		      ofnode_get_name(node), size_len);
+		dm_warn("%s: Error while reading the size length: (ret = %d)\n",
+			ofnode_get_name(node), size_len);
 		return size_len;
 	}
 
@@ -226,6 +244,7 @@ int regmap_init_mem_range(ofnode node, ulong r_start, ulong r_size,
 
 int regmap_init_mem(ofnode node, struct regmap **mapp)
 {
+	ofnode parent;
 	struct regmap_range *range;
 	struct regmap *map;
 	int count;
@@ -234,38 +253,40 @@ int regmap_init_mem(ofnode node, struct regmap **mapp)
 	int index;
 	int ret;
 
-	addr_len = ofnode_read_simple_addr_cells(ofnode_get_parent(node));
+	parent = ofnode_get_parent(node);
+
+	addr_len = ofnode_read_simple_addr_cells(parent);
 	if (addr_len < 0) {
-		debug("%s: Error while reading the addr length (ret = %d)\n",
-		      ofnode_get_name(node), addr_len);
+		dm_warn("%s: Error while reading the addr length (ret = %d)\n",
+			ofnode_get_name(node), addr_len);
 		return addr_len;
 	}
 
-	size_len = ofnode_read_simple_size_cells(ofnode_get_parent(node));
+	size_len = ofnode_read_simple_size_cells(parent);
 	if (size_len < 0) {
-		debug("%s: Error while reading the size length: (ret = %d)\n",
-		      ofnode_get_name(node), size_len);
+		dm_warn("%s: Error while reading the size length: (ret = %d)\n",
+			ofnode_get_name(node), size_len);
 		return size_len;
 	}
 
 	both_len = addr_len + size_len;
 	if (!both_len) {
-		debug("%s: Both addr and size length are zero\n",
-		      ofnode_get_name(node));
+		dm_warn("%s: Both addr and size length are zero\n",
+			ofnode_get_name(node));
 		return -EINVAL;
 	}
 
 	len = ofnode_read_size(node, "reg");
 	if (len < 0) {
-		debug("%s: Error while reading reg size (ret = %d)\n",
-		      ofnode_get_name(node), len);
+		dm_warn("%s: Error while reading reg size (ret = %d)\n",
+			ofnode_get_name(node), len);
 		return len;
 	}
 	len /= sizeof(fdt32_t);
 	count = len / both_len;
 	if (!count) {
-		debug("%s: Not enough data in reg property\n",
-		      ofnode_get_name(node));
+		dm_warn("%s: Not enough data in reg property\n",
+			ofnode_get_name(node));
 		return -EINVAL;
 	}
 
@@ -410,8 +431,8 @@ int regmap_raw_read_range(struct regmap *map, uint range_num, uint offset,
 	void *ptr;
 
 	if (do_range_check() && range_num >= map->range_count) {
-		debug("%s: range index %d larger than range count\n",
-		      __func__, range_num);
+		dm_warn("%s: range index %d larger than range count\n",
+			__func__, range_num);
 		return -ERANGE;
 	}
 	range = &map->ranges[range_num];
@@ -419,7 +440,7 @@ int regmap_raw_read_range(struct regmap *map, uint range_num, uint offset,
 	offset <<= map->reg_offset_shift;
 	if (do_range_check() &&
 	    (offset + val_len > range->size || offset + val_len < offset)) {
-		debug("%s: offset/size combination invalid\n", __func__);
+		dm_warn("%s: offset/size combination invalid\n", __func__);
 		return -ERANGE;
 	}
 
@@ -441,7 +462,7 @@ int regmap_raw_read_range(struct regmap *map, uint range_num, uint offset,
 		break;
 #endif
 	default:
-		debug("%s: regmap size %zu unknown\n", __func__, val_len);
+		dm_warn("%s: regmap size %zu unknown\n", __func__, val_len);
 		return -EINVAL;
 	}
 
@@ -550,15 +571,15 @@ int regmap_raw_write_range(struct regmap *map, uint range_num, uint offset,
 	void *ptr;
 
 	if (range_num >= map->range_count) {
-		debug("%s: range index %d larger than range count\n",
-		      __func__, range_num);
+		dm_warn("%s: range index %d larger than range count\n",
+			__func__, range_num);
 		return -ERANGE;
 	}
 	range = &map->ranges[range_num];
 
 	offset <<= map->reg_offset_shift;
 	if (offset + val_len > range->size || offset + val_len < offset) {
-		debug("%s: offset/size combination invalid\n", __func__);
+		dm_warn("%s: offset/size combination invalid\n", __func__);
 		return -ERANGE;
 	}
 
@@ -580,7 +601,7 @@ int regmap_raw_write_range(struct regmap *map, uint range_num, uint offset,
 		break;
 #endif
 	default:
-		debug("%s: regmap size %zu unknown\n", __func__, val_len);
+		dm_warn("%s: regmap size %zu unknown\n", __func__, val_len);
 		return -EINVAL;
 	}
 
@@ -616,8 +637,8 @@ int regmap_write(struct regmap *map, uint offset, uint val)
 		u.v64 = val;
 		break;
 	default:
-		debug("%s: regmap size %zu unknown\n", __func__,
-		      (size_t)map->width);
+		dm_warn("%s: regmap size %zu unknown\n", __func__,
+			(size_t)map->width);
 		return -EINVAL;
 	}
 

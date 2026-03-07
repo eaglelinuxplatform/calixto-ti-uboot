@@ -1,7 +1,7 @@
 /*
  * mux.c
  *
- * Copyright (C) 2011 Texas Instruments Incorporated - http://www.ti.com/
+ * Copyright (C) 2011 Texas Instruments Incorporated - https://www.ti.com/
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as
@@ -13,7 +13,7 @@
  * GNU General Public License for more details.
  */
 
-#include <common.h>
+#include <config.h>
 #include <asm/arch/sys_proto.h>
 #include <asm/arch/hardware.h>
 #include <asm/arch/mux.h>
@@ -408,6 +408,9 @@ void enable_board_pin_mux(void)
 
 			if (subtype_id == 'L')
 				configure_module_pin_mux(spi0_pin_mux);
+		} else if (board_is_bbge()) {
+			/* Beaglebone Green Eco pinmux */
+			configure_module_pin_mux(rgmii1_pin_mux);
 		} else {
 			/* Beaglebone LT pinmux */
 			configure_module_pin_mux(mii1_pin_mux);

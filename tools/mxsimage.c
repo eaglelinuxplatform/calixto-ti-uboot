@@ -2058,7 +2058,6 @@ static int sb_verify_image_end(struct sb_image_ctx *ictx,
 	return ret;
 }
 
-
 static int sb_build_tree_from_img(struct sb_image_ctx *ictx)
 {
 	long filesize;
@@ -2239,7 +2238,7 @@ static int mxsimage_verify_header(unsigned char *ptr, int image_size,
 	return mxsimage_verify_print_header(params->imagefile, 1);
 }
 
-static void mxsimage_print_header(const void *hdr)
+static void mxsimage_print_header(const void *hdr, struct image_tool_params *params)
 {
 	if (imagefile)
 		mxsimage_verify_print_header(imagefile, 0);

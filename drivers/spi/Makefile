@@ -4,7 +4,7 @@
 # Wolfgang Denk, DENX Software Engineering, wd@denx.de.
 
 # There are many options which enable SPI, so make this library available
-ifdef CONFIG_$(SPL_TPL_)DM_SPI
+ifdef CONFIG_$(PHASE_)DM_SPI
 obj-y += spi-uclass.o
 obj-$(CONFIG_CADENCE_QSPI) += cadence_qspi.o cadence_qspi_apb.o
 obj-$(CONFIG_CADENCE_OSPI_VERSAL) += cadence_ospi_versal.o
@@ -25,10 +25,12 @@ obj-$(CONFIG_ATH79_SPI) += ath79_spi.o
 obj-$(CONFIG_ATMEL_QSPI) += atmel-quadspi.o
 obj-$(CONFIG_ATMEL_SPI) += atmel_spi.o
 obj-$(CONFIG_BCM63XX_HSSPI) += bcm63xx_hsspi.o
+obj-$(CONFIG_BCMBCA_HSSPI) += bcmbca_hsspi.o
 obj-$(CONFIG_BCM63XX_SPI) += bcm63xx_spi.o
 obj-$(CONFIG_BCMSTB_SPI) += bcmstb_spi.o
 obj-$(CONFIG_CF_SPI) += cf_spi.o
 obj-$(CONFIG_CORTINA_SFLASH) += ca_sflash.o
+obj-$(CONFIG_CV1800B_SPIF) += cv1800b_spif.o
 obj-$(CONFIG_DAVINCI_SPI) += davinci_spi.o
 obj-$(CONFIG_DESIGNWARE_SPI) += designware_spi.o
 obj-$(CONFIG_EXYNOS_SPI) += exynos_spi.o
@@ -40,6 +42,7 @@ obj-$(CONFIG_ICH_SPI) +=  ich.o
 obj-$(CONFIG_IPROC_QSPI) += iproc_qspi.o
 obj-$(CONFIG_KIRKWOOD_SPI) += kirkwood_spi.o
 obj-$(CONFIG_MESON_SPIFC) += meson_spifc.o
+obj-$(CONFIG_MESON_SPIFC_A1) += meson_spifc_a1.o
 obj-$(CONFIG_MICROCHIP_COREQSPI) += microchip_coreqspi.o
 obj-$(CONFIG_MPC8XX_SPI) += mpc8xx_spi.o
 obj-$(CONFIG_MPC8XXX_SPI) += mpc8xxx_spi.o

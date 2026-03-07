@@ -18,7 +18,7 @@
 #define CFG_SYS_INIT_RAM_ADDR	0xFFE00000
 /* SPL memory allocation configuration, this is for FAT implementation */
 #define CFG_SYS_INIT_RAM_SIZE	(SOCFPGA_PHYS_OCRAM_SIZE - \
-					 CONFIG_SYS_SPL_MALLOC_SIZE)
+					 CONFIG_SPL_SYS_MALLOC_SIZE)
 #endif
 
 /*
@@ -117,7 +117,7 @@
 /* SPL NAND boot support */
 
 /* Extra Environment */
-#ifndef CONFIG_SPL_BUILD
+#ifndef CONFIG_XPL_BUILD
 
 #ifdef CONFIG_CMD_DHCP
 #define BOOT_TARGET_DEVICES_DHCP(func) func(DHCP, dhcp, na)

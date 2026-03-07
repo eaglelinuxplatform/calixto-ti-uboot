@@ -28,7 +28,6 @@
  * iPXE uses the simple file protocol to load Grub or the Linux Kernel.
  */
 
-#include <common.h>
 #include <blk.h>
 #include <dm.h>
 #include <efi_driver.h>
@@ -124,10 +123,8 @@ efi_bl_create_block_device(efi_handle_t handle, void *interface)
 	struct efi_block_io *io = interface;
 	struct efi_blk_plat *plat;
 
-	devnum = blk_find_max_devnum(UCLASS_EFI_LOADER);
-	if (devnum == -ENODEV)
-		devnum = 0;
-	else if (devnum < 0)
+	devnum = blk_next_free_devnum(UCLASS_EFI_LOADER);
+	if (devnum < 0)
 		return EFI_OUT_OF_RESOURCES;
 
 	name = calloc(1, 18); /* strlen("efiblk#2147483648") + 1 */
@@ -136,15 +133,13 @@ efi_bl_create_block_device(efi_handle_t handle, void *interface)
 	sprintf(name, "efiblk#%d", devnum);
 
 	/* Create driver model udevice for the EFI block io device */
-	if (blk_create_device(parent, "efi_blk", name, UCLASS_EFI_LOADER,
-			      devnum, io->media->block_size,
-			      (lbaint_t)io->media->last_block, &bdev)) {
+	if (blk_create_devicef(parent, "efi_blk", name, UCLASS_EFI_LOADER,
+			       devnum, io->media->block_size,
+			       (lbaint_t)io->media->last_block, &bdev)) {
 		ret = EFI_OUT_OF_RESOURCES;
 		free(name);
 		goto err;
 	}
-	/* Set the DM_FLAG_NAME_ALLOCED flag to avoid a memory leak */
-	device_set_name_alloced(bdev);
 
 	plat = dev_get_plat(bdev);
 	plat->handle = handle;

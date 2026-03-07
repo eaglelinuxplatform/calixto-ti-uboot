@@ -2,7 +2,7 @@
 /*
  * Configuration for Xilinx Versal
  * (C) Copyright 2016 - 2018 Xilinx, Inc.
- * Michal Simek <michal.simek@xilinx.com>
+ * Michal Simek <michal.simek@amd.com>
  *
  * Based on Configuration for Xilinx ZynqMP
  */
@@ -28,9 +28,6 @@
 #endif
 
 /* Ethernet driver */
-#if defined(CONFIG_ZYNQ_GEM)
-# define PHY_ANEG_TIMEOUT       20000
-#endif
 
 #define ENV_MEM_LAYOUT_SETTINGS \
 	"fdt_addr_r=0x40000000\0" \
@@ -40,14 +37,21 @@
 	"kernel_size_r=0x10000000\0" \
 	"kernel_comp_addr_r=0x30000000\0" \
 	"kernel_comp_size=0x3C00000\0" \
-	"scriptaddr=0x20000000\0" \
 	"ramdisk_addr_r=0x02100000\0" \
 	"script_size_f=0x80000\0"
+
+#if defined(CONFIG_DISTRO_DEFAULTS)
 
 #if defined(CONFIG_MMC_SDHCI_ZYNQ)
 # define BOOT_TARGET_DEVICES_MMC(func)	func(MMC, mmc, 0) func(MMC, mmc, 1)
 #else
 # define BOOT_TARGET_DEVICES_MMC(func)
+#endif
+
+#if defined(CONFIG_USB_STORAGE)
+# define BOOT_TARGET_DEVICES_USB(func)	func(USB, usb, 0)
+#else
+# define BOOT_TARGET_DEVICES_USB(func)
 #endif
 
 #if defined(CONFIG_CMD_PXE) && defined(CONFIG_CMD_DHCP)
@@ -87,7 +91,7 @@
 	"jtag "
 
 #define BOOT_TARGET_DEVICES_USB_DFU(func) \
-	func(USB_DFU, usb_dfu, 0) func(USB_DFU, usb_dfu, 1)
+	func(USB_DFU, usb_dfu, 0)
 
 #define BOOTENV_DEV_USB_DFU(devtypeu, devtypel, instance) \
 	"bootcmd_" #devtypel #instance "=setenv dfu_alt_info boot.scr ram " \
@@ -101,7 +105,7 @@
 	""
 
 #define BOOT_TARGET_DEVICES_USB_THOR(func) \
-	func(USB_THOR, usb_thor, 0) func(USB_THOR, usb_thor, 1)
+	func(USB_THOR, usb_thor, 0)
 
 #define BOOTENV_DEV_USB_THOR(devtypeu, devtypel, instance) \
 	"bootcmd_" #devtypel #instance "=setenv dfu_alt_info boot.scr ram " \
@@ -120,10 +124,15 @@
 	BOOT_TARGET_DEVICES_XSPI(func) \
 	BOOT_TARGET_DEVICES_USB_DFU(func) \
 	BOOT_TARGET_DEVICES_USB_THOR(func) \
+	BOOT_TARGET_DEVICES_USB(func) \
 	BOOT_TARGET_DEVICES_PXE(func) \
 	BOOT_TARGET_DEVICES_DHCP(func)
 
 #include <config_distro_bootcmd.h>
+
+#else /* CONFIG_DISTRO_DEFAULTS */
+# define BOOTENV
+#endif /* CONFIG_DISTRO_DEFAULTS */
 
 /* Initial environment variables */
 #ifndef CFG_EXTRA_ENV_SETTINGS

@@ -10,13 +10,12 @@
  * (C) Copyright 2002 Scott McNutt <smcnutt@artesyncp.com>
  */
 
-#include <common.h>
+#include <config.h>
 #include <clock_legacy.h>
 #include <env.h>
-#include <env_internal.h>
 #include <init.h>
 #include <pci.h>
-#include <uuid.h>
+#include <u-boot/uuid.h>
 #include <asm/global_data.h>
 #include <asm/processor.h>
 #include <asm/immap_85xx.h>
@@ -221,20 +220,4 @@ int ft_board_setup(void *blob, struct bd_info *bd)
 int get_serial_clock(void)
 {
 	return 333333330;
-}
-
-enum env_location env_get_location(enum env_operation op, int prio)
-{
-	if (op == ENVOP_SAVE || op == ENVOP_ERASE)
-		return ENVL_FLASH;
-
-	switch (prio) {
-	case 0:
-		return ENVL_NOWHERE;
-	case 1:
-		return ENVL_FLASH;
-	default:
-		return ENVL_UNKNOWN;
-	}
-	return ENVL_UNKNOWN;
 }

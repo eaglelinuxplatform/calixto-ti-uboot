@@ -2,10 +2,9 @@
 /*
  * TI K3 AM65x NAVSS Ring accelerator Manager (RA) subsystem driver
  *
- * Copyright (C) 2018 Texas Instruments Incorporated - http://www.ti.com
+ * Copyright (C) 2018 Texas Instruments Incorporated - https://www.ti.com
  */
 
-#include <common.h>
 #include <cpu_func.h>
 #include <log.h>
 #include <asm/cache.h>
@@ -21,6 +20,7 @@
 #include <linux/compat.h>
 #include <linux/dma-mapping.h>
 #include <linux/err.h>
+#include <linux/printk.h>
 #include <linux/soc/ti/k3-navss-ringacc.h>
 #include <linux/soc/ti/ti_sci_protocol.h>
 #include <linux/soc/ti/cppi5.h>
@@ -79,7 +79,6 @@ struct k3_nav_ring_rt_regs {
 #define K3_DMARING_RING_RT_OCC_TDOWN_COMPLETE		BIT(31)
 #define K3_DMARING_RING_RT_DB_ENTRY_MASK		GENMASK(7, 0)
 #define K3_DMARING_RING_RT_DB_TDOWN_ACK		BIT(31)
-
 
 /**
  * struct k3_nav_ring_fifo_regs -  The Ring Accelerator Queues Registers region
@@ -334,7 +333,7 @@ static void k3_ringacc_ring_reset_sci(struct k3_nav_ring *ring)
 	struct k3_nav_ringacc *ringacc = ring->parent;
 	int ret;
 
-	if (IS_ENABLED(CONFIG_K3_DM_FW))
+	if (IS_ENABLED(CONFIG_K3_DM_FW) || !ringacc->tisci)
 		return k3_ringacc_ring_reset_raw(ring);
 
 	ret = ringacc->tisci_ring_ops->config(
@@ -355,7 +354,8 @@ static void k3_ringacc_ring_reset_sci(struct k3_nav_ring *ring)
 
 void k3_nav_ringacc_ring_reset(struct k3_nav_ring *ring)
 {
-	if (!ring || !(ring->flags & KNAV_RING_FLAG_BUSY))
+	if (!ring || !(ring->flags & KNAV_RING_FLAG_BUSY) ||
+	    (ring->flags & K3_NAV_RING_FLAG_REVERSE))
 		return;
 
 	memset(&ring->state, 0, sizeof(ring->state));
@@ -369,7 +369,7 @@ static void k3_ringacc_ring_reconfig_qmode_sci(struct k3_nav_ring *ring,
 	struct k3_nav_ringacc *ringacc = ring->parent;
 	int ret;
 
-	if (IS_ENABLED(CONFIG_K3_DM_FW))
+	if (IS_ENABLED(CONFIG_K3_DM_FW) || !ringacc->tisci)
 		return k3_ringacc_ring_reconfig_qmode_raw(ring, mode);
 
 	ret = ringacc->tisci_ring_ops->config(
@@ -417,7 +417,7 @@ void k3_nav_ringacc_ring_reset_dma(struct k3_nav_ring *ring, u32 occ)
 			k3_ringacc_ring_reconfig_qmode_sci(
 					ring, K3_NAV_RINGACC_RING_MODE_RING);
 		/*
-		 * 4. Ring the doorbell 2**22 – ringOcc times.
+		 * 4. Ring the doorbell 2**22 - ringOcc times.
 		 * This will wrap the internal UDMAP ring state occupancy
 		 * counter (which is 21-bits wide) to 0.
 		 */
@@ -452,7 +452,7 @@ static void k3_ringacc_ring_free_sci(struct k3_nav_ring *ring)
 	struct k3_nav_ringacc *ringacc = ring->parent;
 	int ret;
 
-	if (IS_ENABLED(CONFIG_K3_DM_FW))
+	if (IS_ENABLED(CONFIG_K3_DM_FW) || !ringacc->tisci)
 		return k3_ringacc_ring_free_raw(ring);
 
 	ret = ringacc->tisci_ring_ops->config(
@@ -529,8 +529,10 @@ static int k3_nav_ringacc_ring_cfg_sci(struct k3_nav_ring *ring)
 	u32 ring_idx;
 	int ret;
 
-	if (!ringacc->tisci)
-		return -EINVAL;
+	if (!ringacc->tisci) {
+		ret = -EINVAL;
+		goto raw_cfg;
+	}
 
 	ring_idx = ring->ring_id;
 	ret = ringacc->tisci_ring_ops->config(
@@ -550,15 +552,18 @@ static int k3_nav_ringacc_ring_cfg_sci(struct k3_nav_ring *ring)
 		return ret;
 	}
 
+raw_cfg:
 	/*
 	 * Above TI SCI call handles firewall configuration, cfg
 	 * register configuration still has to be done locally in
 	 * absence of RM services.
 	 */
-	if (IS_ENABLED(CONFIG_K3_DM_FW))
+	if (IS_ENABLED(CONFIG_K3_DM_FW) || !ringacc->tisci) {
 		k3_nav_ringacc_ring_cfg_raw(ring);
+		return 0;
+	}
 
-	return 0;
+	return ret;
 }
 
 static int k3_dmaring_ring_cfg(struct k3_nav_ring *ring, struct k3_nav_ring_cfg *cfg)
@@ -986,10 +991,10 @@ static int k3_nav_ringacc_init(struct udevice *dev, struct k3_nav_ringacc *ringa
 	if (!base_cfg)
 		return -EINVAL;
 
-	base_rt = (uint32_t *)devfdt_get_addr_name(dev, "rt");
+	base_rt = dev_read_addr_name_ptr(dev, "rt");
 	pr_debug("rt %p\n", base_rt);
-	if (IS_ERR(base_rt))
-		return PTR_ERR(base_rt);
+	if (!base_rt)
+		return -EINVAL;
 
 	ringacc->rings = devm_kzalloc(dev,
 				      sizeof(*ringacc->rings) *
@@ -1044,13 +1049,23 @@ struct k3_nav_ringacc *k3_ringacc_dmarings_init(struct udevice *dev,
 	ringacc->tisci = data->tisci;
 	ringacc->tisci_dev_id = data->tisci_dev_id;
 
-	base_rt = (uint32_t *)devfdt_get_addr_name(dev, "ringrt");
-	if (IS_ERR(base_rt))
-		return base_rt;
+	base_rt = dev_read_addr_name_ptr(dev, "ringrt");
+	if (!base_rt)
+		return ERR_PTR(-EINVAL);
 
-	base_cfg = (uint32_t *)devfdt_get_addr_name(dev, "cfg");
-	if (IS_ERR(base_cfg))
-		return base_cfg;
+	/*
+	 * Since register property is defined as "ring" for PKTDMA and
+	 * "cfg" for UDMA, configure base address of ring configuration
+	 * register accordingly.
+	 */
+	base_cfg = dev_remap_addr_name(dev, "ring");
+	pr_debug("ring %p\n", base_cfg);
+	if (!base_cfg) {
+		base_cfg = dev_remap_addr_name(dev, "cfg");
+		pr_debug("cfg %p\n", base_cfg);
+		if (!base_cfg)
+			base_cfg = base_rt;
+	}
 
 	ringacc->rings = devm_kzalloc(dev,
 				      sizeof(*ringacc->rings) *
@@ -1066,10 +1081,14 @@ struct k3_nav_ringacc *k3_ringacc_dmarings_init(struct udevice *dev,
 	for (i = 0; i < ringacc->num_rings; i++) {
 		struct k3_nav_ring *ring = &ringacc->rings[i];
 
-		ring->cfg = base_cfg + KNAV_RINGACC_CFG_REGS_STEP * i;
 		ring->rt = base_rt + K3_DMARING_RING_RT_REGS_STEP * i;
 		ring->parent = ringacc;
 		ring->ring_id = i;
+
+		if (base_cfg == base_rt)
+			ring->cfg = base_rt + K3_DMARING_RING_RT_REGS_STEP * i;
+		else
+			ring->cfg = base_cfg + KNAV_RINGACC_CFG_REGS_STEP * i;
 
 		ring = &ringacc->rings[ringacc->num_rings + i];
 		ring->rt = base_rt + K3_DMARING_RING_RT_REGS_STEP * i +

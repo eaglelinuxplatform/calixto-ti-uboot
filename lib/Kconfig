@@ -16,7 +16,7 @@ config SYS_NUM_ADDR_MAP
 	  Sets the number of entries in the virtual-physical mapping table.
 
 config SYS_TIMER_COUNTS_DOWN
-	bool "System timer counts down rathe than up"
+	bool "System timer counts down rather than up"
 
 config PHYSMEM
 	bool "Access to physical memory region (> 4G)"
@@ -73,6 +73,18 @@ config HAVE_PRIVATE_LIBGCC
 
 config LIB_UUID
 	bool
+	select SHA1
+
+config RANDOM_UUID
+	bool "GPT Random UUID generation"
+	select LIB_UUID
+	help
+	  Enable the generation of partitions with random UUIDs if none
+	  are provided.
+
+config SPL_LIB_UUID
+	depends on SPL
+	bool
 
 config SEMIHOSTING
 	bool "Support semihosting"
@@ -89,7 +101,7 @@ config SEMIHOSTING
 
 config SEMIHOSTING_FALLBACK
 	bool "Recover gracefully when semihosting fails"
-	depends on SEMIHOSTING && (ARM64 || RISCV)
+	depends on SEMIHOSTING
 	default y
 	help
 	  Normally, if U-Boot makes a semihosting call and no debugger is
@@ -112,7 +124,7 @@ config SPL_SEMIHOSTING
 
 config SPL_SEMIHOSTING_FALLBACK
 	bool "Recover gracefully when semihosting fails in SPL"
-	depends on SPL_SEMIHOSTING && (ARM64 || RISCV)
+	depends on SPL_SEMIHOSTING
 	select ARMV8_SPL_EXCEPTION_VECTORS if ARM64
 	default y
 	help
@@ -277,15 +289,47 @@ config SUPPORT_ACPI
 	  U-Boot can generate these tables and pass them to the Operating
 	  System.
 
+config ACPI
+	bool "Enable support for ACPI libraries"
+	depends on SUPPORT_ACPI
+	help
+	  Provides library functions for dealing with ACPI tables. This does
+	  not necessarily include generation of tables
+	  (see GENERATE_ACPI_TABLE), but allows for tables to be located.
+
+config SPL_ACPI
+	bool "Enable support for ACPI libraries in SPL"
+	depends on SPL && SUPPORT_ACPI
+	help
+	  Provides library functions for dealing with ACPI tables in SPL. This
+	  does not necessarily include generation of tables
+	  (see GENERATE_ACPI_TABLE), but allows for tables to be located.
+
 config GENERATE_ACPI_TABLE
 	bool "Generate an ACPI (Advanced Configuration and Power Interface) table"
-	depends on SUPPORT_ACPI
+	depends on ACPI
 	select QFW if QEMU
 	help
 	  The Advanced Configuration and Power Interface (ACPI) specification
 	  provides an open standard for device configuration and management
 	  by the operating system. It defines platform-independent interfaces
 	  for configuration and power management monitoring.
+
+config ACPI_PARKING_PROTOCOL
+	bool "Support ACPI parking protocol method"
+	depends on GENERATE_ACPI_TABLE
+	depends on ARMV8_MULTIENTRY
+	depends on BLOBLIST_TABLES
+	default y if !SEC_FIRMWARE_ARMV8_PSCI && !ARMV8_PSCI
+	help
+	  Say Y here to support "ACPI parking protocol" enable method
+	  for booting Linux.
+
+	  To use this feature, you must do:
+	    - Bring secondary CPUs into U-Boot proper in a board-specific
+	      manner.  This must be done *after* relocation.  Otherwise, the
+	      secondary CPUs will spin in unprotected memory-area because the
+	      master CPU protects the relocated spin code.
 
 config SPL_TINY_MEMSET
 	bool "Use a very small memset() in SPL"
@@ -321,7 +365,7 @@ config TRACE
 	  Enables function tracing within U-Boot. This allows recording of call
 	  traces including timing information. The command can write data to
 	  memory for exporting for analysis (e.g. using bootchart).
-	  See doc/README.trace for full details.
+	  See doc/develop/trace.rst for full details.
 
 config TRACE_BUFFER_SIZE
 	hex "Size of trace buffer in U-Boot"
@@ -376,7 +420,7 @@ config TRACE_EARLY_CALL_DEPTH_LIMIT
 config TRACE_EARLY_ADDR
 	hex "Address of early trace buffer in U-Boot"
 	depends on TRACE_EARLY
-	default 0x00100000
+	default 0x00200000
 	help
 	  Sets the address of the early trace buffer in U-Boot. This memory
 	  must be accessible before relocation.
@@ -389,7 +433,11 @@ config TRACE_EARLY_ADDR
 config CIRCBUF
 	bool "Enable circular buffer support"
 
-source lib/dhry/Kconfig
+source "lib/dhry/Kconfig"
+
+menu "Alternative crypto libraries"
+source lib/mbedtls/Kconfig
+endmenu
 
 menu "Security support"
 
@@ -402,15 +450,16 @@ config AES
 	  supported by the algorithm but only a 128-bit key is supported at
 	  present.
 
-source lib/ecdsa/Kconfig
-source lib/rsa/Kconfig
-source lib/crypto/Kconfig
-source lib/crypt/Kconfig
+source "lib/ecdsa/Kconfig"
+source "lib/rsa/Kconfig"
+source "lib/crypto/Kconfig"
+source "lib/crypt/Kconfig"
 
 config TPM
 	bool "Trusted Platform Module (TPM) Support"
 	depends on DM
 	imply DM_RNG
+	select SHA1
 	help
 	  This enables support for TPMs which can be used to provide security
 	  features for your board. The TPM can be connected via LPC or I2C
@@ -418,6 +467,9 @@ config TPM
 	  command to interactive the TPM. Driver model support is provided
 	  for the low-level TPM interface, but only one TPM is supported at
 	  a time by the TPM library.
+	  For size reasons only SHA1 is selected which is supported on TPM1.2.
+	  If you want a fully functional TPM enable all hashing algorithms.
+	  If you enabled measured boot all hashing algorithms are selected.
 
 config SPL_TPM
 	bool "Trusted Platform Module (TPM) Support in SPL"
@@ -465,6 +517,24 @@ config LIBAVB
 	  to assure the end user of the integrity of the software running on a
 	  device. Introduces such features as boot chain of trust, rollback
 	  protection etc.
+
+config AVB_ROOT_OF_TRUST
+	bool "Android Verified Boot Root of Trust support"
+	depends on AVB_VERIFY
+	depends on OPTEE_TA_AVB
+	help
+	  This enables Root of Trust functionality for Android Verified Boot 2.0.
+	  Root of Trust provides cryptographic evidence of the device's boot state
+	  and verified boot chain to Android's KeyMint service for key attestation.
+
+	  When enabled, the bootloader will collect and store Root of Trust data
+	  during AVB verification, including the verified boot key, device lock
+	  state, verified boot state, and boot image hash. This data is securely
+	  stored via the AVB Trusted Application in OP-TEE for later retrieval
+	  by the Android KeyMint Trusted Application.
+
+	  This feature requires the AVB TA (CONFIG_OPTEE_TA_AVB) to be enabled
+	  to securely store and manage Root of Trust data.
 
 endmenu
 
@@ -521,6 +591,17 @@ config SHA_HW_ACCEL
 	  hash_lookup_algo() function.
 
 if SPL
+
+config SPL_CRC32
+	bool "Enable CRC32 support in SPL"
+	default y if SPL_LEGACY_IMAGE_SUPPORT || SPL_EFI_PARTITION
+	default y if SPL_ENV_SUPPORT || TPL_BLOBLIST
+	help
+	  This option enables support of hashing using CRC32 algorithm.
+	  The CRC32 algorithm produces 32-bit checksum value. For FIT
+	  images, this is the least secure type of checksum, suitable for
+	  detected accidental image corruption. For secure applications you
+	  should consider SHA256 or SHA384.
 
 config SPL_SHA1
 	bool "Enable SHA1 support in SPL"
@@ -580,6 +661,26 @@ config SPL_SHA_PROG_HW_ACCEL
 
 endif
 
+config VPL_SHA1
+	bool "Enable SHA1 support in VPL"
+	depends on VPL
+	default y if SHA1
+	help
+	  This option enables support of hashing using SHA1 algorithm.
+	  The hash is calculated in software.
+	  The SHA1 algorithm produces a 160-bit (20-byte) hash value
+	  (digest).
+
+config VPL_SHA256
+	bool "Enable SHA256 support in VPL"
+	depends on VPL
+	default y if SHA256
+	help
+	  This option enables support of hashing using SHA256 algorithm.
+	  The hash is calculated in software.
+	  The SHA256 algorithm produces a 256-bit (32-byte) hash value
+	  (digest).
+
 if SHA_HW_ACCEL
 
 config SHA512_HW_ACCEL
@@ -635,6 +736,12 @@ config SPL_CRC8
 	  a simple and fast checksumming algorithm which does a bytewise
 	  checksum with feedback to produce an 8-bit result. The code is small
 	  and it does not require a lookup table (unlike CRC32).
+
+config SPL_CRC16
+	bool "Support CRC16 in SPL"
+	depends on SPL
+	help
+	  Enables CRC16 support in SPL. This is not normally required.
 
 config CRC32
 	def_bool y
@@ -728,6 +835,12 @@ config ZSTD_LIB_MINIFY
 
 endif
 
+config SPL_BZIP2
+	bool "Enable bzip2 decompression support for SPL build"
+	depends on SPL
+	help
+	  This enables support for bzip2 compression algorithm for SPL boot.
+
 config SPL_LZ4
 	bool "Enable LZ4 decompression support in SPL"
 	depends on SPL
@@ -813,7 +926,7 @@ config OF_LIBFDT
 config OF_LIBFDT_ASSUME_MASK
 	hex "Mask of conditions to assume for libfdt"
 	depends on OF_LIBFDT || FIT
-	default 0
+	default 0x0
 	help
 	  Use this to change the assumptions made by libfdt about the
 	  device tree it is working with. A value of 0 means that no assumptions
@@ -904,31 +1017,25 @@ config VPL_OF_LIBFDT_ASSUME_MASK
 	  0xff means all assumptions are made and any invalid data may cause
 	  unsafe execution. See FDT_ASSUME_PERFECT, etc. in libfdt_internal.h
 
-config FDT_FIXUP_PARTITIONS
-	bool "overwrite MTD partitions in DTS through defined in 'mtdparts'"
-	depends on OF_LIBFDT
-	depends on CMD_MTDPARTS
-	help
-	  Allow overwriting defined partitions in the device tree blob
-	  using partition info defined in the 'mtdparts' environment
-	  variable.
-
 menu "System tables"
 	depends on (!EFI && !SYS_COREBOOT) || (ARM && EFI_LOADER)
 
 config BLOBLIST_TABLES
 	bool "Put tables in a bloblist"
-	depends on X86 && BLOBLIST
+	depends on BLOBLIST
+	default y if (ARM && EFI_LOADER && GENERATE_ACPI_TABLE)
+	default n
 	help
-	  Normally tables are placed at address 0xf0000 and can be up to 64KB
-	  long. With this option, tables are instead placed in the bloblist
-	  with a pointer from 0xf0000. The size can then be larger and the
-	  tables can be placed high in memory.
+	  On x86 normally tables are placed at address 0xf0000 and can be up
+	  to 64KB long. With this option, tables are instead placed in the
+	  bloblist with a pointer from 0xf0000. The size can then be larger
+	  and the tables can be placed high in memory.
+	  On other architectures the tables are always placed in high memory.
 
 config GENERATE_SMBIOS_TABLE
 	bool "Generate an SMBIOS (System Management BIOS) table"
+	depends on SMBIOS
 	default y
-	depends on X86 || EFI_LOADER
 	help
 	  The System Management BIOS (SMBIOS) specification addresses how
 	  motherboard and system vendors present management information about
@@ -937,8 +1044,10 @@ config GENERATE_SMBIOS_TABLE
 
 	  Check http://www.dmtf.org/standards/smbios for details.
 
-	  See also SMBIOS_SYSINFO which allows SMBIOS values to be provided in
+	  See also SYSINFO_SMBIOS which allows SMBIOS values to be provided in
 	  the devicetree.
+
+endmenu
 
 config LIB_RATIONAL
 	bool "enable continued fraction calculation routines"
@@ -946,8 +1055,6 @@ config LIB_RATIONAL
 config SPL_LIB_RATIONAL
 	bool "enable continued fraction calculation routines for SPL"
 	depends on SPL
-
-endmenu
 
 config ASN1_COMPILER
 	bool
@@ -997,14 +1104,26 @@ config SPL_OID_REGISTRY
 	  unambiguous persistent name (https://en.wikipedia.org/wiki/Object_identifier).
 	  Enable fast lookup object identifier registry in the SPL.
 
+config SMBIOS
+	bool "SMBIOS support"
+	depends on X86 || EFI_LOADER
+	default y
+	select LAST_STAGE_INIT
+	help
+	  Indicates that this platform can support System Management BIOS
+	  (SMBIOS) tables. These provide various pieces of information about
+	  the board, such as the manufacturer and the model name.
+
+	  See GENERATE_SMBIOS_TABLE which controls whether U-Boot actually
+	  creates these tables, rather than them coming from a previous firmware
+	  stage.
+
 config SMBIOS_PARSER
 	bool "SMBIOS parser"
 	help
 	  A simple parser for SMBIOS data.
 
-source lib/efi/Kconfig
-source lib/efi_loader/Kconfig
-source lib/optee/Kconfig
+source "lib/optee/Kconfig"
 
 config TEST_FDTDEC
 	bool "enable fdtdec test"
@@ -1023,55 +1142,46 @@ config LMB
 	bool "Enable the logical memory blocks library (lmb)"
 	default y if ARC || ARM || M68K || MICROBLAZE || MIPS || \
 		     NIOS2 || PPC || RISCV || SANDBOX || SH || X86 || XTENSA
+	select ARCH_MISC_INIT if PPC
 	help
-	  Support the library logical memory blocks.
+	  Support the library logical memory blocks. This will require
+	  a malloc() implementation for defining the data structures
+	  needed for maintaining the LMB memory map.
 
-config LMB_USE_MAX_REGIONS
-	bool "Use a common number of memory and reserved regions in lmb lib"
+config SPL_LMB
+	bool "Enable LMB module for SPL"
+	depends on SPL && SPL_FRAMEWORK && SPL_SYS_MALLOC
+	help
+	  Enable support for Logical Memory Block library routines in
+	  SPL. This will require a malloc() implementation for defining
+	  the data structures needed for maintaining the LMB memory map.
+
+config LMB_ARCH_MEM_MAP
+	bool "Add an architecture specific memory map"
 	depends on LMB
-	default y
+	default y if FSL_LAYERSCAPE || X86
 	help
-	  Define the number of supported memory regions in the library logical
-	  memory blocks.
-	  This feature allow to reduce the lmb library size by using compiler
-	  optimization when LMB_MEMORY_REGIONS == LMB_RESERVED_REGIONS.
+	  Some architectures have special or unique aspects which need
+	  consideration when adding memory ranges to the list of available
+	  memory map. Enable this config in such scenarios which allow
+	  architectures and boards to define their own memory map.
 
-config LMB_MAX_REGIONS
-	int "Number of memory and reserved regions in lmb lib"
-	depends on LMB && LMB_USE_MAX_REGIONS
-	default 16
+config SPL_LMB_ARCH_MEM_MAP
+	bool "Add an architecture specific memory map"
+	depends on SPL_LMB
 	help
-	  Define the number of supported regions, memory and reserved, in the
-	  library logical memory blocks.
-
-config LMB_MEMORY_REGIONS
-	int "Number of memory regions in lmb lib"
-	depends on LMB && !LMB_USE_MAX_REGIONS
-	default 8
-	help
-	  Define the number of supported memory regions in the library logical
-	  memory blocks.
-	  The minimal value is CONFIG_NR_DRAM_BANKS.
-
-config LMB_RESERVED_REGIONS
-	int "Number of reserved regions in lmb lib"
-	depends on LMB && !LMB_USE_MAX_REGIONS
-	default 8
-	help
-	  Define the number of supported reserved regions in the library logical
-	  memory blocks.
+	  Some architectures have special or unique scenarios which need
+	  consideration when adding memory ranges to the list of available
+	  memory map. Enable this config in such scenarios which allow
+	  architectures and boards to define their own memory map.
 
 config PHANDLE_CHECK_SEQ
 	bool "Enable phandle check while getting sequence number"
 	help
 	  When there are multiple device tree nodes with same name,
-          enable this config option to distinguish them using
+	  enable this config option to distinguish them using
 	  phandles in fdtdec_get_alias_seq() function.
 
 endmenu
 
-menu "FWU Multi Bank Updates"
-
-source lib/fwu_updates/Kconfig
-
-endmenu
+source "lib/fwu_updates/Kconfig"

@@ -5,7 +5,6 @@
  * Copyright (c) 2017 Rob Clark
  */
 
-#include <common.h>
 #include <charset.h>
 #include <efi_loader.h>
 #include <log.h>
@@ -195,6 +194,8 @@ static struct efi_file_handle *file_open(struct file_system *fs,
 
 	/* +2 is for null and '/' */
 	fh = calloc(1, sizeof(*fh) + plen + (flen * MAX_UTF8_PER_UTF16) + 2);
+	if (!fh)
+		return NULL;
 
 	fh->open_mode = open_mode;
 	fh->base = efi_file_handle_protocol;
@@ -294,7 +295,7 @@ out:
 }
 
 /**
- * efi_file_open_()
+ * efi_file_open() - open file synchronously
  *
  * This function implements the Open service of the File Protocol.
  * See the UEFI spec for details.
@@ -863,8 +864,16 @@ static efi_status_t EFIAPI efi_file_getinfo(struct efi_file_handle *file,
 		}
 
 		ret = efi_get_file_size(fh, &file_size);
-		if (ret != EFI_SUCCESS)
-			goto error;
+		if (ret != EFI_SUCCESS) {
+			if (!fh->isdir)
+				goto error;
+			/*
+			 * Some file drivers don't implement fs_size() for
+			 * directories. Use a dummy non-zero value.
+			 */
+			file_size = 4096;
+			ret = EFI_SUCCESS;
+		}
 
 		memset(info, 0, required_size);
 
@@ -975,14 +984,16 @@ static efi_status_t EFIAPI efi_file_setinfo(struct efi_file_handle *file,
 		}
 		free(new_file_name);
 		/* Check for truncation */
-		ret = efi_get_file_size(fh, &file_size);
-		if (ret != EFI_SUCCESS)
-			goto out;
-		if (file_size != info->file_size) {
-			/* TODO: we do not support truncation */
-			EFI_PRINT("Truncation not supported\n");
-			ret = EFI_ACCESS_DENIED;
-			goto out;
+		if (!fh->isdir) {
+			ret = efi_get_file_size(fh, &file_size);
+			if (ret != EFI_SUCCESS)
+				goto out;
+			if (file_size != info->file_size) {
+				/* TODO: we do not support truncation */
+				EFI_PRINT("Truncation not supported\n");
+				ret = EFI_ACCESS_DENIED;
+				goto out;
+			}
 		}
 		/*
 		 * We do not care for the other attributes
@@ -1192,18 +1203,22 @@ efi_open_volume(struct efi_simple_file_system_protocol *this,
 	return EFI_EXIT(efi_open_volume_int(this, root));
 }
 
-struct efi_simple_file_system_protocol *
-efi_simple_file_system(struct blk_desc *desc, int part,
-		       struct efi_device_path *dp)
+efi_status_t
+efi_create_simple_file_system(struct blk_desc *desc, int part,
+			      struct efi_device_path *dp,
+			      struct efi_simple_file_system_protocol **fsp)
 {
 	struct file_system *fs;
 
 	fs = calloc(1, sizeof(*fs));
+	if (!fs)
+		return EFI_OUT_OF_RESOURCES;
 	fs->base.rev = EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_REVISION;
 	fs->base.open_volume = efi_open_volume;
 	fs->desc = desc;
 	fs->part = part;
 	fs->dp = dp;
+	*fsp = &fs->base;
 
-	return &fs->base;
+	return EFI_SUCCESS;
 }

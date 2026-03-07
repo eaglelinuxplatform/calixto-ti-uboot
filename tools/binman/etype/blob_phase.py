@@ -52,3 +52,13 @@ class Entry_blob_phase(Entry_section):
 
         # Read entries again, now that we have some
         self.ReadEntries()
+
+        # Propagate the no-write-symbols property
+        if self.no_write_symbols:
+            for entry in self._entries.values():
+                entry.no_write_symbols = True
+
+        # Propagate the symbols-base property
+        if self.symbols_base is not None:
+            for entry in self._entries.values():
+                entry.symbols_base = self.symbols_base

@@ -390,7 +390,7 @@ int btrfs_read_extent_inline(struct btrfs_path *path,
 			   csize);
 	ret = btrfs_decompress(btrfs_file_extent_compression(leaf, fi),
 			       cbuf, csize, dbuf, dsize);
-	if (ret == (u32)-1) {
+	if (ret < 0) {
 		ret = -EIO;
 		goto out;
 	}
@@ -500,7 +500,7 @@ int btrfs_read_extent_reg(struct btrfs_path *path,
 
 	ret = btrfs_decompress(btrfs_file_extent_compression(leaf, fi), cbuf,
 			       csize, dbuf, dsize);
-	if (ret == (u32)-1) {
+	if (ret < 0) {
 		ret = -EIO;
 		goto out;
 	}
@@ -511,7 +511,9 @@ int btrfs_read_extent_reg(struct btrfs_path *path,
 	if (ret < dsize)
 		memset(dbuf + ret, 0, dsize - ret);
 	/* Then copy the needed part */
-	memcpy(dest, dbuf + btrfs_file_extent_offset(leaf, fi), len);
+	memcpy(dest,
+	       dbuf + btrfs_file_extent_offset(leaf, fi) + offset - key.offset,
+	       len);
 	ret = len;
 out:
 	free(cbuf);
@@ -638,7 +640,11 @@ static int read_and_truncate_page(struct btrfs_path *path,
 	extent_type = btrfs_file_extent_type(leaf, fi);
 	if (extent_type == BTRFS_FILE_EXTENT_INLINE) {
 		ret = btrfs_read_extent_inline(path, fi, buf);
-		memcpy(dest, buf + page_off, min(page_len, ret));
+		if (ret < 0) {
+			free(buf);
+			return ret;
+		}
+		memcpy(dest, buf + page_off, min3(page_len, ret, len));
 		free(buf);
 		return len;
 	}
@@ -650,7 +656,7 @@ static int read_and_truncate_page(struct btrfs_path *path,
 		free(buf);
 		return ret;
 	}
-	memcpy(dest, buf + page_off, page_len);
+	memcpy(dest, buf + page_off, min(page_len, len));
 	free(buf);
 	return len;
 }

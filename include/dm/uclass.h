@@ -265,6 +265,23 @@ int uclass_get_device_by_ofnode(enum uclass_id id, ofnode node,
 				struct udevice **devp);
 
 /**
+ * uclass_get_device_by_of_path() - Get a uclass device by device tree path
+ *
+ * This searches the devices in the uclass for one attached to the
+ * device tree node corresponding to the given path (which may also be
+ * an alias).
+ *
+ * The device is probed to activate it ready for use.
+ *
+ * @id: ID to look up
+ * @path: Device tree path to search for (if no such path then -ENODEV is returned)
+ * @devp: Returns pointer to device (there is only one for each node)
+ * Return: 0 if OK, -ve on error
+ */
+int uclass_get_device_by_of_path(enum uclass_id id, const char *path,
+				 struct udevice **devp);
+
+/**
  * uclass_get_device_by_phandle_id() - Get a uclass device by phandle id
  *
  * This searches the devices in the uclass for one with the given phandle id.
@@ -417,6 +434,17 @@ int uclass_next_device_check(struct udevice **devp);
  */
 int uclass_first_device_drvdata(enum uclass_id id, ulong driver_data,
 				struct udevice **devp);
+
+/**
+ * uclass_try_first_device()- See if there is a device for a uclass
+ *
+ * If the uclass exists, this returns the first device on that uclass, without
+ * probing it. If the uclass does not exist, it gives up
+ *
+ * @id: Uclass ID to check
+ * Return: Pointer to device, if found, else NULL
+ */
+struct udevice *uclass_try_first_device(enum uclass_id id);
 
 /**
  * uclass_probe_all() - Probe all devices based on an uclass ID

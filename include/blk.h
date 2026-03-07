@@ -7,6 +7,7 @@
 #ifndef BLK_H
 #define BLK_H
 
+#include <bouncebuf.h>
 #include <dm/uclass-id.h>
 #include <efi.h>
 
@@ -19,6 +20,8 @@ typedef ulong lbaint_t;
 #endif
 #define LBAF "%" LBAFlength "x"
 #define LBAFU "%" LBAFlength "u"
+
+#define DEFAULT_BLKSZ		512
 
 struct udevice;
 
@@ -62,10 +65,10 @@ struct blk_desc {
 	unsigned char	hwpart;		/* HW partition, e.g. for eMMC */
 	unsigned char	type;		/* device type */
 	unsigned char	removable;	/* removable device */
-#ifdef CONFIG_LBA48
 	/* device can use 48bit addr (ATA/ATAPI v7) */
-	unsigned char	lba48;
-#endif
+	bool	lba48;
+	unsigned char	atapi;		/* Use ATAPI protocol */
+	unsigned char	bb;		/* Use bounce buffer */
 	lbaint_t	lba;		/* number of blocks */
 	unsigned long	blksz;		/* block size */
 	int		log2blksz;	/* for convenience: log2(blksz) */
@@ -105,12 +108,6 @@ struct blk_desc {
 	(PAD_SIZE(size, blk_desc->blksz))
 
 #if CONFIG_IS_ENABLED(BLOCK_CACHE)
-
-/**
- * blkcache_init() - initialize the block cache list pointers
- */
-int blkcache_init(void);
-
 /**
  * blkcache_read() - attempt to read a set of blocks from cache
  *
@@ -200,7 +197,6 @@ static inline void blkcache_free(void) {}
 
 #endif
 
-#if CONFIG_IS_ENABLED(BLK)
 struct udevice;
 
 /* Operations on block devices */
@@ -261,9 +257,27 @@ struct blk_ops {
 	 * @return 0 if OK, -ve on error
 	 */
 	int (*select_hwpart)(struct udevice *dev, int hwpart);
+
+#if IS_ENABLED(CONFIG_BOUNCE_BUFFER)
+	/**
+	 * buffer_aligned() - test memory alignment of block operation buffer
+	 *
+	 * Some devices have limited DMA capabilities and require that the
+	 * buffers passed to them fit specific properties. This optional
+	 * callback can be used to indicate whether a buffer alignment is
+	 * suitable for the device DMA or not, and trigger use of generic
+	 * bounce buffer implementation to help use of unsuitable buffers
+	 * at the expense of performance degradation.
+	 *
+	 * @dev:	Block device associated with the request
+	 * @state:	Bounce buffer state
+	 * @return 1 if OK, 0 if unaligned
+	 */
+	int (*buffer_aligned)(struct udevice *dev, struct bounce_buffer *state);
+#endif	/* CONFIG_BOUNCE_BUFFER */
 };
 
-#define blk_get_ops(dev)	((struct blk_ops *)(dev)->driver->ops)
+#if CONFIG_IS_ENABLED(BLK)
 
 /*
  * These functions should take struct udevice instead of struct blk_desc,
@@ -277,6 +291,8 @@ unsigned long blk_dwrite(struct blk_desc *block_dev, lbaint_t start,
 			 lbaint_t blkcnt, const void *buffer);
 unsigned long blk_derase(struct blk_desc *block_dev, lbaint_t start,
 			 lbaint_t blkcnt);
+
+#endif /* BLK */
 
 /**
  * blk_read() - Read from a block device
@@ -362,23 +378,6 @@ int blk_first_device(int uclass_id, struct udevice **devp);
  * Return: 0 if found, -ENODEV if no device, or other -ve error value
  */
 int blk_next_device(struct udevice **devp);
-
-/**
- * blk_create_device() - Create a new block device
- *
- * @parent:	Parent of the new device
- * @drv_name:	Driver name to use for the block device
- * @name:	Name for the device
- * @uclass_id:	Interface type (enum uclass_id_t)
- * @devnum:	Device number, specific to the interface type, or -1 to
- *		allocate the next available number
- * @blksz:	Block size of the device in bytes (typically 512)
- * @lba:	Total number of blocks of the device
- * @devp:	the new device (which has not been probed)
- */
-int blk_create_device(struct udevice *parent, const char *drv_name,
-		      const char *name, int uclass_id, int devnum, int blksz,
-		      lbaint_t lba, struct udevice **devp);
 
 /**
  * blk_create_devicef() - Create a new named block device
@@ -503,8 +502,22 @@ const char *blk_get_devtype(struct udevice *dev);
  */
 struct blk_desc *blk_get_by_device(struct udevice *dev);
 
-#else
+/**
+ * blk_get_desc() - Get the block device descriptor for the given device number
+ *
+ * @uclass_id:	Interface type
+ * @devnum:	Device number (0 = first)
+ * @descp:	Returns block device descriptor on success
+ * Return: 0 on success, -ENODEV if there is no such device and no device
+ * with a higher device number, -ENOENT if there is no such device but there
+ * is one with a higher number, or other -ve on other error.
+ */
+int blk_get_desc(enum uclass_id uclass_id, int devnum, struct blk_desc **descp);
+
+#if !CONFIG_IS_ENABLED(BLK)
+
 #include <errno.h>
+
 /*
  * These functions should take struct udevice instead of struct blk_desc,
  * but this is convenient for migration to driver model. Add a 'd' prefix
@@ -625,7 +638,7 @@ struct blk_driver *blk_driver_lookup_type(int uclass_id);
 struct blk_desc *blk_get_devnum_by_uclass_id(enum uclass_id uclass_id, int devnum);
 
 /**
- * blk_get_devnum_by_uclass_id() - Get a block device by type name, and number
+ * blk_get_devnum_by_uclass_idname() - Get block device by type name and number
  *
  * This looks up the block device type based on @uclass_idname, then calls
  * blk_get_devnum_by_uclass_id().
@@ -635,7 +648,7 @@ struct blk_desc *blk_get_devnum_by_uclass_id(enum uclass_id uclass_id, int devnu
  * Return: point to block device descriptor, or NULL if not found
  */
 struct blk_desc *blk_get_devnum_by_uclass_idname(const char *uclass_idname,
-					    int devnum);
+						 int devnum);
 
 /**
  * blk_dselect_hwpart() - select a hardware partition
@@ -704,32 +717,6 @@ int blk_print_device_num(enum uclass_id uclass_id, int devnum);
  * the interface type is not supported, other -ve on other error
  */
 int blk_print_part_devnum(enum uclass_id uclass_id, int devnum);
-
-/**
- * blk_read_devnum() - read blocks from a device
- *
- * @uclass_id:	Block device type
- * @devnum:	Device number
- * @start:	Start block number to read (0=first)
- * @blkcnt:	Number of blocks to read
- * @buffer:	Address to write data to
- * Return: number of blocks read, or -ve error number on error
- */
-ulong blk_read_devnum(enum uclass_id uclass_id, int devnum, lbaint_t start,
-		      lbaint_t blkcnt, void *buffer);
-
-/**
- * blk_write_devnum() - write blocks to a device
- *
- * @uclass_id:	Block device type
- * @devnum:	Device number
- * @start:	Start block number to write (0=first)
- * @blkcnt:	Number of blocks to write
- * @buffer:	Address to read data from
- * Return: number of blocks written, or -ve error number on error
- */
-ulong blk_write_devnum(enum uclass_id uclass_id, int devnum, lbaint_t start,
-		       lbaint_t blkcnt, const void *buffer);
 
 /**
  * blk_select_hwpart_devnum() - select a hardware partition

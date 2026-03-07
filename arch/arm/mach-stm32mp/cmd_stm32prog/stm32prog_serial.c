@@ -3,17 +3,18 @@
  * Copyright (C) 2020, STMicroelectronics - All Rights Reserved
  */
 
-#include <common.h>
 #include <console.h>
 #include <dm.h>
 #include <dfu.h>
 #include <malloc.h>
 #include <serial.h>
+#include <time.h>
 #include <watchdog.h>
 #include <asm/arch/sys_proto.h>
 #include <dm/lists.h>
 #include <dm/device-internal.h>
 #include <linux/delay.h>
+#include <linux/printk.h>
 #include <asm/global_data.h>
 #include "stm32prog.h"
 

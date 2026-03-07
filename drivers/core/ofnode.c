@@ -6,16 +6,17 @@
 
 #define LOG_CATEGORY	LOGC_DT
 
-#include <common.h>
 #include <dm.h>
 #include <fdtdec.h>
 #include <fdt_support.h>
 #include <log.h>
 #include <malloc.h>
+#include <of_live.h>
 #include <linux/libfdt.h>
 #include <dm/of_access.h>
 #include <dm/of_addr.h>
 #include <dm/ofnode.h>
+#include <dm/util.h>
 #include <linux/err.h>
 #include <linux/ioport.h>
 #include <asm/global_data.h>
@@ -46,17 +47,44 @@ static int oftree_find(const void *fdt)
 	return -1;
 }
 
+static int check_tree_count(void)
+{
+	if (oftree_count == CONFIG_OFNODE_MULTI_TREE_MAX) {
+		log_warning("Too many registered device trees (max %d)\n",
+			    CONFIG_OFNODE_MULTI_TREE_MAX);
+		return -E2BIG;
+	}
+
+	return 0;
+}
+
 static oftree oftree_ensure(void *fdt)
 {
 	oftree tree;
 	int i;
 
+	if (of_live_active()) {
+		struct device_node *root;
+		int ret;
+
+		ret = unflatten_device_tree(fdt, &root);
+		if (ret) {
+			log_err("Failed to create live tree: err=%d\n", ret);
+			return oftree_null();
+		}
+		tree = oftree_from_np(root);
+
+		return tree;
+	}
+
 	if (gd->flags & GD_FLG_RELOC) {
 		i = oftree_find(fdt);
 		if (i == -1) {
-			if (oftree_count == CONFIG_OFNODE_MULTI_TREE_MAX) {
-				log_warning("Too many registered device trees (max %d)\n",
-					    CONFIG_OFNODE_MULTI_TREE_MAX);
+			if (check_tree_count())
+				return oftree_null();
+
+			if (fdt_check_header(fdt)) {
+				log_err("Invalid device tree blob header\n");
 				return oftree_null();
 			}
 
@@ -67,7 +95,7 @@ static oftree oftree_ensure(void *fdt)
 		}
 	} else {
 		if (fdt != gd->fdt_blob) {
-			log_debug("Cannot only access control FDT before relocation\n");
+			log_debug("Only the control FDT can be accessed before relocation\n");
 			return oftree_null();
 		}
 	}
@@ -77,12 +105,53 @@ static oftree oftree_ensure(void *fdt)
 	return tree;
 }
 
+int oftree_new(oftree *treep)
+{
+	oftree tree = oftree_null();
+	int ret;
+
+	if (of_live_active()) {
+		struct device_node *root;
+
+		ret = of_live_create_empty(&root);
+		if (ret)
+			return log_msg_ret("liv", ret);
+		tree = oftree_from_np(root);
+	} else {
+		const int size = 1024;
+		void *fdt;
+
+		ret = check_tree_count();
+		if (ret)
+			return log_msg_ret("fla", ret);
+
+		/* register the new tree with a small size */
+		fdt = malloc(size);
+		if (!fdt)
+			return log_msg_ret("fla", -ENOMEM);
+		ret = fdt_create_empty_tree(fdt, size);
+		if (ret)
+			return log_msg_ret("fla", -EINVAL);
+		oftree_list[oftree_count++] = fdt;
+		tree.fdt = fdt;
+	}
+	*treep = tree;
+
+	return 0;
+}
+
+void oftree_dispose(oftree tree)
+{
+	if (of_live_active())
+		of_live_free(tree.np);
+}
+
 void *ofnode_lookup_fdt(ofnode node)
 {
 	if (gd->flags & GD_FLG_RELOC) {
 		uint i = OFTREE_TREE_ID(node.of_offset);
 
-		if (i > oftree_count) {
+		if (i >= oftree_count) {
 			log_debug("Invalid tree ID %x\n", i);
 			return NULL;
 		}
@@ -133,6 +202,10 @@ oftree oftree_from_fdt(void *fdt)
 	if (CONFIG_IS_ENABLED(OFNODE_MULTI_TREE))
 		return oftree_ensure(fdt);
 
+#ifdef OF_CHECKS
+	if (of_live_active())
+		return oftree_null();
+#endif
 	tree.fdt = fdt;
 
 	return tree;
@@ -168,7 +241,30 @@ static inline int oftree_find(const void *fdt)
 	return 0;
 }
 
+int oftree_new(oftree *treep)
+{
+	return -ENOSYS;
+}
+
 #endif /* OFNODE_MULTI_TREE */
+
+int oftree_to_fdt(oftree tree, struct abuf *buf)
+{
+	int ret;
+
+	if (of_live_active()) {
+		ret = of_live_flatten(ofnode_to_np(oftree_root(tree)), buf);
+		if (ret)
+			return log_msg_ret("flt", ret);
+	} else {
+		void *fdt = oftree_lookup_fdt(tree);
+
+		abuf_init(buf);
+		abuf_set(buf, fdt, fdt_totalsize(fdt));
+	}
+
+	return 0;
+}
 
 /**
  * ofnode_from_tree_offset() - get an ofnode from a tree offset (flat tree)
@@ -219,7 +315,7 @@ int ofnode_read_u8(ofnode node, const char *propname, u8 *outp)
 	int len;
 
 	assert(ofnode_valid(node));
-	debug("%s: %s: ", __func__, propname);
+	log_debug("%s: %s: ", __func__, propname);
 
 	if (ofnode_is_np(node))
 		return of_read_u8(ofnode_to_np(node), propname, outp);
@@ -227,11 +323,11 @@ int ofnode_read_u8(ofnode node, const char *propname, u8 *outp)
 	cell = fdt_getprop(gd->fdt_blob, ofnode_to_offset(node), propname,
 			   &len);
 	if (!cell || len < sizeof(*cell)) {
-		debug("(not found)\n");
+		log_debug("(not found)\n");
 		return -EINVAL;
 	}
 	*outp = *cell;
-	debug("%#x (%d)\n", *outp, *outp);
+	log_debug("%#x (%u)\n", *outp, *outp);
 
 	return 0;
 }
@@ -250,7 +346,7 @@ int ofnode_read_u16(ofnode node, const char *propname, u16 *outp)
 	int len;
 
 	assert(ofnode_valid(node));
-	debug("%s: %s: ", __func__, propname);
+	log_debug("%s: %s: ", __func__, propname);
 
 	if (ofnode_is_np(node))
 		return of_read_u16(ofnode_to_np(node), propname, outp);
@@ -258,11 +354,11 @@ int ofnode_read_u16(ofnode node, const char *propname, u16 *outp)
 	cell = fdt_getprop(gd->fdt_blob, ofnode_to_offset(node), propname,
 			   &len);
 	if (!cell || len < sizeof(*cell)) {
-		debug("(not found)\n");
+		log_debug("(not found)\n");
 		return -EINVAL;
 	}
 	*outp = be16_to_cpup(cell);
-	debug("%#x (%d)\n", *outp, *outp);
+	log_debug("%#x (%u)\n", *outp, *outp);
 
 	return 0;
 }
@@ -295,7 +391,7 @@ int ofnode_read_u32_index(ofnode node, const char *propname, int index,
 	int len;
 
 	assert(ofnode_valid(node));
-	debug("%s: %s: ", __func__, propname);
+	log_debug("%s: %s: ", __func__, propname);
 
 	if (ofnode_is_np(node))
 		return of_read_u32_index(ofnode_to_np(node), propname, index,
@@ -304,17 +400,47 @@ int ofnode_read_u32_index(ofnode node, const char *propname, int index,
 	cell = fdt_getprop(ofnode_to_fdt(node), ofnode_to_offset(node),
 			   propname, &len);
 	if (!cell) {
-		debug("(not found)\n");
+		log_debug("(not found)\n");
 		return -EINVAL;
 	}
 
 	if (len < (sizeof(int) * (index + 1))) {
-		debug("(not large enough)\n");
+		log_debug("(not large enough)\n");
 		return -EOVERFLOW;
 	}
 
 	*outp = fdt32_to_cpu(cell[index]);
-	debug("%#x (%d)\n", *outp, *outp);
+	log_debug("%#x (%u)\n", *outp, *outp);
+
+	return 0;
+}
+
+int ofnode_read_u64_index(ofnode node, const char *propname, int index,
+			  u64 *outp)
+{
+	const fdt64_t *cell;
+	int len;
+
+	assert(ofnode_valid(node));
+
+	if (ofnode_is_np(node))
+		return of_read_u64_index(ofnode_to_np(node), propname, index,
+					 outp);
+
+	cell = fdt_getprop(ofnode_to_fdt(node), ofnode_to_offset(node),
+			   propname, &len);
+	if (!cell) {
+		log_debug("(not found)\n");
+		return -EINVAL;
+	}
+
+	if (len < (sizeof(u64) * (index + 1))) {
+		log_debug("(not large enough)\n");
+		return -EOVERFLOW;
+	}
+
+	*outp = fdt64_to_cpu(cell[index]);
+	log_debug("%#llx (%llu)\n", *outp, *outp);
 
 	return 0;
 }
@@ -342,7 +468,7 @@ int ofnode_read_u64(ofnode node, const char *propname, u64 *outp)
 	int len;
 
 	assert(ofnode_valid(node));
-	debug("%s: %s: ", __func__, propname);
+	log_debug("%s: %s: ", __func__, propname);
 
 	if (ofnode_is_np(node))
 		return of_read_u64(ofnode_to_np(node), propname, outp);
@@ -350,12 +476,12 @@ int ofnode_read_u64(ofnode node, const char *propname, u64 *outp)
 	cell = fdt_getprop(ofnode_to_fdt(node), ofnode_to_offset(node),
 			   propname, &len);
 	if (!cell || len < sizeof(*cell)) {
-		debug("(not found)\n");
+		log_debug("(not found)\n");
 		return -EINVAL;
 	}
 	*outp = fdt64_to_cpu(cell[0]);
-	debug("%#llx (%lld)\n", (unsigned long long)*outp,
-	      (unsigned long long)*outp);
+	log_debug("%#llx (%llu)\n", (unsigned long long)*outp,
+		  (unsigned long long)*outp);
 
 	return 0;
 }
@@ -370,14 +496,14 @@ u64 ofnode_read_u64_default(ofnode node, const char *propname, u64 def)
 
 bool ofnode_read_bool(ofnode node, const char *propname)
 {
-	const void *prop;
+	bool prop;
 
 	assert(ofnode_valid(node));
-	debug("%s: %s: ", __func__, propname);
+	log_debug("%s: %s: ", __func__, propname);
 
-	prop = ofnode_get_property(node, propname, NULL);
+	prop = ofnode_has_property(node, propname);
 
-	debug("%s\n", prop ? "true" : "false");
+	log_debug("%s\n", prop ? "true" : "false");
 
 	return prop ? true : false;
 }
@@ -388,7 +514,7 @@ const void *ofnode_read_prop(ofnode node, const char *propname, int *sizep)
 	int len;
 
 	assert(ofnode_valid(node));
-	debug("%s: %s: ", __func__, propname);
+	log_debug("%s: %s: ", __func__, propname);
 
 	if (ofnode_is_np(node)) {
 		struct property *prop = of_find_property(
@@ -403,7 +529,7 @@ const void *ofnode_read_prop(ofnode node, const char *propname, int *sizep)
 				  propname, &len);
 	}
 	if (!val) {
-		debug("<not found>\n");
+		log_debug("<not found>\n");
 		if (sizep)
 			*sizep = -FDT_ERR_NOTFOUND;
 		return NULL;
@@ -424,10 +550,10 @@ const char *ofnode_read_string(ofnode node, const char *propname)
 		return NULL;
 
 	if (strnlen(str, len) >= len) {
-		debug("<invalid>\n");
+		dm_warn("<invalid>\n");
 		return NULL;
 	}
-	debug("%s\n", str);
+	log_debug("%s\n", str);
 
 	return str;
 }
@@ -447,7 +573,7 @@ ofnode ofnode_find_subnode(ofnode node, const char *subnode_name)
 	ofnode subnode;
 
 	assert(ofnode_valid(node));
-	debug("%s: %s: ", __func__, subnode_name);
+	log_debug("%s: %s: ", __func__, subnode_name);
 
 	if (ofnode_is_np(node)) {
 		struct device_node *np = ofnode_to_np(node);
@@ -462,8 +588,8 @@ ofnode ofnode_find_subnode(ofnode node, const char *subnode_name)
 				ofnode_to_offset(node), subnode_name);
 		subnode = noffset_to_ofnode(node, ooffset);
 	}
-	debug("%s\n", ofnode_valid(subnode) ?
-	      ofnode_get_name(subnode) : "<none>");
+	log_debug("%s\n", ofnode_valid(subnode) ?
+		  ofnode_get_name(subnode) : "<none>");
 
 	return subnode;
 }
@@ -472,7 +598,7 @@ int ofnode_read_u32_array(ofnode node, const char *propname,
 			  u32 *out_values, size_t sz)
 {
 	assert(ofnode_valid(node));
-	debug("%s: %s: ", __func__, propname);
+	log_debug("%s: %s: ", __func__, propname);
 
 	if (ofnode_is_np(node)) {
 		return of_read_u32_array(ofnode_to_np(node), propname,
@@ -485,7 +611,7 @@ int ofnode_read_u32_array(ofnode node, const char *propname,
 					   out_values, sz);
 
 		/* get the error right, but space is more important in SPL */
-		if (!IS_ENABLED(CONFIG_SPL_BUILD)) {
+		if (!IS_ENABLED(CONFIG_XPL_BUILD)) {
 			if (ret == -FDT_ERR_NOTFOUND)
 				return -EINVAL;
 			else if (ret == -FDT_ERR_BADLAYOUT)
@@ -544,7 +670,7 @@ ofnode ofnode_get_parent(ofnode node)
 const char *ofnode_get_name(ofnode node)
 {
 	if (!ofnode_valid(node)) {
-		debug("%s node not valid\n", __func__);
+		dm_warn("%s node not valid\n", __func__);
 		return NULL;
 	}
 
@@ -636,8 +762,9 @@ static fdt_addr_t __ofnode_get_addr_size_index(ofnode node, int index,
 			return of_read_number(prop_val, na);
 		}
 	} else {
-		na = ofnode_read_simple_addr_cells(ofnode_get_parent(node));
-		ns = ofnode_read_simple_size_cells(ofnode_get_parent(node));
+		ofnode parent = ofnode_get_parent(node);
+		na = ofnode_read_simple_addr_cells(parent);
+		ns = ofnode_read_simple_size_cells(parent);
 		return fdtdec_get_addr_size_fixed(ofnode_to_fdt(node),
 						  ofnode_to_offset(node), "reg",
 						  index, na, ns, size,
@@ -870,6 +997,24 @@ ofnode ofnode_get_chosen_node(const char *name)
 	return ofnode_path(prop);
 }
 
+int ofnode_read_baud(void)
+{
+	const char *str, *p;
+	u32 baud;
+
+	str = ofnode_read_chosen_string("stdout-path");
+	if (!str)
+		return -EINVAL;
+
+	/* Parse string serial0:115200n8 */
+	p = strchr(str, ':');
+	if (!p)
+		return -EINVAL;
+
+	baud = dectoul(p + 1, NULL);
+	return baud;
+}
+
 const void *ofnode_read_aliases_prop(const char *propname, int *sizep)
 {
 	ofnode node;
@@ -887,7 +1032,7 @@ ofnode ofnode_get_aliases_node(const char *name)
 	if (!prop)
 		return ofnode_null();
 
-	debug("%s: node_path: %s\n", __func__, prop);
+	log_debug("%s: node_path: %s\n", __func__, prop);
 
 	return ofnode_path(prop);
 }
@@ -910,8 +1055,8 @@ static int decode_timing_property(ofnode node, const char *name,
 
 	length = ofnode_read_size(node, name);
 	if (length < 0) {
-		debug("%s: could not find property %s\n",
-		      ofnode_get_name(node), name);
+		dm_warn("%s: could not find property %s\n",
+			ofnode_get_name(node), name);
 		return length;
 	}
 
@@ -998,7 +1143,7 @@ int ofnode_decode_panel_timing(ofnode parent,
 	u32 val = 0;
 	int ret = 0;
 
-	timings = ofnode_find_subnode(parent, "panel-timings");
+	timings = ofnode_find_subnode(parent, "panel-timing");
 	if (!ofnode_valid(timings))
 		return -EINVAL;
 	memset(dt, 0, sizeof(*dt));
@@ -1045,6 +1190,14 @@ const void *ofnode_get_property(ofnode node, const char *propname, int *lenp)
 	else
 		return fdt_getprop(ofnode_to_fdt(node), ofnode_to_offset(node),
 				   propname, lenp);
+}
+
+bool ofnode_has_property(ofnode node, const char *propname)
+{
+	if (ofnode_is_np(node))
+		return of_find_property(ofnode_to_np(node), propname, NULL);
+	else
+		return ofnode_get_property(node, propname, NULL);
 }
 
 int ofnode_first_property(ofnode node, struct ofprop *prop)
@@ -1141,13 +1294,14 @@ const uint8_t *ofnode_read_u8_array_ptr(ofnode node, const char *propname,
 }
 
 int ofnode_read_pci_addr(ofnode node, enum fdt_pci_space type,
-			 const char *propname, struct fdt_pci_addr *addr)
+			 const char *propname, struct fdt_pci_addr *addr,
+			 fdt_size_t *size)
 {
 	const fdt32_t *cell;
 	int len;
 	int ret = -ENOENT;
 
-	debug("%s: %s: ", __func__, propname);
+	log_debug("%s: %s: ", __func__, propname);
 
 	/*
 	 * If we follow the pci bus bindings strictly, we should check
@@ -1164,19 +1318,23 @@ int ofnode_read_pci_addr(ofnode node, enum fdt_pci_space type,
 		int i;
 
 		for (i = 0; i < num; i++) {
-			debug("pci address #%d: %08lx %08lx %08lx\n", i,
-			      (ulong)fdt32_to_cpu(cell[0]),
-			      (ulong)fdt32_to_cpu(cell[1]),
-			      (ulong)fdt32_to_cpu(cell[2]));
+			log_debug("pci address #%d: %08lx %08lx %08lx\n", i,
+				  (ulong)fdt32_to_cpu(cell[0]),
+				  (ulong)fdt32_to_cpu(cell[1]),
+				  (ulong)fdt32_to_cpu(cell[2]));
 			if ((fdt32_to_cpu(*cell) & type) == type) {
+				const unaligned_fdt64_t *ptr;
+
 				addr->phys_hi = fdt32_to_cpu(cell[0]);
 				addr->phys_mid = fdt32_to_cpu(cell[1]);
 				addr->phys_lo = fdt32_to_cpu(cell[2]);
+				ptr = (const unaligned_fdt64_t *)(cell + 3);
+				if (size)
+					*size = fdt64_to_cpu(*ptr);
 				break;
 			}
 
-			cell += (FDT_PCI_ADDR_CELLS +
-				 FDT_PCI_SIZE_CELLS);
+			cell += FDT_PCI_ADDR_CELLS + FDT_PCI_SIZE_CELLS;
 		}
 
 		if (i == num) {
@@ -1190,7 +1348,7 @@ int ofnode_read_pci_addr(ofnode node, enum fdt_pci_space type,
 	ret = -EINVAL;
 
 fail:
-	debug("(not found)\n");
+	log_debug("(not found)\n");
 	return ret;
 }
 
@@ -1310,7 +1468,7 @@ int ofnode_read_simple_size_cells(ofnode node)
 
 bool ofnode_pre_reloc(ofnode node)
 {
-#if defined(CONFIG_SPL_BUILD) || defined(CONFIG_TPL_BUILD)
+#if defined(CONFIG_XPL_BUILD) || defined(CONFIG_TPL_BUILD)
 	/* for SPL and TPL the remaining nodes after the fdtgrep 1st pass
 	 * had property bootph-all or bootph-pre-sram/bootph-pre-ram.
 	 * They are removed in final dtb (fdtgrep 2nd pass)
@@ -1328,7 +1486,7 @@ bool ofnode_pre_reloc(ofnode node)
 	 */
 	if (ofnode_read_bool(node, "bootph-pre-ram") ||
 	    ofnode_read_bool(node, "bootph-pre-sram"))
-		return true;
+		return gd->flags & GD_FLG_RELOC;
 
 	if (IS_ENABLED(CONFIG_OF_TAG_MIGRATE)) {
 		/* detect and handle old tags */
@@ -1474,7 +1632,7 @@ int ofnode_write_string(ofnode node, const char *propname, const char *value)
 {
 	assert(ofnode_valid(node));
 
-	debug("%s: %s = %s", __func__, propname, value);
+	log_debug("%s: %s = %s", __func__, propname, value);
 
 	return ofnode_write_prop(node, propname, value, strlen(value) + 1,
 				 false);
@@ -1492,7 +1650,46 @@ int ofnode_write_u32(ofnode node, const char *propname, u32 value)
 		return -ENOMEM;
 	*val = cpu_to_fdt32(value);
 
-	return ofnode_write_prop(node, propname, val, sizeof(value), false);
+	return ofnode_write_prop(node, propname, val, sizeof(value), true);
+}
+
+int ofnode_write_u64(ofnode node, const char *propname, u64 value)
+{
+	fdt64_t *val;
+
+	assert(ofnode_valid(node));
+
+	log_debug("%s = %llx", propname, (unsigned long long)value);
+	val = malloc(sizeof(*val));
+	if (!val)
+		return -ENOMEM;
+	*val = cpu_to_fdt64(value);
+
+	return ofnode_write_prop(node, propname, val, sizeof(value), true);
+}
+
+int ofnode_write_bool(ofnode node, const char *propname, bool value)
+{
+	if (value)
+		return ofnode_write_prop(node, propname, NULL, 0, false);
+	else
+		return ofnode_delete_prop(node, propname);
+}
+
+int ofnode_delete_prop(ofnode node, const char *propname)
+{
+	if (ofnode_is_np(node)) {
+		struct property *prop;
+		int len;
+
+		prop = of_find_property(ofnode_to_np(node), propname, &len);
+		if (prop)
+			return of_remove_property(ofnode_to_np(node), prop);
+		return 0;
+	} else {
+		return fdt_delprop(ofnode_to_fdt(node), ofnode_to_offset(node),
+				   propname);
+	}
 }
 
 int ofnode_set_enabled(ofnode node, bool value)
@@ -1538,6 +1735,98 @@ const char *ofnode_conf_read_str(const char *prop_name)
 	return ofnode_read_string(node, prop_name);
 }
 
+bool ofnode_options_read_bool(const char *prop_name)
+{
+	ofnode uboot;
+
+	uboot = ofnode_path("/options/u-boot");
+	if (!ofnode_valid(uboot))
+		return false;
+
+	return ofnode_read_bool(uboot, prop_name);
+}
+
+int ofnode_options_read_int(const char *prop_name, int default_val)
+{
+	ofnode uboot;
+
+	uboot = ofnode_path("/options/u-boot");
+	if (!ofnode_valid(uboot))
+		return default_val;
+
+	return ofnode_read_u32_default(uboot, prop_name, default_val);
+}
+
+const char *ofnode_options_read_str(const char *prop_name)
+{
+	ofnode uboot;
+
+	uboot = ofnode_path("/options/u-boot");
+	if (!ofnode_valid(uboot))
+		return NULL;
+
+	return ofnode_read_string(uboot, prop_name);
+}
+
+int ofnode_read_bootscript_address(u64 *bootscr_address, u64 *bootscr_offset)
+{
+	int ret;
+	ofnode uboot;
+
+	*bootscr_address = 0;
+	*bootscr_offset = 0;
+
+	uboot = ofnode_path("/options/u-boot");
+	if (!ofnode_valid(uboot)) {
+		dm_warn("%s: Missing /u-boot node\n", __func__);
+		return -EINVAL;
+	}
+
+	ret = ofnode_read_u64(uboot, "bootscr-address", bootscr_address);
+	if (ret) {
+		ret = ofnode_read_u64(uboot, "bootscr-ram-offset",
+				      bootscr_offset);
+		if (ret)
+			return -EINVAL;
+	}
+
+	return 0;
+}
+
+int ofnode_read_bootscript_flash(u64 *bootscr_flash_offset,
+				 u64 *bootscr_flash_size)
+{
+	int ret;
+	ofnode uboot;
+
+	*bootscr_flash_offset = 0;
+	*bootscr_flash_size = 0;
+
+	uboot = ofnode_path("/options/u-boot");
+	if (!ofnode_valid(uboot)) {
+		dm_warn("%s: Missing /u-boot node\n", __func__);
+		return -EINVAL;
+	}
+
+	ret = ofnode_read_u64(uboot, "bootscr-flash-offset",
+			      bootscr_flash_offset);
+	if (ret)
+		return -EINVAL;
+
+	ret = ofnode_read_u64(uboot, "bootscr-flash-size",
+			      bootscr_flash_size);
+	if (ret)
+		return -EINVAL;
+
+	if (!bootscr_flash_size) {
+		dm_warn("bootscr-flash-size is zero. Ignoring properties!\n");
+		*bootscr_flash_offset = 0;
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
 ofnode ofnode_get_phy_node(ofnode node)
 {
 	/* DT node properties that reference a PHY node */
@@ -1577,7 +1866,7 @@ phy_interface_t ofnode_read_phy_mode(ofnode node)
 		if (!strcmp(mode, phy_interface_strings[i]))
 			return i;
 
-	debug("%s: Invalid PHY interface '%s'\n", __func__, mode);
+	dm_warn("%s: Invalid PHY interface '%s'\n", __func__, mode);
 
 	return PHY_INTERFACE_MODE_NA;
 }
@@ -1617,7 +1906,30 @@ int ofnode_add_subnode(ofnode node, const char *name, ofnode *subnodep)
 	return ret;	/* 0 or -EEXIST */
 }
 
-int ofnode_copy_props(ofnode src, ofnode dst)
+int ofnode_delete(ofnode *nodep)
+{
+	ofnode node = *nodep;
+	int ret;
+
+	assert(ofnode_valid(node));
+	if (ofnode_is_np(node)) {
+		ret = of_remove_node(ofnode_to_np(node));
+	} else {
+		void *fdt = ofnode_to_fdt(node);
+		int offset = ofnode_to_offset(node);
+
+		ret = fdt_del_node(fdt, offset);
+		if (ret)
+			ret = -EFAULT;
+	}
+	if (ret)
+		return ret;
+	*nodep = ofnode_null();
+
+	return 0;
+}
+
+int ofnode_copy_props(ofnode dst, ofnode src)
 {
 	struct ofprop prop;
 
@@ -1637,6 +1949,26 @@ int ofnode_copy_props(ofnode src, ofnode dst)
 			return log_msg_ret("wr", -EINVAL);
 		}
 	}
+
+	return 0;
+}
+
+int ofnode_copy_node(ofnode dst_parent, const char *name, ofnode src,
+		     ofnode *nodep)
+{
+	ofnode node;
+	int ret;
+
+	ret = ofnode_add_subnode(dst_parent, name, &node);
+	if (ret) {
+		if (ret == -EEXIST)
+			*nodep = node;
+		return log_msg_ret("add", ret);
+	}
+	ret = ofnode_copy_props(node, src);
+	if (ret)
+		return log_msg_ret("cpy", ret);
+	*nodep = node;
 
 	return 0;
 }

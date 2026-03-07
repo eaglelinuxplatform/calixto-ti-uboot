@@ -132,7 +132,6 @@
  */
 #define CFG_SYS_NAND_BASE	0xE0600000
 
-
 /* Vitesse 7385 */
 
 #define CFG_SYS_VSC7385_BASE	0xF0000000
@@ -140,7 +139,9 @@
 /*
  * Serial Port
  */
+#if !CONFIG_IS_ENABLED(DM_SERIAL) && !CONFIG_IS_ENABLED(DM_CLK)
 #define CFG_SYS_NS16550_CLK		get_bus_freq(0)
+#endif
 
 #define CFG_SYS_BAUDRATE_TABLE \
 		{300, 600, 1200, 2400, 4800, 9600, 19200, 38400, 115200}

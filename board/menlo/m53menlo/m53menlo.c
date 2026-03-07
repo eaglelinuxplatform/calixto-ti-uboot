@@ -6,7 +6,6 @@
  * Copyright (C) 2014-2017 Olaf Mandel <o.mandel@menlosystems.com>
  */
 
-#include <common.h>
 #include <dm.h>
 #include <init.h>
 #include <malloc.h>
@@ -42,7 +41,7 @@ DECLARE_GLOBAL_DATA_PTR;
 
 static u32 mx53_dram_size[2];
 
-phys_size_t board_get_usable_ram_top(phys_size_t total_size)
+phys_addr_t board_get_usable_ram_top(phys_size_t total_size)
 {
 	/*
 	 * WARNING: We must override get_effective_memsize() function here
@@ -264,6 +263,7 @@ void board_preboot_os(void)
 	gpio_direction_output(IMX_GPIO_NR(6, 0), 0);
 }
 
+#if CONFIG_IS_ENABLED(OF_LIBFDT)
 int ft_board_setup(void *blob, struct bd_info *bd)
 {
 	if (lvds_compat_string)
@@ -272,6 +272,7 @@ int ft_board_setup(void *blob, struct bd_info *bd)
 
 	return 0;
 }
+#endif
 
 struct display_info_t const displays[] = {
 	{
@@ -523,7 +524,7 @@ int checkboard(void)
 /*
  * NAND SPL
  */
-#ifdef CONFIG_SPL_BUILD
+#ifdef CONFIG_XPL_BUILD
 void spl_board_init(void)
 {
 	setup_iomux_nand();

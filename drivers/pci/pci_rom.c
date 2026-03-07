@@ -24,7 +24,6 @@
 
 #define LOG_CATEGORY UCLASS_PCI
 
-#include <common.h>
 #include <bios_emul.h>
 #include <bloblist.h>
 #include <bootstage.h>
@@ -36,6 +35,7 @@
 #include <pci.h>
 #include <pci_rom.h>
 #include <spl.h>
+#include <time.h>
 #include <vesa.h>
 #include <video.h>
 #include <acpi/acpi_s3.h>
@@ -93,6 +93,7 @@ static int pci_rom_probe(struct udevice *dev, struct pci_rom_header **hdrp)
 		debug("%s: rom_address=%x\n", __func__, rom_address);
 		return -ENOENT;
 	}
+	rom_address &= PCI_ROM_ADDRESS_MASK;
 
 	/* Enable expansion ROM address decoding. */
 	dm_pci_write_config32(dev, PCI_ROM_ADDRESS,
@@ -256,14 +257,16 @@ int dm_pci_run_vga_bios(struct udevice *dev, int (*int15_handler)(void),
 
 	ret = pci_rom_probe(dev, &rom);
 	if (ret)
-		return ret;
+		return log_msg_ret("pro", ret);
 
 	ret = pci_rom_load(rom, &ram, &alloced);
-	if (ret)
+	if (ret) {
+		ret = log_msg_ret("ld", ret);
 		goto err;
+	}
 
 	if (!board_should_run_oprom(dev)) {
-		ret = -ENXIO;
+		ret = log_msg_ret("run", -ENXIO);
 		goto err;
 	}
 
@@ -271,7 +274,7 @@ int dm_pci_run_vga_bios(struct udevice *dev, int (*int15_handler)(void),
 		defined(CONFIG_FRAMEBUFFER_VESA_MODE)
 	vesa_mode = CONFIG_FRAMEBUFFER_VESA_MODE;
 #endif
-	debug("Selected vesa mode %#x\n", vesa_mode);
+	debug("Selected vesa mode 0x%x\n", vesa_mode);
 
 	if (exec_method & PCI_ROM_USE_NATIVE) {
 #ifdef CONFIG_X86
@@ -298,27 +301,31 @@ int dm_pci_run_vga_bios(struct udevice *dev, int (*int15_handler)(void),
 	}
 
 	if (emulate) {
-#ifdef CONFIG_BIOSEMU
-		BE_VGAInfo *info;
+		if (CONFIG_IS_ENABLED(BIOSEMU)) {
+			BE_VGAInfo *info;
 
-		ret = biosemu_setup(dev, &info);
-		if (ret)
-			goto err;
-		biosemu_set_interrupt_handler(0x15, int15_handler);
-		ret = biosemu_run(dev, (uchar *)ram, 1 << 16, info,
-				  true, vesa_mode, &mode_info);
-		if (ret)
-			goto err;
-#endif
+			log_debug("Running video BIOS with emulator...");
+			ret = biosemu_setup(dev, &info);
+			if (ret)
+				goto err;
+			biosemu_set_interrupt_handler(0x15, int15_handler);
+			ret = biosemu_run(dev, (uchar *)ram, 1 << 16, info,
+					  true, vesa_mode, &mode_info);
+			log_debug("done\n");
+			if (ret)
+				goto err;
+		}
 	} else {
 #if defined(CONFIG_X86) && (CONFIG_IS_ENABLED(X86_32BIT_INIT) || CONFIG_TPL)
+		log_debug("Running video BIOS...");
 		bios_set_interrupt_handler(0x15, int15_handler);
 
 		bios_run_on_x86(dev, (unsigned long)ram, vesa_mode,
 				&mode_info);
+		log_debug("done\n");
 #endif
 	}
-	debug("Final vesa mode %#x\n", mode_info.video_mode);
+	debug("Final vesa mode %x\n", mode_info.video_mode);
 	ret = 0;
 
 err:
@@ -327,7 +334,7 @@ err:
 	return ret;
 }
 
-int vesa_setup_video_priv(struct vesa_mode_info *vesa,
+int vesa_setup_video_priv(struct vesa_mode_info *vesa, u64 fb,
 			  struct video_priv *uc_priv,
 			  struct video_uc_plat *plat)
 {
@@ -350,9 +357,9 @@ int vesa_setup_video_priv(struct vesa_mode_info *vesa,
 
 	/* Use double buffering if enabled */
 	if (IS_ENABLED(CONFIG_VIDEO_COPY) && plat->base)
-		plat->copy_base = vesa->phys_base_ptr;
+		plat->copy_base = fb;
 	else
-		plat->base = vesa->phys_base_ptr;
+		plat->base = fb;
 	log_debug("base = %lx, copy_base = %lx\n", plat->base, plat->copy_base);
 	plat->size = vesa->bytes_per_scanline * vesa->y_resolution;
 
@@ -372,7 +379,7 @@ int vesa_setup_video(struct udevice *dev, int (*int15_handler)(void))
 	}
 
 	/* In U-Boot proper, collect the information added by SPL (see below) */
-	if (IS_ENABLED(CONFIG_SPL_VIDEO) && spl_phase() > PHASE_SPL &&
+	if (IS_ENABLED(CONFIG_SPL_VIDEO) && xpl_phase() > PHASE_SPL &&
 	    CONFIG_IS_ENABLED(BLOBLIST)) {
 		struct video_handoff *ho;
 
@@ -418,7 +425,7 @@ int vesa_setup_video(struct udevice *dev, int (*int15_handler)(void))
 	       mode_info.vesa.bits_per_pixel);
 
 	/* In SPL, store the information for use by U-Boot proper */
-	if (spl_phase() == PHASE_SPL && CONFIG_IS_ENABLED(BLOBLIST)) {
+	if (xpl_phase() == PHASE_SPL && CONFIG_IS_ENABLED(BLOBLIST)) {
 		struct video_handoff *ho;
 
 		ho = bloblist_add(BLOBLISTT_U_BOOT_VIDEO, sizeof(*ho), 0);

@@ -3,9 +3,8 @@
  * Copyright 2020 Hitachi Power Grids. All rights reserved.
  */
 
-#include <common.h>
+#include <config.h>
 #include <event.h>
-#include <i2c.h>
 #include <asm/io.h>
 #include <asm/arch/immap_ls102xa.h>
 #include <asm/arch/clock.h>
@@ -107,17 +106,24 @@ int board_early_init_f(void)
 
 	arch_soc_init();
 
+	/*
+	 * Reset I2C bus. When the board is powercycled during a bus
+	 * transfer it might hang; for details see doc/I2C_Edge_Conditions.
+	 * Now run the AbortSequence()
+	 */
+	i2c_make_abort();
+
 	return 0;
 }
 
-static int pg_wcom_misc_init_f(void *ctx, struct event *event)
+static int pg_wcom_misc_init_f(void)
 {
 	if (IS_ENABLED(CONFIG_PG_WCOM_UBOOT_UPDATE_SUPPORTED))
 		check_for_uboot_update();
 
 	return 0;
 }
-EVENT_SPY(EVT_MISC_INIT_F, pg_wcom_misc_init_f);
+EVENT_SPY_SIMPLE(EVT_MISC_INIT_F, pg_wcom_misc_init_f);
 
 int board_init(void)
 {
@@ -215,8 +221,4 @@ int hush_init_var(void)
 	return 0;
 }
 
-int last_stage_init(void)
-{
-	set_km_env();
-	return 0;
-}
+EVENT_SPY_SIMPLE(EVT_LAST_STAGE_INIT, set_km_env);

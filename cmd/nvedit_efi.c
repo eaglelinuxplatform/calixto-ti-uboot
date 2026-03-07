@@ -6,7 +6,6 @@
  */
 
 #include <charset.h>
-#include <common.h>
 #include <command.h>
 #include <efi_loader.h>
 #include <efi_variable.h>
@@ -16,7 +15,7 @@
 #include <malloc.h>
 #include <mapmem.h>
 #include <rtc.h>
-#include <uuid.h>
+#include <u-boot/uuid.h>
 #include <linux/kernel.h>
 
 /*
@@ -262,7 +261,7 @@ static int append_value(char **bufp, size_t *sizep, char *data)
 	char *tmp_buf = NULL, *new_buf = NULL, *value;
 	unsigned long len = 0;
 
-	if (!strncmp(data, "=0x", 2)) { /* hexadecimal number */
+	if (!strncmp(data, "=0x", 3)) { /* hexadecimal number */
 		union {
 			u8 u8;
 			u16 u16;

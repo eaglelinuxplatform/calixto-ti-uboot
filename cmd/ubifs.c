@@ -4,18 +4,17 @@
  * Stefan Roese, DENX Software Engineering, sr@denx.de.
  */
 
-
 /*
  * UBIFS command support
  */
 
 #undef DEBUG
 
-#include <common.h>
 #include <config.h>
 #include <command.h>
 #include <log.h>
 #include <ubifs_uboot.h>
+#include <vsprintf.h>
 
 static int ubifs_initialized;
 static int ubifs_mounted;
@@ -111,7 +110,7 @@ static int do_ubifs_load(struct cmd_tbl *cmdtp, int flag, int argc,
 	char *filename;
 	char *endp;
 	int ret;
-	u32 addr;
+	unsigned long addr;
 	u32 size = 0;
 
 	if (!ubifs_mounted) {
@@ -133,7 +132,7 @@ static int do_ubifs_load(struct cmd_tbl *cmdtp, int flag, int argc,
 		if (endp == argv[3])
 			return CMD_RET_USAGE;
 	}
-	debug("Loading file '%s' to address 0x%08x (size %d)\n", filename, addr, size);
+	debug("Loading file '%s' to address 0x%08lx (size %d)\n", filename, addr, size);
 
 	ret = ubifs_load(filename, addr, size);
 	if (ret) {

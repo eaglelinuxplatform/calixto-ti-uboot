@@ -5,7 +5,7 @@
 
 #define LOG_CATEGORY LOGC_ARCH
 
-#include <common.h>
+#include <config.h>
 #include <log.h>
 #include <linux/libfdt.h>
 #include <asm/arch/sys_proto.h>
@@ -29,7 +29,7 @@ void *board_fdt_blob_setup(int *err)
 			return (void *)nt_fw_dtb;
 		log_debug("%s: DTB not found.\n", __func__);
 	}
-	log_debug("%s: fall back to builtin DTB, %p\n", __func__, &_end);
+	log_debug("%s: fall back to builtin DTB, %p\n", __func__, _end);
 
-	return (void *)&_end;
+	return (void *)_end;
 }

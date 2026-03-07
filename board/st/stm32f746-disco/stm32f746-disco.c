@@ -4,7 +4,7 @@
  * Author(s): Vikas Manocha, <vikas.manocha@st.com> for STMicroelectronics.
  */
 
-#include <common.h>
+#include <config.h>
 #include <dm.h>
 #include <init.h>
 #include <log.h>
@@ -14,7 +14,6 @@
 #include <serial.h>
 #include <spl.h>
 #include <splash.h>
-#include <st_logo_data.h>
 #include <video.h>
 #include <asm/global_data.h>
 #include <asm/io.h>
@@ -28,7 +27,7 @@ DECLARE_GLOBAL_DATA_PTR;
 
 int dram_init(void)
 {
-#ifndef CONFIG_SPL_BUILD
+#ifndef CONFIG_XPL_BUILD
 	int rv;
 	struct udevice *dev;
 	rv = uclass_get_device(UCLASS_RAM, 0, &dev);
@@ -46,7 +45,7 @@ int dram_init_banksize(void)
 	return fdtdec_setup_memory_banksize();
 }
 
-#ifdef CONFIG_SPL_BUILD
+#ifdef CONFIG_XPL_BUILD
 #ifdef CONFIG_SPL_OS_BOOT
 int spl_start_uboot(void)
 {
@@ -133,11 +132,6 @@ int board_init(void)
 		printf("Unsupported PHY interface!\n");
 	}
 #endif
-
-#if defined(CONFIG_CMD_BMP)
-	bmp_display((ulong)stmicroelectronics_uboot_logo_8bit_rle,
-		    BMP_ALIGN_CENTER, BMP_ALIGN_CENTER);
-#endif /* CONFIG_CMD_BMP */
 
 	return 0;
 }

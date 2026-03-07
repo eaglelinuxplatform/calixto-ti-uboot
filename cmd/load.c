@@ -7,7 +7,6 @@
 /*
  * Serial up- and download support
  */
-#include <common.h>
 #include <command.h>
 #include <console.h>
 #include <cpu_func.h>
@@ -142,7 +141,6 @@ static int do_load_serial(struct cmd_tbl *cmdtp, int flag, int argc,
 
 static ulong load_serial(long offset)
 {
-	struct lmb lmb;
 	char	record[SREC_MAXRECLEN + 1];	/* buffer for one S-Record	*/
 	char	binbuf[SREC_MAXBINLEN];		/* buffer for binary data	*/
 	int	binlen;				/* no. of data bytes in S-Rec.	*/
@@ -154,8 +152,6 @@ static ulong load_serial(long offset)
 	ulong	end_addr   =  0;
 	int	line_count =  0;
 	long ret;
-
-	lmb_init_and_reserve(&lmb, gd->bd, (void *)gd->fdt_blob);
 
 	while (read_record(record, SREC_MAXRECLEN + 1) >= 0) {
 		type = srec_decode(record, &binlen, &addr, binbuf);
@@ -181,14 +177,18 @@ static ulong load_serial(long offset)
 		    } else
 #endif
 		    {
-			ret = lmb_reserve(&lmb, store_addr, binlen);
+			void *dst;
+
+			ret = lmb_reserve(store_addr, binlen);
 			if (ret) {
 				printf("\nCannot overwrite reserved area (%08lx..%08lx)\n",
 					store_addr, store_addr + binlen);
 				return ret;
 			}
-			memcpy((char *)(store_addr), binbuf, binlen);
-			lmb_free(&lmb, store_addr, binlen);
+			dst = map_sysmem(store_addr, binlen);
+			memcpy(dst, binbuf, binlen);
+			unmap_sysmem(dst);
+			lmb_free(store_addr, binlen);
 		    }
 		    if ((store_addr) < start_addr)
 			start_addr = store_addr;
@@ -226,7 +226,7 @@ static ulong load_serial(long offset)
 static int read_record(char *buf, ulong len)
 {
 	char *p;
-	char c;
+	int c;
 
 	--len;	/* always leave room for terminating '\0' byte */
 
@@ -350,15 +350,19 @@ static int save_serial(ulong address, ulong count)
 	if(write_record(SREC3_START))			/* write the header */
 		return (-1);
 	do {
-		if(count) {						/* collect hex data in the buffer  */
-			c = *(volatile uchar*)(address + reclen);	/* get one byte    */
-			checksum += c;							/* accumulate checksum */
+		volatile uchar *src;
+
+		src = map_sysmem(address, count);
+		if (count) {				/* collect hex data in the buffer */
+			c = src[reclen];		/* get one byte */
+			checksum += c;			/* accumulate checksum */
 			data[2*reclen]   = hex[(c>>4)&0x0f];
 			data[2*reclen+1] = hex[c & 0x0f];
 			data[2*reclen+2] = '\0';
 			++reclen;
 			--count;
 		}
+		unmap_sysmem((void *)src);
 		if(reclen == SREC_BYTES_PER_RECORD || count == 0) {
 			/* enough data collected for one record: dump it */
 			if(reclen) {	/* build & write a data record: */
@@ -410,7 +414,6 @@ static int write_record(char *buf)
 
 #endif
 
-
 #if defined(CONFIG_CMD_LOADB)
 /*
  * loadb command (load binary) included
@@ -433,7 +436,6 @@ static int write_record(char *buf)
 static void set_kerm_bin_mode(unsigned long *);
 static int k_recv(void);
 static ulong load_serial_bin(ulong offset);
-
 
 static char his_eol;        /* character he needs at end of packet */
 static int  his_pad_count;  /* number of pad chars he needs */
@@ -550,7 +552,6 @@ static int do_load_serial_bin(struct cmd_tbl *cmdtp, int flag, int argc,
 	return rcode;
 }
 
-
 static ulong load_serial_bin(ulong offset)
 {
 	int size, i;
@@ -645,7 +646,6 @@ static void send_nack(int n)
 	s1_sendpacket(a_b);
 }
 
-
 static void (*os_data_init)(void);
 static void (*os_data_char)(char new_char);
 static int os_data_state, os_data_state_saved;
@@ -685,7 +685,6 @@ static void set_kerm_bin_mode(unsigned long *addr)
 	os_data_init = bin_data_init;
 	os_data_char = bin_data_char;
 }
-
 
 /* k_data_* simply handles the kermit escape translations */
 static int k_data_escape, k_data_escape_saved;
@@ -819,7 +818,7 @@ static void handle_send_packet(int n)
 /* k_recv receives a OS Open image file over kermit line */
 static int k_recv(void)
 {
-	char new_char;
+	int new_char;
 	char k_state, k_state_saved;
 	int sum;
 	int done;
@@ -1059,7 +1058,6 @@ static ulong load_serial_ymodem(ulong offset, int mode)
 	xyzModem_stream_terminate(false, &getcxmodem);
 	xyzModem_stream_close(&err);
 
-
 	flush_cache(offset, ALIGN(size, ARCH_DMA_MINALIGN));
 
 	printf("## Total Size      = 0x%08x = %d Bytes\n", size, size);
@@ -1134,7 +1132,6 @@ U_BOOT_CMD(
  * SAVES always requires LOADS support, but not vice versa
  */
 
-
 #if defined(CONFIG_CMD_SAVES)
 #ifdef	CONFIG_SYS_LOADS_BAUD_CHANGE
 U_BOOT_CMD(
@@ -1154,7 +1151,6 @@ U_BOOT_CMD(
 #endif	/* CONFIG_SYS_LOADS_BAUD_CHANGE */
 #endif	/* CONFIG_CMD_SAVES */
 #endif	/* CONFIG_CMD_LOADS */
-
 
 #if defined(CONFIG_CMD_LOADB)
 U_BOOT_CMD(

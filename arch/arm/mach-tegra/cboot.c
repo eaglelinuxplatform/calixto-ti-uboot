@@ -3,7 +3,6 @@
  * Copyright (c) 2016-2018, NVIDIA CORPORATION.
  */
 
-#include <common.h>
 #include <env.h>
 #include <fdt_support.h>
 #include <fdtdec.h>
@@ -15,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <asm/global_data.h>
+#include <linux/printk.h>
 
 #include <linux/ctype.h>
 #include <linux/sizes.h>
@@ -188,10 +188,6 @@ int cboot_dram_init_banksize(void)
 		gd->bd->bi_dram[i].start = tegra_mem_map[1 + i].virt;
 		gd->bd->bi_dram[i].size = tegra_mem_map[1 + i].size;
 	}
-
-#ifdef CONFIG_PCI
-	gd->pci_ram_top = ram_top;
-#endif
 
 	return 0;
 }

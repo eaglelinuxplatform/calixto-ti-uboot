@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * (C) Copyright 2014 - 2015 Xilinx, Inc.
- * Michal Simek <michal.simek@xilinx.com>
+ * Michal Simek <michal.simek@amd.com>
  */
 
 #ifndef _ASM_ARCH_SYS_PROTO_H
@@ -48,12 +48,10 @@ enum {
 
 unsigned int zynqmp_get_silicon_version(void);
 
-int zynqmp_mmio_write(const u32 address, const u32 mask, const u32 value);
-int zynqmp_mmio_read(const u32 address, u32 *value);
-
+int check_tcm_mode(bool mode);
 void initialize_tcm(bool mode);
 void mem_map_fill(void);
-#if defined(CONFIG_SYS_MEM_RSVD_FOR_MMU) || defined(CONFIG_DEFINE_TCM_OCM_MMAP)
+#if defined(CONFIG_DEFINE_TCM_OCM_MMAP)
 void tcm_init(u8 mode);
 #endif
 

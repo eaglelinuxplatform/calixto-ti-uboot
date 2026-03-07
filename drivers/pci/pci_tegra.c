@@ -11,7 +11,6 @@
 
 #define pr_fmt(fmt) "tegra-pcie: " fmt
 
-#include <common.h>
 #include <clk.h>
 #include <dm.h>
 #include <errno.h>
@@ -22,6 +21,7 @@
 #include <power-domain.h>
 #include <reset.h>
 #include <linux/delay.h>
+#include <linux/printk.h>
 
 #include <asm/io.h>
 #include <asm/gpio.h>
@@ -461,7 +461,7 @@ static int tegra_pcie_parse_port_info(ofnode node, uint *index, uint *lanes)
 
 	*lanes = err;
 
-	err = ofnode_read_pci_addr(node, 0, "reg", &addr);
+	err = ofnode_read_pci_addr(node, 0, "reg", &addr, NULL);
 	if (err < 0) {
 		pr_err("failed to parse \"reg\" property\n");
 		return err;

@@ -6,9 +6,9 @@
  *             Bartlomiej Sieka <tur@semihalf.com>
  */
 
-#include <common.h>
 #include <cpu_func.h>
 #include <image.h>
+#include <linux/printk.h>
 
 #include <command.h>
 #include <env.h>
@@ -253,7 +253,6 @@ int update_tftp(ulong addr, char *interface, char *devstring)
 		addr = hextoul(env_addr, NULL);
 	else
 		addr = CONFIG_UPDATE_LOAD_ADDR;
-
 
 	if (update_load(filename, CONFIG_UPDATE_TFTP_MSEC_MAX,
 					CONFIG_UPDATE_TFTP_CNT_MAX, addr)) {

@@ -139,7 +139,7 @@ class Toolchain:
         """Get toolchain wrapper from the setting file.
         """
         value = ''
-        for name, value in bsettings.GetItems('toolchain-wrapper'):
+        for name, value in bsettings.get_items('toolchain-wrapper'):
             if not value:
                 print("Warning: Wrapper not found")
         if value:
@@ -156,9 +156,12 @@ class Toolchain:
         Returns:
             Value of that environment variable or arguments
         """
-        wrapper = self.GetWrapper()
         if which == VAR_CROSS_COMPILE:
-            return wrapper + os.path.join(self.path, self.cross)
+            wrapper = self.GetWrapper()
+            base = '' if self.arch == 'sandbox' else self.path
+            if (base == '' and self.cross == ''):
+                return ''
+            return wrapper + os.path.join(base, self.cross)
         elif which == VAR_PATH:
             return self.path
         elif which == VAR_ARCH:
@@ -171,13 +174,14 @@ class Toolchain:
         else:
             raise ValueError('Unknown arg to GetEnvArgs (%d)' % which)
 
-    def MakeEnvironment(self, full_path):
+    def MakeEnvironment(self, full_path, env=None):
         """Returns an environment for using the toolchain.
 
-        Thie takes the current environment and adds CROSS_COMPILE so that
+        This takes the current environment and adds CROSS_COMPILE so that
         the tool chain will operate correctly. This also disables localized
-        output and possibly unicode encoded output of all build tools by
-        adding LC_ALL=C.
+        output and possibly Unicode encoded output of all build tools by
+        adding LC_ALL=C. For the case where full_path is False, it prepends
+        the toolchain to PATH
 
         Note that os.environb is used to obtain the environment, since in some
         cases the environment many contain non-ASCII characters and we see
@@ -186,26 +190,48 @@ class Toolchain:
           UnicodeEncodeError: 'utf-8' codec can't encode characters in position
              569-570: surrogates not allowed
 
+        When running inside a Python venv, care is taken not to put the
+        toolchain path before the venv path, so that builds initiated by
+        buildman will still respect the venv.
+
         Args:
             full_path: Return the full path in CROSS_COMPILE and don't set
                 PATH
+            env (dict of bytes): Original environment, used for testing
         Returns:
             Dict containing the (bytes) environment to use. This is based on the
             current environment, with changes as needed to CROSS_COMPILE, PATH
             and LC_ALL.
         """
-        env = dict(os.environb)
+        env = dict(env or os.environb)
+
         wrapper = self.GetWrapper()
 
         if self.override_toolchain:
             # We'll use MakeArgs() to provide this
             pass
-        elif full_path:
+        elif full_path and self.cross:
             env[b'CROSS_COMPILE'] = tools.to_bytes(
                 wrapper + os.path.join(self.path, self.cross))
-        else:
+        elif self.cross:
             env[b'CROSS_COMPILE'] = tools.to_bytes(wrapper + self.cross)
-            env[b'PATH'] = tools.to_bytes(self.path) + b':' + env[b'PATH']
+
+            # Detect a Python virtualenv and avoid defeating it
+            if sys.prefix != sys.base_prefix:
+                paths = env[b'PATH'].split(b':')
+                new_paths = []
+                to_insert = tools.to_bytes(self.path)
+                insert_after = tools.to_bytes(sys.prefix)
+                for path in paths:
+                    new_paths.append(path)
+                    if to_insert and path.startswith(insert_after):
+                        new_paths.append(to_insert)
+                        to_insert = None
+                if to_insert:
+                    new_paths.append(to_insert)
+                env[b'PATH'] = b':'.join(new_paths)
+            else:
+                env[b'PATH'] = tools.to_bytes(self.path) + b':' + env[b'PATH']
 
         env[b'LC_ALL'] = b'C'
 
@@ -248,7 +274,7 @@ class Toolchains:
         self.prefixes = {}
         self.paths = []
         self.override_toolchain = override_toolchain
-        self._make_flags = dict(bsettings.GetItems('make-flags'))
+        self._make_flags = dict(bsettings.get_items('make-flags'))
 
     def GetPathList(self, show_warning=True):
         """Get a list of available toolchain paths
@@ -260,7 +286,7 @@ class Toolchains:
             List of strings, each a path to a toolchain mentioned in the
             [toolchain] section of the settings file.
         """
-        toolchains = bsettings.GetItems('toolchain')
+        toolchains = bsettings.get_items('toolchain')
         if show_warning and not toolchains:
             print(("Warning: No tool chains. Please run 'buildman "
                    "--fetch-arch all' to download all available toolchains, or "
@@ -282,7 +308,7 @@ class Toolchains:
         Args:
             show_warning: True to show a warning if there are no tool chains.
         """
-        self.prefixes = bsettings.GetItems('toolchain-prefix')
+        self.prefixes = bsettings.get_items('toolchain-prefix')
         self.paths += self.GetPathList(show_warning)
 
     def Add(self, fname, test=True, verbose=False, priority=PRIORITY_CALC,
@@ -398,7 +424,7 @@ class Toolchains:
         returns:
             toolchain object, or None if none found
         """
-        for tag, value in bsettings.GetItems('toolchain-alias'):
+        for tag, value in bsettings.get_items('toolchain-alias'):
             if arch == tag:
                 for alias in value.split():
                     if alias in self.toolchains:
@@ -414,13 +440,13 @@ class Toolchains:
         This converts ${blah} within the string to the value of blah.
         This function works recursively.
 
+            Resolved string
+
         Args:
             var_dict: Dictionary containing variables and their values
             args: String containing make arguments
         Returns:
-            Resolved string
-
-        >>> bsettings.Setup(None)
+        >>> bsettings.setup(None)
         >>> tcs = Toolchains()
         >>> tcs.Add('fred', False)
         >>> var_dict = {'oblique' : 'OBLIQUE', 'first' : 'fi${second}rst', \
@@ -430,7 +456,7 @@ class Toolchains:
         >>> tcs.ResolveReferences(var_dict, 'this=${oblique}_set${first}nd')
         'this=OBLIQUE_setfi2ndrstnd'
         """
-        re_var = re.compile('(\$\{[-_a-z0-9A-Z]{1,}\})')
+        re_var = re.compile(r'(\$\{[-_a-z0-9A-Z]{1,}\})')
 
         while True:
             m = re_var.search(args)
@@ -469,7 +495,7 @@ class Toolchains:
         self._make_flags['target'] = brd.target
         arg_str = self.ResolveReferences(self._make_flags,
                            self._make_flags.get(brd.target, ''))
-        args = re.findall("(?:\".*?\"|\S)+", arg_str)
+        args = re.findall(r"(?:\".*?\"|\S)+", arg_str)
         i = 0
         while i < len(args):
             args[i] = args[i].replace('"', '')
@@ -498,7 +524,7 @@ class Toolchains:
         if arch == 'aarch64':
             arch = 'arm64'
         base = 'https://www.kernel.org/pub/tools/crosstool/files/bin'
-        versions = ['12.2.0', '11.1.0']
+        versions = ['13.2.0', '12.2.0']
         links = []
         for version in versions:
             url = '%s/%s/%s/' % (base, arch, version)
@@ -597,5 +623,5 @@ class Toolchains:
         if not self.TestSettingsHasPath(dirpath):
             print(("Adding 'download' to config file '%s'" %
                    bsettings.config_fname))
-            bsettings.SetItem('toolchain', 'download', '%s/*/*' % dest)
+            bsettings.set_item('toolchain', 'download', '%s/*/*' % dest)
         return 0

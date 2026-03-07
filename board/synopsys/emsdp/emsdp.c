@@ -3,7 +3,6 @@
  * Copyright (C) 2018 Synopsys, Inc. All rights reserved.
  */
 
-#include <common.h>
 #include <command.h>
 #include <cpu_func.h>
 #include <dwmmc.h>
@@ -76,7 +75,6 @@ int board_early_init_r(void)
 	writew(0, (void *)(0x10000000 + PSRAM_RCR_SETUP));
 	// Switch PSRAM controller back to memory mode
 	writel(0, PSRAM_FLASH_CONFIG_REG_0);
-
 
 	// Switch PSRAM controller to command mode
 	writel(CRE_ENABLE | CRE_DRIVE_CMD, PSRAM_FLASH_CONFIG_REG_1);

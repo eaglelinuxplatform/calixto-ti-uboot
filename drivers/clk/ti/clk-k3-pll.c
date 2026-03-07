@@ -2,11 +2,10 @@
 /*
  * Texas Instruments K3 SoC PLL clock driver
  *
- * Copyright (C) 2020-2021 Texas Instruments Incorporated - http://www.ti.com/
+ * Copyright (C) 2020-2021 Texas Instruments Incorporated - https://www.ti.com/
  *	Tero Kristo <t-kristo@ti.com>
  */
 
-#include <common.h>
 #include <asm/io.h>
 #include <dm.h>
 #include <div64.h>

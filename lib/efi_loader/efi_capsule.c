@@ -8,7 +8,6 @@
 
 #define LOG_CATEGORY LOGC_EFI
 
-#include <common.h>
 #include <efi_loader.h>
 #include <efi_variable.h>
 #include <env.h>
@@ -21,6 +20,7 @@
 #include <sort.h>
 #include <sysreset.h>
 #include <asm/global_data.h>
+#include <u-boot/uuid.h>
 
 #include <crypto/pkcs7.h>
 #include <crypto/pkcs7_parser.h>
@@ -368,9 +368,8 @@ efi_status_t efi_capsule_authenticate(const void *capsule, efi_uintn_t capsule_s
 					     auth_hdr->auth_info.hdr.dwLength
 					     - sizeof(auth_hdr->auth_info),
 					     &buf);
-	if (IS_ERR(capsule_sig)) {
+	if (!capsule_sig) {
 		debug("Parsing variable's pkcs7 header failed\n");
-		capsule_sig = NULL;
 		goto out;
 	}
 
@@ -403,12 +402,6 @@ out:
 	free(regs);
 
 	return status;
-}
-#else
-efi_status_t efi_capsule_authenticate(const void *capsule, efi_uintn_t capsule_size,
-				      void **image, efi_uintn_t *image_size)
-{
-	return EFI_UNSUPPORTED;
 }
 #endif /* CONFIG_EFI_CAPSULE_AUTHENTICATE */
 
@@ -488,6 +481,11 @@ static __maybe_unused efi_status_t fwu_empty_capsule_process(
 		if (ret != EFI_SUCCESS)
 			log_err("Unable to set the Accept bit for the image %pUs\n",
 				image_guid);
+
+		status = fwu_state_machine_updates(0, active_idx);
+		if (status < 0)
+			ret = EFI_DEVICE_ERROR;
+
 	}
 
 	return ret;
@@ -529,11 +527,10 @@ static __maybe_unused efi_status_t fwu_post_update_process(bool fw_accept_os)
 		log_err("Failed to update FWU metadata index values\n");
 	} else {
 		log_debug("Successfully updated the active_index\n");
-		if (fw_accept_os) {
-			status = fwu_trial_state_ctr_start();
-			if (status < 0)
-				ret = EFI_DEVICE_ERROR;
-		}
+		status = fwu_state_machine_updates(fw_accept_os ? 1 : 0,
+						   update_index);
+		if (status < 0)
+			ret = EFI_DEVICE_ERROR;
 	}
 
 	return ret;
@@ -567,15 +564,19 @@ static efi_status_t efi_capsule_update_firmware(
 	bool fw_accept_os;
 
 	if (IS_ENABLED(CONFIG_FWU_MULTI_BANK_UPDATE)) {
-		if (fwu_empty_capsule_checks_pass() &&
-		    fwu_empty_capsule(capsule_data))
-			return fwu_empty_capsule_process(capsule_data);
+		if (fwu_empty_capsule(capsule_data)) {
+			if (fwu_empty_capsule_checks_pass()) {
+				return fwu_empty_capsule_process(capsule_data);
+			} else {
+				log_err("FWU empty capsule checks failed. Cannot start update\n");
+				return EFI_INVALID_PARAMETER;
+			}
+		}
 
 		if (!fwu_update_checks_pass()) {
 			log_err("FWU checks failed. Cannot start update\n");
 			return EFI_INVALID_PARAMETER;
 		}
-
 
 		/* Obtain the update_index from the platform */
 		status = fwu_plat_get_update_index(&update_index);
@@ -585,6 +586,13 @@ static efi_status_t efi_capsule_update_firmware(
 		}
 
 		fw_accept_os = capsule_data->flags & FW_ACCEPT_OS ? 0x1 : 0x0;
+	}
+
+	if (guidcmp(&capsule_data->capsule_guid,
+		    &efi_guid_firmware_management_capsule_id)) {
+		log_err("Unsupported capsule type: %pUs\n",
+			&capsule_data->capsule_guid);
+		return EFI_UNSUPPORTED;
 	}
 
 	/* sanity check */
@@ -757,15 +765,7 @@ efi_status_t EFIAPI efi_update_capsule(
 
 		log_debug("Capsule[%d] (guid:%pUs)\n",
 			  i, &capsule->capsule_guid);
-		if (!guidcmp(&capsule->capsule_guid,
-			     &efi_guid_firmware_management_capsule_id)) {
-			ret  = efi_capsule_update_firmware(capsule);
-		} else {
-			log_err("Unsupported capsule type: %pUs\n",
-				&capsule->capsule_guid);
-			ret = EFI_UNSUPPORTED;
-		}
-
+		ret  = efi_capsule_update_firmware(capsule);
 		if (ret != EFI_SUCCESS)
 			goto out;
 	}

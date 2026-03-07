@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: GPL-2.0+
-# Copyright (C) 2022 Texas Instruments Incorporated - https://www.ti.com/
 #
 # Test schema
 #
@@ -48,4 +47,3 @@ properties:
                             $ref: "#/definitions/u8"
                         d:
                             $ref: "#/definitions/u8"
-

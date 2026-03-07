@@ -4,45 +4,44 @@
  * Copyright (C) 2021-2022 Texas Instruments Incorporated - https://www.ti.com/
  */
 
-#include "k3-am62x-sk-common-u-boot.dtsi"
-#include "k3-am625-sk-binman.dtsi"
+#include "k3-am62-sk-common-u-boot.dtsi"
 
-&ospi0_pins_default {
-	bootph-pre-ram;
+&main_bcdma {
+	reg = <0x00 0x485c0100 0x00 0x100>,
+	      <0x00 0x4c000000 0x00 0x20000>,
+	      <0x00 0x4a820000 0x00 0x20000>,
+	      <0x00 0x4aa40000 0x00 0x20000>,
+	      <0x00 0x4bc00000 0x00 0x100000>,
+	      <0x00 0x48600000 0x00 0x8000>,
+	      <0x00 0x484a4000 0x00 0x2000>,
+	      <0x00 0x484c2000 0x00 0x2000>;
+	reg-names = "gcfg", "bchanrt", "rchanrt", "tchanrt",
+		    "ringrt" , "cfg", "tchan", "rchan";
 };
 
-&ospi0 {
-	bootph-pre-ram;
-
-	flash@0 {
-		bootph-pre-ram;
-
-		partitions {
-			bootph-pre-ram;
-
-			partition@3fc0000 {
-				bootph-pre-ram;
-			};
-		};
-	};
+&main_pktdma {
+	reg = <0x00 0x485c0000 0x00 0x100>,
+	      <0x00 0x4a800000 0x00 0x20000>,
+	      <0x00 0x4aa00000 0x00 0x20000>,
+	      <0x00 0x4b800000 0x00 0x200000>,
+	      <0x00 0x485e0000 0x00 0x10000>,
+	      <0x00 0x484a0000 0x00 0x2000>,
+	      <0x00 0x484c0000 0x00 0x2000>,
+	      <0x00 0x48430000 0x00 0x1000>;
+	reg-names = "gcfg", "rchanrt", "tchanrt", "ringrt",
+		    "cfg", "tchan", "rchan", "rflow";
+	bootph-all;
 };
 
-&vmain_pd {
-	bootph-pre-ram;
+&cpsw_port2 {
+	status = "disabled";
 };
 
-&vcc_5v0 {
-	bootph-pre-ram;
+&usbss0 {
+	bootph-all;
 };
 
-&vcc_3v3_sys {
-	bootph-pre-ram;
-};
-
-&vdd_sd_dv {
-	bootph-pre-ram;
-};
-
-&vdd_sd_dv_pins_default {
-	bootph-pre-ram;
+&usb0 {
+	dr_mode = "peripheral";
+	bootph-all;
 };

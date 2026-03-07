@@ -7,7 +7,6 @@
 
 #define LOG_CATEGORY UCLASS_ETH
 
-#include <common.h>
 #include <bootdev.h>
 #include <bootstage.h>
 #include <dm.h>
@@ -48,6 +47,15 @@ struct eth_uclass_priv {
 
 /* eth_errno - This stores the most recent failure code from DM functions */
 static int eth_errno;
+/* Are we currently in eth_init() or eth_halt()? */
+static bool in_init_halt;
+
+/* board-specific Ethernet Interface initializations. */
+__weak int board_interface_eth_init(struct udevice *dev,
+				    phy_interface_t interface_type)
+{
+	return 0;
+}
 
 static struct eth_uclass_priv *eth_get_uclass_priv(void)
 {
@@ -276,13 +284,42 @@ static int on_ethaddr(const char *name, const char *value, enum env_op op,
 }
 U_BOOT_ENV_CALLBACK(ethaddr, on_ethaddr);
 
+int eth_start_udev(struct udevice *dev)
+{
+	struct eth_device_priv *priv = dev_get_uclass_priv(dev);
+	int ret;
+
+	if (priv->running)
+		return 0;
+
+	if (!device_active(dev))
+		return -EINVAL;
+
+	ret = eth_get_ops(dev)->start(dev);
+	if (ret < 0)
+		return ret;
+
+	priv->state = ETH_STATE_ACTIVE;
+	priv->running = true;
+
+	return 0;
+}
+
 int eth_init(void)
 {
-	char *ethact = env_get("ethact");
-	char *ethrotate = env_get("ethrotate");
 	struct udevice *current = NULL;
 	struct udevice *old_current;
 	int ret = -ENODEV;
+	char *ethrotate;
+	char *ethact;
+
+	if (in_init_halt)
+		return -EBUSY;
+
+	in_init_halt = true;
+
+	ethact = env_get("ethact");
+	ethrotate = env_get("ethrotate");
 
 	/*
 	 * When 'ethrotate' variable is set to 'no' and 'ethact' variable
@@ -291,8 +328,10 @@ int eth_init(void)
 	if ((ethrotate != NULL) && (strcmp(ethrotate, "no") == 0)) {
 		if (ethact) {
 			current = eth_get_dev_by_name(ethact);
-			if (!current)
-				return -EINVAL;
+			if (!current) {
+				ret = -EINVAL;
+				goto end;
+			}
 		}
 	}
 
@@ -300,7 +339,8 @@ int eth_init(void)
 		current = eth_get_dev();
 		if (!current) {
 			log_err("No ethernet found.\n");
-			return -ENODEV;
+			ret = -ENODEV;
+			goto end;
 		}
 	}
 
@@ -309,19 +349,11 @@ int eth_init(void)
 		if (current) {
 			debug("Trying %s\n", current->name);
 
-			if (device_active(current)) {
-				ret = eth_get_ops(current)->start(current);
-				if (ret >= 0) {
-					struct eth_device_priv *priv =
-						dev_get_uclass_priv(current);
-
-					priv->state = ETH_STATE_ACTIVE;
-					priv->running = true;
-					return 0;
-				}
-			} else {
+			ret = eth_start_udev(current);
+			if (ret < 0)
 				ret = eth_errno;
-			}
+			else
+				break;
 
 			debug("FAIL\n");
 		} else {
@@ -337,6 +369,8 @@ int eth_init(void)
 		current = eth_get_dev();
 	} while (old_current != current);
 
+end:
+	in_init_halt = false;
 	return ret;
 }
 
@@ -345,17 +379,25 @@ void eth_halt(void)
 	struct udevice *current;
 	struct eth_device_priv *priv;
 
+	if (in_init_halt)
+		return;
+
+	in_init_halt = true;
+
 	current = eth_get_dev();
 	if (!current)
-		return;
+		goto end;
 
 	priv = dev_get_uclass_priv(current);
 	if (!priv || !priv->running)
-		return;
+		goto end;
 
 	eth_get_ops(current)->stop(current);
 	priv->state = ETH_STATE_PASSIVE;
 	priv->running = false;
+
+end:
+	in_init_halt = false;
 }
 
 int eth_is_active(struct udevice *dev)
@@ -549,42 +591,20 @@ static int eth_post_probe(struct udevice *dev)
 	unsigned char env_enetaddr[ARP_HLEN];
 	char *source = "DT";
 
-#if defined(CONFIG_NEEDS_MANUAL_RELOC)
-	struct eth_ops *ops = eth_get_ops(dev);
-	static int reloc_done;
-
-	if (!reloc_done) {
-		if (ops->start)
-			ops->start += gd->reloc_off;
-		if (ops->send)
-			ops->send += gd->reloc_off;
-		if (ops->recv)
-			ops->recv += gd->reloc_off;
-		if (ops->free_pkt)
-			ops->free_pkt += gd->reloc_off;
-		if (ops->stop)
-			ops->stop += gd->reloc_off;
-		if (ops->mcast)
-			ops->mcast += gd->reloc_off;
-		if (ops->write_hwaddr)
-			ops->write_hwaddr += gd->reloc_off;
-		if (ops->read_rom_hwaddr)
-			ops->read_rom_hwaddr += gd->reloc_off;
-
-		reloc_done++;
-	}
-#endif
-
 	priv->state = ETH_STATE_INIT;
 	priv->running = false;
 
 	/* Check if the device has a valid MAC address in device tree */
 	if (!eth_dev_get_mac_address(dev, pdata->enetaddr) ||
 	    !is_valid_ethaddr(pdata->enetaddr)) {
-		source = "ROM";
 		/* Check if the device has a MAC address in ROM */
-		if (eth_get_ops(dev)->read_rom_hwaddr)
-			eth_get_ops(dev)->read_rom_hwaddr(dev);
+		if (eth_get_ops(dev)->read_rom_hwaddr) {
+			int ret;
+
+			ret = eth_get_ops(dev)->read_rom_hwaddr(dev);
+			if (!ret)
+				source = "ROM";
+		}
 	}
 
 	eth_env_get_enetaddr_by_index("eth", dev_seq(dev), env_enetaddr);
@@ -613,7 +633,7 @@ static int eth_post_probe(struct udevice *dev)
 		eth_env_set_enetaddr_by_index("eth", dev_seq(dev),
 					      pdata->enetaddr);
 #else
-		printf("\nError: %s address not set.\n",
+		printf("\nError: %s No valid MAC address found.\n",
 		       dev->name);
 		return -EINVAL;
 #endif

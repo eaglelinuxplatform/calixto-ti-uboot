@@ -20,11 +20,12 @@
  *
  */
 
-#include <common.h>
 #include <display_options.h>
 #include <env.h>
 #include <splash.h>
 #include <video.h>
+#include <vsprintf.h>
+#include <linux/kernel.h>
 
 static struct splash_location default_splash_locations[] = {
 	{
@@ -125,9 +126,11 @@ void splash_get_pos(int *x, int *y)
 #include <dm.h>
 #include <video_console.h>
 #include <video_font.h>
+#include <video_font_data.h>
 
 void splash_display_banner(void)
 {
+	struct video_fontdata __maybe_unused *fontdata = fonts;
 	struct udevice *dev;
 	char buf[DISPLAY_OPTIONS_BANNER_LENGTH];
 	int col, row, ret;
@@ -136,9 +139,9 @@ void splash_display_banner(void)
 	if (ret)
 		return;
 
-#ifdef CONFIG_VIDEO_LOGO
-	col = BMP_LOGO_WIDTH / VIDEO_FONT_WIDTH + 1;
-	row = BMP_LOGO_HEIGHT / VIDEO_FONT_HEIGHT + 1;
+#if IS_ENABLED(CONFIG_VIDEO_LOGO)
+	col = BMP_LOGO_WIDTH / fontdata->width + 1;
+	row = BMP_LOGO_HEIGHT / fontdata->height + 1;
 #else
 	col = 0;
 	row = 0;

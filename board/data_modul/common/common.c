@@ -3,7 +3,6 @@
  * Copyright 2022 Marek Vasut <marex@denx.de>
  */
 
-#include <common.h>
 #include <asm-generic/gpio.h>
 #include <asm-generic/sections.h>
 #include <asm/arch/clock.h>
@@ -12,7 +11,6 @@
 #include <asm/io.h>
 #include <asm/mach-imx/boot_mode.h>
 #include <asm/mach-imx/iomux-v3.h>
-#include <common.h>
 #include <dm/uclass.h>
 #include <hang.h>
 #include <i2c_eeprom.h>
@@ -29,6 +27,8 @@
 DECLARE_GLOBAL_DATA_PTR;
 
 #define WDOG_PAD_CTRL	(PAD_CTL_DSE6 | PAD_CTL_ODE | PAD_CTL_PUE | PAD_CTL_PE)
+
+#define DDRC_ECCCFG0_ECC_MODE_MASK	0x7
 
 u8 dmo_get_memcfg(void)
 {
@@ -47,6 +47,9 @@ u8 dmo_get_memcfg(void)
 					      "dmo,ram-coding-gpios",
 					      gpio, ARRAY_SIZE(gpio),
 					      GPIOD_IS_IN);
+	if (ret < 0)
+		return BIT(2) | BIT(0);
+
 	for (i = 0; i < ret; i++)
 		memcfg |= !!dm_gpio_get_value(&(gpio[i])) << i;
 
@@ -58,13 +61,21 @@ u8 dmo_get_memcfg(void)
 int board_phys_sdram_size(phys_size_t *size)
 {
 	u8 memcfg = dmo_get_memcfg();
+	u8 ecc = 0;
 
-	*size = (4ULL >> ((memcfg >> 1) & 0x3)) * SZ_1G;
+	*size = 4ULL >> ((memcfg >> 1) & 0x3);
+
+	if (IS_ENABLED(CONFIG_IMX8M_DRAM_INLINE_ECC)) {
+		/* 896 MiB, i.e. 1 GiB without 12.5% reserved for in-band ECC */
+		ecc = readl(DDRC_ECCCFG0(0)) & DDRC_ECCCFG0_ECC_MODE_MASK;
+	}
+
+	*size *= SZ_1G - (ecc ? (SZ_1G / 8) : 0);
 
 	return 0;
 }
 
-#ifdef CONFIG_SPL_BUILD
+#ifdef CONFIG_XPL_BUILD
 static void data_modul_imx_edm_sbc_early_init_f(const iomux_v3_cfg_t wdog_pad)
 {
 	struct wdog_regs *wdog = (struct wdog_regs *)WDOG1_BASE_ADDR;
@@ -100,6 +111,12 @@ static void spl_dram_init(struct dram_timing_info *dram_timing_info[8])
 	}
 
 	ddr_init(dram_timing_info[memcfg]);
+
+	if (IS_ENABLED(CONFIG_IMX8M_DRAM_INLINE_ECC)) {
+		printf("DDR:   Inline ECC %sabled\n",
+		       (readl(DDRC_ECCCFG0(0)) & DDRC_ECCCFG0_ECC_MODE_MASK) ?
+		       "en" : "dis");
+	}
 }
 
 void dmo_board_init_f(const iomux_v3_cfg_t wdog_pad,

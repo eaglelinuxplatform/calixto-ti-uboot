@@ -12,7 +12,6 @@
  * Thomas Petazzoni <thomas.petazzoni@free-electrons.com>
  */
 
-#include <common.h>
 #include <cpu_func.h>
 #include <dm.h>
 #include <log.h>
@@ -815,7 +814,7 @@ static void mvneta_defaults_set(struct mvneta_port *pp)
 	mvreg_write(pp, MVNETA_SDMA_CONFIG, val);
 
 	/* Enable PHY polling in hardware if not in fixed-link mode */
-	if (!CONFIG_IS_ENABLED(PHY_FIXED) ||
+	if (!IS_ENABLED(CONFIG_PHY_FIXED) ||
 	    pp->phydev->phy_id != PHY_FIXED_ID) {
 		mvreg_write(pp, MVNETA_PHY_ADDR, pp->phydev->addr);
 
@@ -971,7 +970,6 @@ static struct mvneta_rx_queue *mvneta_rxq_handle_get(struct mvneta_port *pp,
 	return &pp->rxqs[rxq];
 }
 
-
 /* Drop packets received by the RXQ and free buffers */
 static void mvneta_rxq_drop_pkts(struct mvneta_port *pp,
 				 struct mvneta_rx_queue *rxq)
@@ -1108,7 +1106,6 @@ static void mvneta_cleanup_rxqs(struct mvneta_port *pp)
 		mvneta_rxq_deinit(pp, &pp->rxqs[queue]);
 }
 
-
 /* Init all Rx queues */
 static int mvneta_setup_rxqs(struct mvneta_port *pp)
 {
@@ -1176,7 +1173,7 @@ static void mvneta_adjust_link(struct udevice *dev)
 		 * be added). Also, why is ADVERT_FC enabled if we don't enable
 		 * inband AN at all?
 		 */
-		if (CONFIG_IS_ENABLED(PHY_FIXED) &&
+		if (IS_ENABLED(CONFIG_PHY_FIXED) &&
 		    pp->phydev->phy_id == PHY_FIXED_ID)
 			val = MVNETA_GMAC_IB_BYPASS_AN_EN |
 			      MVNETA_GMAC_SET_FC_EN |

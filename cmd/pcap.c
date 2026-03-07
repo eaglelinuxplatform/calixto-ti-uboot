@@ -4,8 +4,8 @@
  * Ramon Fried <rfried.dev@gmail.com>
  */
 
-#include <common.h>
 #include <command.h>
+#include <vsprintf.h>
 #include <net.h>
 #include <net/pcap.h>
 
@@ -48,7 +48,7 @@ static int do_pcap_clear(struct cmd_tbl *cmdtp, int flag, int argc,
 	return pcap_clear() ? CMD_RET_FAILURE : CMD_RET_SUCCESS;
 }
 
-static char pcap_help_text[] =
+U_BOOT_LONGHELP(pcap,
 	"- network packet capture\n\n"
 	"pcap\n"
 	"pcap init\t\t\t<addr> <max_size>\n"
@@ -60,7 +60,7 @@ static char pcap_help_text[] =
 	"With:\n"
 	"\t<addr>: user address to which pcap will be stored (hexedcimal)\n"
 	"\t<max_size>: Maximum size of pcap file (decimal)\n"
-	"\n";
+	"\n");
 
 U_BOOT_CMD_WITH_SUBCMDS(pcap, "pcap", pcap_help_text,
 			U_BOOT_SUBCMD_MKENT(init, 3, 0, do_pcap_init),

@@ -1,12 +1,12 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2018, Linaro Limited
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <avb_verify.h>
 #include <blk.h>
 #include <cpu_func.h>
+#include <env.h>
 #include <image.h>
 #include <malloc.h>
 #include <part.h>
@@ -19,6 +19,55 @@
 extern const unsigned char _binary_common_avb_pubkey_start;
 extern const unsigned char _binary_common_avb_pubkey_end;
 
+const char *str_avb_io_error(AvbIOResult res)
+{
+	switch (res) {
+	case AVB_IO_RESULT_OK:
+		return "Requested operation was successful";
+	case AVB_IO_RESULT_ERROR_IO:
+		return "Underlying hardware encountered an I/O error";
+	case AVB_IO_RESULT_ERROR_OOM:
+		return "Unable to allocate memory";
+	case AVB_IO_RESULT_ERROR_NO_SUCH_PARTITION:
+		return "Requested partition does not exist";
+	case AVB_IO_RESULT_ERROR_RANGE_OUTSIDE_PARTITION:
+		return "Bytes requested is outside the range of partition";
+	case AVB_IO_RESULT_ERROR_NO_SUCH_VALUE:
+		return "Named persistent value does not exist";
+	case AVB_IO_RESULT_ERROR_INVALID_VALUE_SIZE:
+		return "Named persistent value size is not supported";
+	case AVB_IO_RESULT_ERROR_INSUFFICIENT_SPACE:
+		return "Buffer is too small for the requested operation";
+	default:
+		return "Unknown AVB error";
+	}
+}
+
+const char *str_avb_slot_error(AvbSlotVerifyResult res)
+{
+	switch (res) {
+	case AVB_SLOT_VERIFY_RESULT_OK:
+		return "Verification passed successfully";
+	case AVB_SLOT_VERIFY_RESULT_ERROR_OOM:
+		return "Allocation of memory failed";
+	case AVB_SLOT_VERIFY_RESULT_ERROR_IO:
+		return "I/O error occurred while trying to load data";
+	case AVB_SLOT_VERIFY_RESULT_ERROR_VERIFICATION:
+		return "Digest didn't match or signature checks failed";
+	case AVB_SLOT_VERIFY_RESULT_ERROR_ROLLBACK_INDEX:
+		return "Rollback index is less than its stored value";
+	case AVB_SLOT_VERIFY_RESULT_ERROR_PUBLIC_KEY_REJECTED:
+		return "Public keys are not accepted";
+	case AVB_SLOT_VERIFY_RESULT_ERROR_INVALID_METADATA:
+		return "Metadata is invalid or inconsistent";
+	case AVB_SLOT_VERIFY_RESULT_ERROR_UNSUPPORTED_VERSION:
+		return "Metadata requires a newer version of libavb";
+	case AVB_SLOT_VERIFY_RESULT_ERROR_INVALID_ARGUMENT:
+		return "Invalid arguments are used";
+	default:
+		return "Unknown AVB slot verification error";
+	}
+}
 /**
  * ============================================================================
  * Boot states support (GREEN, YELLOW, ORANGE, RED) and dm_verity
@@ -179,9 +228,9 @@ static unsigned long mmc_read_and_flush(struct mmc_part *part,
 	 * Reading fails on unaligned buffers, so we have to
 	 * use aligned temporary buffer and then copy to destination
 	 */
-
 	if (unaligned) {
-		printf("Handling unaligned read buffer..\n");
+		debug("%s: handling unaligned read buffer, addr = 0x%p\n",
+		      __func__, buffer);
 		tmp_buf = get_sector_buf();
 		buf_size = get_sector_buf_size();
 		if (sectors > buf_size / part->info.blksz)
@@ -220,7 +269,8 @@ static unsigned long mmc_write(struct mmc_part *part, lbaint_t start,
 	if (unaligned) {
 		tmp_buf = get_sector_buf();
 		buf_size = get_sector_buf_size();
-		printf("Handling unaligned wrire buffer..\n");
+		debug("%s: handling unaligned read buffer, addr = 0x%p\n",
+		      __func__, buffer);
 		if (sectors > buf_size / part->info.blksz)
 			sectors = buf_size / part->info.blksz;
 
@@ -248,28 +298,35 @@ static struct mmc_part *get_partition(AvbOps *ops, const char *partition)
 	dev_num = get_boot_device(ops);
 	part->mmc = find_mmc_device(dev_num);
 	if (!part->mmc) {
-		printf("No MMC device at slot %x\n", dev_num);
+		printf("%s: no MMC device at slot %x\n", __func__, dev_num);
 		goto err;
 	}
 
-	if (mmc_init(part->mmc)) {
-		printf("MMC initialization failed\n");
+	ret = mmc_init(part->mmc);
+	if (ret) {
+		printf("%s: MMC initialization failed, err = %d\n",
+		       __func__, ret);
 		goto err;
 	}
 
-	ret = mmc_switch_part(part->mmc, part_num);
-	if (ret)
-		goto err;
+	if (IS_MMC(part->mmc)) {
+		ret = mmc_switch_part(part->mmc, part_num);
+		if (ret) {
+			printf("%s: MMC part switch failed, err = %d\n",
+			       __func__, ret);
+			goto err;
+		}
+	}
 
 	mmc_blk = mmc_get_blk_desc(part->mmc);
 	if (!mmc_blk) {
-		printf("Error - failed to obtain block descriptor\n");
+		printf("%s: failed to obtain block descriptor\n", __func__);
 		goto err;
 	}
 
 	ret = part_get_info_by_name(mmc_blk, partition, &part->info);
 	if (ret < 0) {
-		printf("Can't find partition '%s'\n", partition);
+		printf("%s: can't find partition '%s'\n", __func__, partition);
 		goto err;
 	}
 
@@ -584,7 +641,7 @@ static AvbIOResult read_rollback_index(AvbOps *ops,
 {
 #ifndef CONFIG_OPTEE_TA_AVB
 	/* For now we always return 0 as the stored rollback index. */
-	printf("%s not supported yet\n", __func__);
+	debug("%s: rollback protection is not implemented\n", __func__);
 
 	if (out_rollback_index)
 		*out_rollback_index = 0;
@@ -630,7 +687,7 @@ static AvbIOResult write_rollback_index(AvbOps *ops,
 {
 #ifndef CONFIG_OPTEE_TA_AVB
 	/* For now this is a no-op. */
-	printf("%s not supported yet\n", __func__);
+	debug("%s: rollback protection is not implemented\n", __func__);
 
 	return AVB_IO_RESULT_OK;
 #else
@@ -664,24 +721,191 @@ static AvbIOResult write_rollback_index(AvbOps *ops,
  */
 static AvbIOResult read_is_device_unlocked(AvbOps *ops, bool *out_is_unlocked)
 {
-#ifndef CONFIG_OPTEE_TA_AVB
-	/* For now we always return that the device is unlocked. */
-
-	printf("%s not supported yet\n", __func__);
-
-	*out_is_unlocked = true;
-
-	return AVB_IO_RESULT_OK;
-#else
+#if defined(CONFIG_OPTEE_TA_AVB) && defined(CONFIG_FASTBOOT_LOCKING)
+	/* Use AVB TA when both TA_AVB and fastboot locking are enabled */
 	AvbIOResult rc;
 	struct tee_param param = { .attr = TEE_PARAM_ATTR_TYPE_VALUE_OUTPUT };
 
+	debug("%s: reading device lock state via AVB TA\n", __func__);
 	rc = invoke_func(ops->user_data, TA_AVB_CMD_READ_LOCK_STATE, 1, &param);
-	if (rc)
-		return rc;
+	if (rc) {
+		debug("%s: AVB TA failed (rc=%d), falling back to environment\n", __func__, rc);
+		goto fallback_env;
+	}
 	*out_is_unlocked = !param.u.value.a;
+	debug("%s: AVB TA returned lock_state=%llu (unlocked=%d)\n",
+	      __func__, (unsigned long long)param.u.value.a, *out_is_unlocked);
+	return AVB_IO_RESULT_OK;
+
+fallback_env:
+#endif
+#ifdef CONFIG_FASTBOOT_LOCKING
+	/* Use environment variable when fastboot locking is enabled */
+	char *device_unlocked = env_get("device_unlocked");
+
+	debug("%s: reading device lock state via environment\n", __func__);
+	*out_is_unlocked = (device_unlocked && !strcmp(device_unlocked, "1"));
+	debug("%s: environment device_unlocked=%s (unlocked=%d)\n", __func__,
+	      device_unlocked ? device_unlocked : "NULL", *out_is_unlocked);
+	return AVB_IO_RESULT_OK;
+#else
+	/* For systems without fastboot locking, always return unlocked */
+	debug("%s: device locking is not implemented, returning unlocked\n", __func__);
+	*out_is_unlocked = true;
 	return AVB_IO_RESULT_OK;
 #endif
+}
+
+/**
+ * write_is_device_unlocked() - sets whether the device is unlocked
+ *
+ * @ops: contains AVB ops handlers
+ * @is_unlocked: device unlock state to set, true if unlocked,
+ *       false otherwise
+ *
+ * @return:
+ *       AVB_IO_RESULT_OK: state is set successfully
+ *       AVB_IO_RESULT_ERROR_IO: an error occurred
+ */
+AvbIOResult write_is_device_unlocked(AvbOps *ops, bool is_unlocked)
+{
+#ifdef CONFIG_OPTEE_TA_AVB
+	/* Use AVB TA when available */
+	AvbIOResult rc;
+	struct tee_param param = { .attr = TEE_PARAM_ATTR_TYPE_VALUE_INPUT };
+
+	debug("%s: setting device lock state via AVB TA (unlocked=%d)\n", __func__, is_unlocked);
+	/* TA expects lock state (opposite of unlock state) */
+	param.u.value.a = !is_unlocked;
+
+	rc = invoke_func(ops->user_data, TA_AVB_CMD_WRITE_LOCK_STATE, 1, &param);
+	if (rc != AVB_IO_RESULT_OK) {
+		debug("%s: AVB TA failed (rc=%d)\n", __func__, rc);
+		return rc;
+	}
+	debug("%s: AVB TA write successful\n", __func__);
+	return AVB_IO_RESULT_OK;
+#else
+	/* No AVB TA available */
+	debug("%s: AVB TA not available\n", __func__);
+	return AVB_IO_RESULT_ERROR_IO;
+#endif
+}
+
+/**
+ * avb_is_device_unlocked() - checks if device is unlocked using AVB TA or environment
+ *
+ * This function can be called without AVB operations and will use the AVB TA
+ * if available, otherwise fall back to environment variables.
+ *
+ * @return: true if device is unlocked, false if locked
+ */
+bool avb_is_device_unlocked(void)
+{
+#ifdef CONFIG_OPTEE_TA_AVB
+	/* Try to use AVB TA if available */
+	struct AvbOpsData *ops_data;
+	AvbIOResult rc;
+	struct tee_param param = { .attr = TEE_PARAM_ATTR_TYPE_VALUE_OUTPUT };
+	bool is_unlocked;
+
+	/* Try to get AVB ops data - this is a best effort attempt */
+	ops_data = (struct AvbOpsData *)avb_ops_alloc(0);
+	if (ops_data) {
+		debug("%s: reading device lock state via AVB TA\n", __func__);
+		rc = invoke_func(ops_data, TA_AVB_CMD_READ_LOCK_STATE, 1, &param);
+		if (rc == AVB_IO_RESULT_OK) {
+			is_unlocked = !param.u.value.a;
+			debug("%s: AVB TA returned lock_state=%llu (unlocked=%d)\n",
+			      __func__, (unsigned long long)param.u.value.a, is_unlocked);
+			avb_ops_free(&ops_data->ops);
+			return is_unlocked;
+		}
+		debug("%s: AVB TA failed (rc=%d)\n", __func__, rc);
+		avb_ops_free(&ops_data->ops);
+	}
+#endif
+
+	/* No AVB TA available or failed */
+	debug("%s: AVB TA not available, returning false (locked)\n", __func__);
+	return false;
+}
+
+/* Forward declarations for static functions used by critical lock functions */
+static AvbIOResult read_persistent_value(AvbOps *ops, const char *name,
+					 size_t buffer_size, u8 *out_buffer,
+					 size_t *out_num_bytes_read);
+static AvbIOResult write_persistent_value(AvbOps *ops, const char *name,
+					  size_t value_size, const u8 *value);
+
+/**
+ * write_is_device_critical_unlocked() - sets whether the device critical
+ * partitions are unlocked using AVB persistent values
+ *
+ * Uses a separate AVB persistent value "critical_unlocked" to manage critical lock state
+ * independently from the standard device lock state.
+ *
+ * @ops: contains AVB ops handlers
+ * @is_unlocked: device unlock state to write
+ *
+ * @return:
+ *      AVB_IO_RESULT_OK, on success
+ *      AVB_IO_RESULT_ERROR_*, on error
+ */
+AvbIOResult write_is_device_critical_unlocked(AvbOps *ops, bool is_unlocked)
+{
+	/* Use AVB persistent value for critical unlock state */
+	AvbIOResult rc;
+	u8 unlock_state = is_unlocked ? 1 : 0;
+
+	debug("%s: setting critical lock state via AVB persistent value (unlocked=%d)\n",
+	      __func__, is_unlocked);
+
+	rc = write_persistent_value(ops, "critical_unlocked", 1, &unlock_state);
+	if (rc != AVB_IO_RESULT_OK) {
+		debug("%s: AVB persistent value write failed (rc=%d)\n", __func__, rc);
+		return rc;
+	}
+	debug("%s: AVB persistent value write successful\n", __func__);
+	return AVB_IO_RESULT_OK;
+}
+
+/**
+ * avb_is_device_critical_unlocked() - checks if device critical partitions
+ * are unlocked using AVB persistent values
+ *
+ * Uses a separate AVB persistent value "critical_unlocked" to check critical lock state
+ * independently from the standard device lock state.
+ *
+ * @return: true if critical partitions are unlocked, false if locked
+ */
+bool avb_is_device_critical_unlocked(void)
+{
+	/* Use AVB persistent value for critical unlock state */
+	AvbOps *ops;
+	AvbIOResult rc;
+	u8 unlock_state = 0;
+	size_t num_bytes_read = 0;
+
+	ops = avb_ops_alloc(0);
+	if (!ops)
+		return false;  /* Default to locked if no AVB available */
+
+	debug("%s: reading critical lock state via AVB persistent value\n", __func__);
+	rc = read_persistent_value(ops, "critical_unlocked", 1, &unlock_state, &num_bytes_read);
+	if (rc != AVB_IO_RESULT_OK || num_bytes_read != 1) {
+		debug("%s: AVB persistent value read failed (rc=%d, bytes=%zu)\n",
+		      __func__, rc, num_bytes_read);
+		avb_ops_free(ops);
+		return false;  /* Default to locked if read fails */
+	}
+
+	bool unlocked = (unlock_state == 1);
+
+	debug("%s: AVB persistent value critical_unlocked=%u (unlocked=%d)\n",
+	      __func__, unlock_state, unlocked);
+	avb_ops_free(ops);
+	return unlocked;
 }
 
 /**

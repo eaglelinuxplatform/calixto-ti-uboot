@@ -3,7 +3,7 @@
  * Copyright 2017-2018, 2021 NXP
  */
 
-#include <common.h>
+#include <config.h>
 #include <fdt_support.h>
 #include <i2c.h>
 #include <asm/cache.h>
@@ -12,9 +12,6 @@
 #include <asm/io.h>
 #include <asm/arch/clock.h>
 #include <asm/arch/fsl_serdes.h>
-#ifdef CONFIG_FSL_LS_PPA
-#include <asm/arch/ppa.h>
-#endif
 #include <asm/arch/mmu.h>
 #include <asm/arch/soc.h>
 #include <fsl_esdhc.h>
@@ -143,7 +140,7 @@ int dram_init(void)
 #endif
 	mmdc_init(&mparam);
 
-#if !defined(CONFIG_SPL) || defined(CONFIG_SPL_BUILD)
+#if !defined(CONFIG_SPL) || defined(CONFIG_XPL_BUILD)
 	/* This will break-before-make MMU for DDR */
 	update_early_mmu_table();
 #endif
@@ -171,9 +168,6 @@ int board_init(void)
 	if (current_el() == 3)
 		out_le32(&cci->ctrl_ord, CCI400_CTRLORD_EN_BARRIER);
 
-#ifdef CONFIG_FSL_LS_PPA
-	ppa_init();
-#endif
 	return 0;
 }
 

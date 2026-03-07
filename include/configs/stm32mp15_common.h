@@ -21,10 +21,6 @@
  */
 #define CFG_SYS_BOOTMAPSZ		SZ_256M
 
-/* NAND support */
-
-/* Ethernet need */
-
 #define STM32MP_FIP_IMAGE_GUID \
 	EFI_GUID(0x19d5df83, 0x11b0, 0x457b, 0xbe, 0x2c, \
 		 0x75, 0x59, 0xc1, 0x31, 0x42, 0xa5)
@@ -33,7 +29,7 @@
 #ifdef CONFIG_DISTRO_DEFAULTS
 /*****************************************************************************/
 
-#if !defined(CONFIG_SPL_BUILD)
+#if !defined(CONFIG_XPL_BUILD)
 
 #ifdef CONFIG_CMD_MMC
 #define BOOT_TARGET_MMC0(func)	func(MMC, mmc, 0)
@@ -92,19 +88,6 @@
 		"run distro_bootcmd;" \
 	"fi;\0"
 
-#ifdef CONFIG_FASTBOOT_CMD_OEM_FORMAT
-/* eMMC default partitions for fastboot command: oem format */
-#define STM32MP_PARTS_DEFAULT \
-	"partitions=" \
-	"name=ssbl,size=2M;" \
-	"name=bootfs,size=64MB,bootable;" \
-	"name=vendorfs,size=16M;" \
-	"name=rootfs,size=746M;" \
-	"name=userfs,size=-\0"
-#else
-#define STM32MP_PARTS_DEFAULT
-#endif
-
 #define STM32MP_EXTRA \
 	"env_check=if env info -p -d -q; then env save; fi\0" \
 	"boot_net_usb_start=true\0"
@@ -138,12 +121,11 @@
 #define CFG_EXTRA_ENV_SETTINGS \
 	STM32MP_MEM_LAYOUT \
 	STM32MP_BOOTCMD \
-	STM32MP_PARTS_DEFAULT \
 	BOOTENV \
 	STM32MP_EXTRA \
 	STM32MP_BOARD_EXTRA_ENV
 
-#endif /* ifndef CONFIG_SPL_BUILD */
+#endif /* ifndef CONFIG_XPL_BUILD */
 #endif /* ifdef CONFIG_DISTRO_DEFAULTS*/
 
 #endif /* __CONFIG_STM32MP15_COMMMON_H */

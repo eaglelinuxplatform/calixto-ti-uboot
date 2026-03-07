@@ -4,7 +4,6 @@
  */
 
 #include <config.h>
-#include <common.h>
 #include <blk.h>
 #include <env.h>
 #include <fastboot.h>
@@ -18,8 +17,6 @@
 #include <div64.h>
 #include <linux/compat.h>
 #include <android_image.h>
-
-#define FASTBOOT_MAX_BLK_WRITE 16384
 
 #define BOOT_PARTITION_NAME "boot"
 

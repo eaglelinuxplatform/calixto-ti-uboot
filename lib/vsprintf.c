@@ -13,13 +13,13 @@
  * from hush: simple_itoa() was lifted from boa-0.93.15
  */
 
-#include <common.h>
 #include <charset.h>
 #include <efi_loader.h>
 #include <div64.h>
 #include <hexdump.h>
 #include <stdarg.h>
-#include <uuid.h>
+#include <u-boot/uuid.h>
+#include <stdio.h>
 #include <vsprintf.h>
 #include <linux/ctype.h>
 #include <linux/err.h>
@@ -308,7 +308,7 @@ static __maybe_unused char *string16(char *buf, char *end, u16 *s,
 	return buf;
 }
 
-#if CONFIG_IS_ENABLED(EFI_DEVICE_PATH_TO_TEXT)
+#if CONFIG_IS_ENABLED(EFI_DEVICE_PATH_TO_TEXT) && !defined(API_BUILD)
 static char *device_path_string(char *buf, char *end, void *dp, int field_width,
 				int precision, int flags)
 {
@@ -674,15 +674,20 @@ repeat:
 
 		case 'x':
 			flags |= SMALL;
+		/* fallthrough */
 		case 'X':
 			base = 16;
 			break;
 
 		case 'd':
-			if (fmt[1] == 'E')
+			if (fmt[1] == 'E') {
 				flags |= ERRSTR;
+				fmt++;
+			}
+		/* fallthrough */
 		case 'i':
 			flags |= SIGN;
+		/* fallthrough */
 		case 'u':
 			break;
 
@@ -722,7 +727,6 @@ repeat:
 			ADDCH(str, ' ');
 			for (p = errno_str(num); *p; p++)
 				ADDCH(str, *p);
-			fmt++;
 		}
 	}
 

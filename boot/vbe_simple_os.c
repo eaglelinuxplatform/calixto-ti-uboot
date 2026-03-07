@@ -8,7 +8,6 @@
 
 #define LOG_CATEGORY LOGC_BOOT
 
-#include <common.h>
 #include <dm.h>
 #include <bootflow.h>
 #include <vbe.h>
@@ -94,7 +93,7 @@ static int bootmeth_vbe_simple_ft_fixup(void *ctx, struct event *event)
 
 		/* Copy over the vbe properties for fwupd */
 		log_debug("Fixing up: %s\n", dev->name);
-		ret = ofnode_copy_props(dev_ofnode(dev), subnode);
+		ret = ofnode_copy_props(subnode, dev_ofnode(dev));
 		if (ret)
 			return log_msg_ret("cp", ret);
 
@@ -109,4 +108,4 @@ static int bootmeth_vbe_simple_ft_fixup(void *ctx, struct event *event)
 
 	return 0;
 }
-EVENT_SPY(EVT_FT_FIXUP, bootmeth_vbe_simple_ft_fixup);
+EVENT_SPY_FULL(EVT_FT_FIXUP, bootmeth_vbe_simple_ft_fixup);

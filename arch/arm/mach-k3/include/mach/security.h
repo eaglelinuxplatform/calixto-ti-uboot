@@ -2,7 +2,7 @@
 /*
  * K3: Security related definitions
  *
- * Copyright (C) 2022 Texas Instruments Incorporated - https://www.ti.com/
+ * Copyright (C) 2024 Texas Instruments Incorporated - https://www.ti.com/
  *	Manorit Chawdhry <m-chawdhry@ti.com>
  */
 

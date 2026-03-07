@@ -7,7 +7,6 @@
  * Author: Uri Mashiach <uri.mashiach@compulab.co.il>
  */
 
-#include <common.h>
 #include <hang.h>
 #include <init.h>
 #include <spl.h>
@@ -16,6 +15,7 @@
 #include <asm/arch-mx7/mx7-pins.h>
 #include <asm/arch-mx7/clock.h>
 #include <asm/arch-mx7/mx7-ddr.h>
+#include <asm/sections.h>
 #include "common.h"
 
 #ifdef CONFIG_FSL_ESDHC_IMX

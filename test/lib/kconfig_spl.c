@@ -6,7 +6,6 @@
  * Written by Simon Glass <sjg@chromium.org>
  */
 
-#include <common.h>
 #include <test/lib.h>
 #include <test/test.h>
 #include <test/ut.h>
@@ -15,9 +14,9 @@ static int lib_test_spl_is_enabled(struct unit_test_state *uts)
 {
 	ulong val;
 
-	ut_asserteq(0, CONFIG_IS_ENABLED(CMDLINE))
-	ut_asserteq(1, CONFIG_IS_ENABLED(OF_PLATDATA))
-	ut_asserteq(0, CONFIG_IS_ENABLED(_UNDEFINED))
+	ut_asserteq(0, CONFIG_IS_ENABLED(CMDLINE));
+	ut_asserteq(1, CONFIG_IS_ENABLED(OF_PLATDATA));
+	ut_asserteq(0, CONFIG_IS_ENABLED(_UNDEFINED));
 
 	/*
 	 * This fails if CONFIG_TEST_KCONFIG_ENABLE is not enabled, since the

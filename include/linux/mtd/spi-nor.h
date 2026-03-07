@@ -13,6 +13,9 @@
 #include <linux/mtd/mtd.h>
 #include <spi-mem.h>
 
+/* In parallel configuration enable multiple CS */
+#define SPI_NOR_ENABLE_MULTI_CS	(BIT(0) | BIT(1))
+
 /*
  * Manufacturer IDs
  *
@@ -45,6 +48,8 @@
 #define SPINOR_OP_WRSR		0x01	/* Write status register 1 byte */
 #define SPINOR_OP_RDSR2		0x3f	/* Read status register 2 */
 #define SPINOR_OP_WRSR2		0x3e	/* Write status register 2 */
+#define SPINOR_OP_RDSR3		0x15	/* Read status register 3 */
+#define SPINOR_OP_WRSR3		0x11	/* Write status register 3 */
 #define SPINOR_OP_READ		0x03	/* Read data bytes (low frequency) */
 #define SPINOR_OP_READ_FAST	0x0b	/* Read data bytes (high frequency) */
 #define SPINOR_OP_READ_1_1_2	0x3b	/* Read data bytes (Dual Output SPI) */
@@ -136,14 +141,6 @@
 #define SPINOR_OP_BRRD		0x16	/* Bank register read */
 #define SPINOR_OP_CLSR		0x30	/* Clear status register 1 */
 #define SPINOR_OP_EX4B_CYPRESS	0xB8	/* Exit 4-byte mode */
-#define SPINOR_OP_RDAR		0x65	/* Read any register */
-#define SPINOR_OP_WRAR		0x71	/* Write any register */
-#define SPINOR_REG_ADDR_STR1V	0x00800000
-#define SPINOR_REG_ADDR_CFR1V	0x00800002
-#define SPINOR_REG_ADDR_CFR3V	0x00800004
-#define SPINOR_REG_ADDR_ARCFN	0x00000006
-#define CFR3V_UNHYSA		BIT(3)	/* Uniform sectors or not */
-#define CFR3V_PGMBUF		BIT(4)	/* Program buffer size */
 
 /* Used for Micron flashes only. */
 #define SPINOR_OP_RD_EVCR	0x65	/* Read EVCR register */
@@ -185,11 +182,24 @@
 /* Status Register 2 bits. */
 #define SR2_QUAD_EN_BIT7	BIT(7)
 
+/* Status Register 3 bits. */
+#define SR3_WPS			BIT(2)
+
+/*
+ * Maximum number of flashes that can be connected
+ * in stacked/parallel configuration
+ */
+#define SNOR_FLASH_CNT_MAX	2
+
 /* For Cypress flash. */
 #define SPINOR_OP_RD_ANY_REG			0x65	/* Read any register */
 #define SPINOR_OP_WR_ANY_REG			0x71	/* Write any register */
-#define SPINOR_OP_S28_SE_4K			0x21
+#define SPINOR_OP_CYPRESS_CLPEF			0x82	/* Clear P/E err flag */
+#define SPINOR_REG_CYPRESS_ARCFN		0x00000006
+#define SPINOR_REG_CYPRESS_STR1V		0x00800000
+#define SPINOR_REG_CYPRESS_CFR1V		0x00800002
 #define SPINOR_REG_CYPRESS_CFR2V		0x00800003
+#define SPINOR_REG_CYPRESS_CFR2_MEMLAT_MASK	GENMASK(3, 0)
 #define SPINOR_REG_CYPRESS_CFR2_MEMLAT_11_24	0xb
 #define SPINOR_REG_CYPRESS_CFR3V		0x00800004
 #define SPINOR_REG_CYPRESS_CFR3_PGSZ		BIT(4) /* Page size. */
@@ -298,6 +308,13 @@ enum spi_nor_option_flags {
 	SNOR_F_BROKEN_RESET	= BIT(6),
 	SNOR_F_SOFT_RESET	= BIT(7),
 	SNOR_F_IO_MODE_EN_VOLATILE = BIT(8),
+#if defined(CONFIG_SPI_STACKED_PARALLEL)
+	SNOR_F_HAS_STACKED	= BIT(9),
+	SNOR_F_HAS_PARALLEL	= BIT(10),
+#else
+	SNOR_F_HAS_STACKED	= 0,
+	SNOR_F_HAS_PARALLEL	= 0,
+#endif
 };
 
 struct spi_nor;
@@ -440,6 +457,7 @@ enum spi_nor_pp_command_index {
 
 struct spi_nor_flash_parameter {
 	u64				size;
+	u32				writesize;
 	u32				page_size;
 	u8				rdsr_dummy;
 	u8				rdsr_addr_nbytes;
@@ -555,6 +573,7 @@ struct spi_nor {
 	u8			bank_read_cmd;
 	u8			bank_write_cmd;
 	u8			bank_curr;
+	u8			upage_prev;
 #endif
 	enum spi_nor_protocol	read_proto;
 	enum spi_nor_protocol	write_proto;

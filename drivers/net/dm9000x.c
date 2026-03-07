@@ -49,7 +49,6 @@
  * TODO: external MII is not functional, only internal at the moment.
  */
 
-#include <common.h>
 #include <command.h>
 #include <dm.h>
 #include <malloc.h>
@@ -651,7 +650,7 @@ static int dm9000_of_to_plat(struct udevice *dev)
 
 	pdata->iobase = dev_read_addr_index(dev, 0);
 	db->base_io = (void __iomem *)pdata->iobase;
-	db->base_data = (void __iomem *)dev_read_addr_index(dev, 1);
+	db->base_data = dev_read_addr_index_ptr(dev, 1);
 
 	return 0;
 }

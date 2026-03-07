@@ -62,6 +62,7 @@ struct pxe_label {
  *
  * title - the name of the menu as given by a 'menu title' line.
  * default_label - the name of the default label, if any.
+ * fallback_label - the name of the fallback label, if any.
  * bmp - the bmp file name which is displayed in background
  * timeout - time in tenths of a second to wait for a user key-press before
  *           booting the default label.
@@ -73,6 +74,7 @@ struct pxe_label {
 struct pxe_menu {
 	char *title;
 	char *default_label;
+	char *fallback_label;
 	char *bmp;
 	int timeout;
 	int prompt;
@@ -93,6 +95,9 @@ typedef int (*pxe_getfile_func)(struct pxe_context *ctx, const char *file_path,
  * @bootdir: Directory that files are loaded from ("" if no directory). This is
  *	allocated
  * @pxe_file_size: Size of the PXE file
+ * @use_ipv6: TRUE : use IPv6 addressing, FALSE : use IPv4 addressing
+ * @use_fallback: TRUE : use "fallback" option as default, FALSE : use
+ *	"default" option as default
  */
 struct pxe_context {
 	struct cmd_tbl *cmdtp;
@@ -112,6 +117,8 @@ struct pxe_context {
 	bool allow_abs_path;
 	char *bootdir;
 	ulong pxe_file_size;
+	bool use_ipv6;
+	bool use_fallback;
 };
 
 /**
@@ -209,12 +216,19 @@ int format_mac_pxe(char *outbuf, size_t outbuf_len);
  * @allow_abs_path: true to allow absolute paths
  * @bootfile: Bootfile whose directory loaded files are relative to, NULL if
  *	none
+ * @use_ipv6: TRUE : use IPv6 addressing
+ *            FALSE : use IPv4 addressing
+ * @use_fallback: TRUE : Use "fallback" option instead of "default" should no
+ *                       other choice be selected
+ *                FALSE : Use "default" option should no other choice be
+ *                        selected
  * Return: 0 if OK, -ENOMEM if out of memory, -E2BIG if bootfile is larger than
  *	MAX_TFTP_PATH_LEN bytes
  */
 int pxe_setup_ctx(struct pxe_context *ctx, struct cmd_tbl *cmdtp,
 		  pxe_getfile_func getfile, void *userdata,
-		  bool allow_abs_path, const char *bootfile);
+		  bool allow_abs_path, const char *bootfile, bool use_ipv6,
+		  bool use_fallback);
 
 /**
  * pxe_destroy_ctx() - Destroy a PXE context
@@ -251,7 +265,9 @@ int pxe_get_file_size(ulong *sizep);
  *	"rpi/info", which indicates that all files should be fetched from the
  *	"rpi/" subdirectory
  * @sizep: Size of the PXE file (not bootfile)
+ * @use_ipv6: TRUE : use IPv6 addressing
+ *            FALSE : use IPv4 addressing
  */
-int pxe_get(ulong pxefile_addr_r, char **bootdirp, ulong *sizep);
+int pxe_get(ulong pxefile_addr_r, char **bootdirp, ulong *sizep, bool use_ipv6);
 
 #endif /* __PXE_UTILS_H */

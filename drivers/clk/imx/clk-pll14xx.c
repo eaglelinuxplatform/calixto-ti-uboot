@@ -5,7 +5,6 @@
  * Peng Fan <peng.fan@nxp.com>
  */
 
-#include <common.h>
 #include <asm/io.h>
 #include <malloc.h>
 #include <clk-uclass.h>
@@ -18,6 +17,7 @@
 #include <linux/iopoll.h>
 #include <clk.h>
 #include <div64.h>
+#include <linux/printk.h>
 
 #include "clk.h"
 
@@ -247,7 +247,6 @@ static ulong clk_pll1416x_set_rate(struct clk *clk, unsigned long drate)
 	/* Enable BYPASS */
 	tmp |= BYPASS_MASK;
 	writel(tmp, pll->base);
-
 
 	div_val = (rate->mdiv << MDIV_SHIFT) | (rate->pdiv << PDIV_SHIFT) |
 		(rate->sdiv << SDIV_SHIFT);

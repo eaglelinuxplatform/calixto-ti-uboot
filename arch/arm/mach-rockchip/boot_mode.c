@@ -3,7 +3,6 @@
  * (C) Copyright 2016 Rockchip Electronics Co., Ltd
  */
 
-#include <common.h>
 #include <adc.h>
 #include <command.h>
 #include <env.h>
@@ -12,6 +11,7 @@
 #include <asm/arch-rockchip/boot_mode.h>
 #include <dm/device.h>
 #include <dm/uclass.h>
+#include <linux/printk.h>
 
 #if (CONFIG_ROCKCHIP_BOOT_MODE_REG == 0)
 
@@ -39,6 +39,7 @@ void set_back_to_bootrom_dnl_flag(void)
 
 __weak int rockchip_dnl_key_pressed(void)
 {
+#if CONFIG_IS_ENABLED(ADC)
 	unsigned int val;
 	struct udevice *dev;
 	struct uclass *uc;
@@ -68,6 +69,9 @@ __weak int rockchip_dnl_key_pressed(void)
 		return true;
 	else
 		return false;
+#else
+	return false;
+#endif
 }
 
 void rockchip_dnl_mode_check(void)

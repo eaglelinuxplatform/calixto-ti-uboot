@@ -2,13 +2,12 @@
 /*
  * IPU remoteproc driver for various SoCs
  *
- * Copyright (C) 2019 Texas Instruments Incorporated - http://www.ti.com/
+ * Copyright (C) 2019 Texas Instruments Incorporated - https://www.ti.com/
  *	Angela Stegmaier  <angelabaker@ti.com>
  *	Venkateswara Rao Mandela <venkat.mandela@ti.com>
  *      Keerthy <j-keerthy@ti.com>
  */
 
-#include <common.h>
 #include <hang.h>
 #include <cpu_func.h>
 #include <dm.h>

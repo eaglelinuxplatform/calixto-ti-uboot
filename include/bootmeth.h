@@ -7,6 +7,8 @@
 #ifndef __bootmeth_h
 #define __bootmeth_h
 
+#include <linux/bitops.h>
+
 struct blk_desc;
 struct bootflow;
 struct bootflow_iter;
@@ -16,9 +18,12 @@ struct udevice;
  * enum bootmeth_flags - Flags for bootmeths
  *
  * @BOOTMETHF_GLOBAL: bootmeth handles bootdev selection automatically
+ * @BOOTMETHF_ANY_PART: bootmeth is willing to check any partition, even if it
+ * has no filesystem
  */
 enum bootmeth_flags {
 	BOOTMETHF_GLOBAL	= BIT(0),
+	BOOTMETHF_ANY_PART	= BIT(1),
 };
 
 /**
@@ -37,7 +42,7 @@ struct bootmeth_ops {
 	/**
 	 * get_state_desc() - get detailed state information
 	 *
-	 * Prodecues a textual description of the state of the bootmeth. This
+	 * Produces a textual description of the state of the boot method. This
 	 * can include newline characters if it extends to multiple lines. It
 	 * must be a nul-terminated string.
 	 *
@@ -119,19 +124,44 @@ struct bootmeth_ops {
 	 */
 	int (*read_file)(struct udevice *dev, struct bootflow *bflow,
 			 const char *file_path, ulong addr, ulong *sizep);
-
+#if CONFIG_IS_ENABLED(BOOTSTD_FULL)
+	/**
+	 * readall() - read all files for a bootflow
+	 *
+	 * @dev:	Bootmethod device to boot
+	 * @bflow:	Bootflow to read
+	 * Return: 0 if OK, -EIO on I/O error, other -ve on other error
+	 */
+	int (*read_all)(struct udevice *dev, struct bootflow *bflow);
+#endif /* BOOTSTD_FULL */
 	/**
 	 * boot() - boot a bootflow
 	 *
 	 * @dev:	Bootmethod device to boot
 	 * @bflow:	Bootflow to boot
 	 * Return: does not return on success, since it should boot the
-	 *	Operating Systemn. Returns -EFAULT if that fails, -ENOTSUPP if
+	 *	operating system. Returns -EFAULT if that fails, -ENOTSUPP if
 	 *	trying method resulted in finding out that is not actually
 	 *	supported for this boot and should not be tried again unless
 	 *	something changes, other -ve on other error
 	 */
 	int (*boot)(struct udevice *dev, struct bootflow *bflow);
+
+	/**
+	 * set_property() - set the bootmeth property
+	 *
+	 * This allows the setting of boot method specific properties to enable
+	 * automated finer grain control of the boot process
+	 *
+	 * @name: String containing the name of the relevant boot method
+	 * @property: String containing the name of the property to set
+	 * @value: String containing the value to be set for the specified
+	 *         property
+	 * Return: 0 if OK, -ENODEV if an unknown bootmeth or property is
+	 *      provided, -ENOENT if there are no bootmeth devices
+	 */
+	int (*set_property)(struct udevice *dev, const char *property,
+			    const char *value);
 };
 
 #define bootmeth_get_ops(dev)  ((struct bootmeth_ops *)(dev)->driver->ops)
@@ -139,7 +169,7 @@ struct bootmeth_ops {
 /**
  * bootmeth_get_state_desc() - get detailed state information
  *
- * Prodecues a textual description of the state of the bootmeth. This
+ * Produces a textual description of the state of the boot method. This
  * can include newline characters if it extends to multiple lines. It
  * must be a nul-terminated string.
  *
@@ -224,12 +254,26 @@ int bootmeth_read_file(struct udevice *dev, struct bootflow *bflow,
 		       const char *file_path, ulong addr, ulong *sizep);
 
 /**
+ * bootmeth_read_all() - read all bootflow files
+ *
+ * Some bootmeths delay reading of large files until booting is requested. This
+ * causes those files to be read.
+ *
+ * @dev:	Bootmethod device to use
+ * @bflow:	Bootflow to read
+ * Return: does not return on success, since it should boot the
+ *	operating system. Returns -EFAULT if that fails, other -ve on
+ *	other error
+ */
+int bootmeth_read_all(struct udevice *dev, struct bootflow *bflow);
+
+/**
  * bootmeth_boot() - boot a bootflow
  *
  * @dev:	Bootmethod device to boot
  * @bflow:	Bootflow to boot
  * Return: does not return on success, since it should boot the
- *	Operating Systemn. Returns -EFAULT if that fails, other -ve on
+ *	operating system. Returns -EFAULT if that fails, other -ve on
  *	other error
  */
 int bootmeth_boot(struct udevice *dev, struct bootflow *bflow);
@@ -238,7 +282,7 @@ int bootmeth_boot(struct udevice *dev, struct bootflow *bflow);
  * bootmeth_setup_iter_order() - Set up the ordering of bootmeths to scan
  *
  * This sets up the ordering information in @iter, based on the selected
- * ordering of the bootmethds in bootstd_priv->bootmeth_order. If there is no
+ * ordering of the boot methods in bootstd_priv->bootmeth_order. If there is no
  * ordering there, then all bootmethods are added
  *
  * @iter: Iterator to update with the order
@@ -255,12 +299,40 @@ int bootmeth_setup_iter_order(struct bootflow_iter *iter, bool include_global);
  * This selects the ordering to use for bootmeths
  *
  * @order_str: String containing the ordering. This is a comma-separate list of
- * bootmeth-device names, e.g. "syslinux,efi". If empty then a default ordering
+ * bootmeth-device names, e.g. "extlinux,efi". If empty then a default ordering
  * is used, based on the sequence number of devices (i.e. using aliases)
  * Return: 0 if OK, -ENODEV if an unknown bootmeth is mentioned, -ENOMEM if
  * out of memory, -ENOENT if there are no bootmeth devices
  */
 int bootmeth_set_order(const char *order_str);
+
+/**
+ * bootmeth_set_property() - Set the bootmeth property
+ *
+ * This allows the setting of boot method specific properties to enable
+ * automated finer grain control of the boot process
+ *
+ * @name: String containing the name of the relevant boot method
+ * @property: String containing the name of the property to set
+ * @value: String containing the value to be set for the specified property
+ * Return: 0 if OK, -ENODEV if an unknown bootmeth or property is provided,
+ * -ENOENT if there are no bootmeth devices
+ */
+int bootmeth_set_property(const char *name, const char *property,
+			  const char *value);
+
+/**
+ * bootmeth_setup_fs() - Set up read to read a file
+ *
+ * We must redo the setup before each filesystem operation. This function
+ * handles that, including setting the filesystem type if a block device is not
+ * being used
+ *
+ * @bflow: Information about file to try
+ * @desc: Block descriptor to read from (NULL if not a block device)
+ * Return: 0 if OK, -ve on error
+ */
+int bootmeth_setup_fs(struct bootflow *bflow, struct blk_desc *desc);
 
 /**
  * bootmeth_try_file() - See we can access a given file

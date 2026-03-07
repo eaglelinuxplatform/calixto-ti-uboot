@@ -7,7 +7,6 @@
  *	Suman Anna <s-anna@ti.com>
  */
 
-#include <common.h>
 #include <dm.h>
 #include <log.h>
 #include <malloc.h>
@@ -43,10 +42,8 @@
 #define PROC_BOOT_CFG_FLAG_R5_MEM_INIT_DIS		0x00004000
 #define PROC_BOOT_CFG_FLAG_R5_SINGLE_CORE		0x00008000
 
-
 /* R5 TI-SCI Processor Control Flags */
 #define PROC_BOOT_CTRL_FLAG_R5_CORE_HALT		0x00000001
-#define PROC_BOOT_CTRL_FLAG_R5_LPSC			0x00000002
 
 /* R5 TI-SCI Processor Status Flags */
 #define PROC_BOOT_STATUS_FLAG_R5_WFE			0x00000001
@@ -72,7 +69,6 @@ struct k3_r5f_ip_data {
 	bool tcm_is_double;
 	bool tcm_ecc_autoinit;
 	bool is_single_core;
-	bool is_dm_core;
 };
 
 /**
@@ -211,28 +207,19 @@ static int k3_r5f_split_release(struct k3_r5f_core *core)
 
 	dev_dbg(core->dev, "%s\n", __func__);
 
-	if (core->ipdata->is_dm_core) {
-		ret = ti_sci_proc_set_control(&core->tsp,
-					      PROC_BOOT_CTRL_FLAG_R5_LPSC, 0);
-		if (ret) {
-			dev_err(core->dev, "LPSC on failed, ret = %d\n", ret);
-			return ret;
-		}
-	} else {
-		ret = ti_sci_proc_power_domain_on(&core->tsp);
-		if (ret) {
-			dev_err(core->dev, "module-reset deassert failed, ret = %d\n",
-				ret);
-			return ret;
-		}
+	ret = ti_sci_proc_power_domain_on(&core->tsp);
+	if (ret) {
+		dev_err(core->dev, "module-reset deassert failed, ret = %d\n",
+			ret);
+		return ret;
+	}
 
-		ret = reset_deassert(&core->reset);
-		if (ret) {
-			dev_err(core->dev, "local-reset deassert failed, ret = %d\n",
-				ret);
-			if (ti_sci_proc_power_domain_off(&core->tsp))
-				dev_warn(core->dev, "module-reset assert back failed\n");
-		}
+	ret = reset_deassert(&core->reset);
+	if (ret) {
+		dev_err(core->dev, "local-reset deassert failed, ret = %d\n",
+			ret);
+		if (ti_sci_proc_power_domain_off(&core->tsp))
+			dev_warn(core->dev, "module-reset assert back failed\n");
 	}
 
 	return ret;
@@ -454,24 +441,15 @@ proc_release:
 
 static int k3_r5f_split_reset(struct k3_r5f_core *core)
 {
-	int ret = 0;
+	int ret;
 
 	dev_dbg(core->dev, "%s\n", __func__);
 
-	if (core->ipdata->is_dm_core) {
-		ret = ti_sci_proc_set_control(&core->tsp, 0,
-					      PROC_BOOT_CTRL_FLAG_R5_LPSC);
-		if (ret) {
-			dev_err(core->dev, "LPSC off failed, ret = %d\n", ret);
-			return ret;
-		}
-	} else {
-		if (reset_assert(&core->reset))
-			ret = -EINVAL;
+	if (reset_assert(&core->reset))
+		ret = -EINVAL;
 
-		if (ti_sci_proc_power_domain_off(&core->tsp))
-			ret = -EINVAL;
-	}
+	if (ti_sci_proc_power_domain_off(&core->tsp))
+		ret = -EINVAL;
 
 	return ret;
 }
@@ -851,25 +829,19 @@ static int k3_r5f_probe(struct udevice *dev)
 			return ret;
 
 		if (core->in_use) {
-			/*
-			 * If MCU R5F is booted in split mode by ROM code, core0
-			 * will run DM firmware and second core sits in WFI.
-			 * Shut it down so that it can be probed as split core.
-			 */
-			if (core->ipdata->is_dm_core && !is_primary_core(core) &&
-			    core->cluster->mode == CLUSTER_MODE_SPLIT) {
-				dev_dbg(dev, "Core %d is in WFI mode, resetting core to use in split-mode.\n",
-					 core->tsp.proc_id);
-				k3_r5f_stop(core->dev);
-			} else {
-				dev_info(dev, "Core %d is already in use. No rproc commands work\n",
-					 core->tsp.proc_id);
-				return 0;
-			}
+			dev_info(dev, "Core %d is already in use. No rproc commands work\n",
+				 core->tsp.proc_id);
+			return 0;
 		}
+
+		ret = k3_r5f_proc_request(core);
+		if (ret)
+			return ret;
 
 		/* Make sure Local reset is asserted. Redundant? */
 		reset_assert(&core->reset);
+
+		ti_sci_proc_release(&core->tsp);
 	}
 
 	ret = k3_r5f_rproc_configure(core);
@@ -900,45 +872,25 @@ static const struct k3_r5f_ip_data k3_data = {
 	.tcm_is_double = false,
 	.tcm_ecc_autoinit = false,
 	.is_single_core = false,
-	.is_dm_core = false,
 };
 
 static const struct k3_r5f_ip_data j7200_j721s2_data = {
 	.tcm_is_double = true,
 	.tcm_ecc_autoinit = true,
 	.is_single_core = false,
-	.is_dm_core = false,
 };
 
 static const struct k3_r5f_ip_data am62_data = {
 	.tcm_is_double = false,
 	.tcm_ecc_autoinit = false,
 	.is_single_core = true,
-	.is_dm_core = false,
-};
-
-static const struct k3_r5f_ip_data k3_mcu_data = {
-	.tcm_is_double = false,
-	.tcm_ecc_autoinit = false,
-	.is_single_core = false,
-	.is_dm_core = true,
-};
-
-static const struct k3_r5f_ip_data j7200_mcu_data = {
-	.tcm_is_double = true,
-	.tcm_ecc_autoinit = true,
-	.is_single_core = false,
-	.is_dm_core = true,
 };
 
 static const struct udevice_id k3_r5f_rproc_ids[] = {
 	{ .compatible = "ti,am654-r5f", .data = (ulong)&k3_data, },
 	{ .compatible = "ti,j721e-r5f", .data = (ulong)&k3_data, },
-	{ .compatible = "ti,j721e-mcu-r5f", .data = (ulong)&k3_mcu_data, },
 	{ .compatible = "ti,j7200-r5f", .data = (ulong)&j7200_j721s2_data, },
-	{ .compatible = "ti,j7200-mcu-r5f", .data = (ulong)&j7200_mcu_data, },
 	{ .compatible = "ti,j721s2-r5f", .data = (ulong)&j7200_j721s2_data, },
-	{ .compatible = "ti,j721s2-mcu-r5f", .data = (ulong)&j7200_mcu_data, },
 	{ .compatible = "ti,am62-r5f", .data = (ulong)&am62_data, },
 	{ .compatible = "ti,am64-r5f", .data = (ulong)&j7200_j721s2_data, },
 	{}

@@ -3,8 +3,8 @@
  * Copyright 2023 Google LLC
  */
 
-#include <common.h>
 #include <cli.h>
+#include <time.h>
 #include <test/common.h>
 #include <test/test.h>
 #include <test/ut.h>
@@ -43,6 +43,12 @@ static int cli_ch_test(struct unit_test_state *uts)
 	ut_asserteq('a', cli_ch_process(cch, 'a'));
 	ut_asserteq(0, cli_ch_process(cch, 0));
 
+	/* unexpected 'Esc' */
+	ut_asserteq('a', cli_ch_process(cch, 'a'));
+	ut_asserteq(0, cli_ch_process(cch, '\e'));
+	ut_asserteq('b', cli_ch_process(cch, 'b'));
+	ut_asserteq(0, cli_ch_process(cch, 0));
+
 	return 0;
 }
 COMMON_TEST(cli_ch_test, 0);
@@ -59,8 +65,6 @@ static int cread_test(struct unit_test_state *uts)
 	 * gd->flags &= ~GD_FLG_RECORD;
 	 * print_buffer(0, buf, 1, 7, 0);
 	 */
-
-	console_record_reset_enable();
 
 	/* simple input */
 	*buf = '\0';
@@ -80,6 +84,12 @@ static int cread_test(struct unit_test_state *uts)
 	ut_asserteq(7, cli_readline_into_buffer("-> ", buf, 1));
 	ut_asserteq_str("abc\e[Xx", buf);
 
+	/* unexpected 'Esc' */
+	*buf = '\0';
+	ut_asserteq(7, console_in_puts("abc\eXx\n"));
+	ut_asserteq(5, cli_readline_into_buffer("-> ", buf, 1));
+	ut_asserteq_str("abcXx", buf);
+
 	/* check timeout, should be between 1000 and 1050ms */
 	start = get_timer(0);
 	*buf = '\0';
@@ -90,4 +100,4 @@ static int cread_test(struct unit_test_state *uts)
 
 	return 0;
 }
-COMMON_TEST(cread_test, 0);
+COMMON_TEST(cread_test, UTF_CONSOLE);

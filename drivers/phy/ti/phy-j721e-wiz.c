@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Copyright (C) 2017-2018 Texas Instruments Incorporated - http://www.ti.com/
+ * Copyright (C) 2017-2018 Texas Instruments Incorporated - https://www.ti.com/
  * Jean-Jacques Hiblot <jjhiblot@ti.com>
  */
 
-#include <common.h>
 #include <clk-uclass.h>
 #include <dm.h>
 #include <dm/device_compat.h>
@@ -585,12 +584,20 @@ static int wiz_reset_assert(struct reset_ctl *reset_ctl)
 
 static int wiz_phy_fullrt_div(struct wiz *wiz, int lane)
 {
-	if (wiz->type != AM64_WIZ_10G)
+	switch (wiz->type) {
+	case AM64_WIZ_10G:
+		if (wiz->lane_phy_type[lane] == PHY_TYPE_PCIE)
+			return regmap_field_write(wiz->p0_fullrt_div[lane], 0x1);
+		break;
+
+	case J721E_WIZ_16G:
+	case J721E_WIZ_10G:
+		if (wiz->lane_phy_type[lane] == PHY_TYPE_SGMII)
+			return regmap_field_write(wiz->p0_fullrt_div[lane], 0x2);
+		break;
+	default:
 		return 0;
-
-	if (wiz->lane_phy_type[lane] == PHY_TYPE_PCIE)
-		return regmap_field_write(wiz->p0_fullrt_div[lane], 0x1);
-
+	}
 	return 0;
 }
 
@@ -706,7 +713,8 @@ static int wiz_p_mac_div_sel(struct wiz *wiz)
 	int i;
 
 	for (i = 0; i < num_lanes; i++) {
-		if (wiz->lane_phy_type[i] == PHY_TYPE_QSGMII) {
+		if (wiz->lane_phy_type[i] == PHY_TYPE_SGMII ||
+		    wiz->lane_phy_type[i] == PHY_TYPE_QSGMII) {
 			ret = regmap_field_write(wiz->p_mac_div_sel0[i], 1);
 			if (ret)
 				return ret;
@@ -1172,6 +1180,7 @@ static int j721e_wiz_probe(struct udevice *dev)
 	ofnode node;
 	struct regmap *regmap;
 	u32 num_lanes;
+	bool already_configured = false;
 
 	node = get_child_by_name(dev, "serdes");
 
@@ -1234,15 +1243,6 @@ static int j721e_wiz_probe(struct udevice *dev)
 		goto err_addr_to_resource;
 	}
 
-	for (i = 0; i < wiz->num_lanes; i++) {
-		regmap_field_read(wiz->p_enable[i], &val);
-		if (val & (P_ENABLE | P_ENABLE_FORCE)) {
-			dev_err(dev, "SERDES already configured\n");
-			rc = -EBUSY;
-			goto err_addr_to_resource;
-		}
-	}
-
 	rc = j721e_wiz_bind_of_clocks(wiz);
 	if (rc) {
 		dev_err(dev, "Failed to bind clocks\n");
@@ -1261,10 +1261,21 @@ static int j721e_wiz_probe(struct udevice *dev)
 		goto err_addr_to_resource;
 	}
 
-	rc = wiz_init(wiz);
-	if (rc) {
-		dev_err(dev, "WIZ initialization failed\n");
-		goto err_addr_to_resource;
+	for (i = 0; i < wiz->num_lanes; i++) {
+		regmap_field_read(wiz->p_enable[i], &val);
+		if (val & (P_ENABLE | P_ENABLE_FORCE)) {
+			dev_info(dev, "SERDES already configured, skipping wiz initialization\n");
+			already_configured = true;
+			break;
+		}
+	}
+
+	if (!already_configured) {
+		rc = wiz_init(wiz);
+		if (rc) {
+			dev_err(dev, "WIZ initialization failed\n");
+			goto err_addr_to_resource;
+		}
 	}
 
 	return 0;

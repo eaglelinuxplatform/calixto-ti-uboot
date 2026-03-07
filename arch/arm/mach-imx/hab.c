@@ -3,7 +3,6 @@
  * Copyright (C) 2010-2015 Freescale Semiconductor, Inc.
  */
 
-#include <common.h>
 #include <command.h>
 #include <config.h>
 #include <display_options.h>
@@ -27,6 +26,14 @@ DECLARE_GLOBAL_DATA_PTR;
 #define IS_HAB_ENABLED_BIT \
 	(is_soc_type(MXC_SOC_MX7ULP) ? 0x80000000 :	\
 	 ((is_soc_type(MXC_SOC_MX7) || is_soc_type(MXC_SOC_IMX8M)) ? 0x2000000 : 0x2))
+#define FIELD_RETURN_FUSE_MASK \
+	(is_imx8mp() ? 0xFFFFFFFF : 0x00000001)
+/*
+ * The fuse pattern for i.MX8M Plus is 0x28001401, but bit 2 is already set from factory.
+ * This means when field return is set, the fuse word value reads 0x28001405
+ */
+#define FIELD_RETURN_PATTERN \
+	(is_imx8mp() ? 0x28001405 : 0x00000001)
 
 #ifdef CONFIG_MX7ULP
 #define HAB_M4_PERSISTENT_START	((soc_rev() >= CHIP_REV_2_0) ? 0x20008040 : \
@@ -246,7 +253,7 @@ void *hab_rvt_authenticate_image(uint8_t cid, ptrdiff_t ivt_offset,
 	return ret;
 }
 
-#if !defined(CONFIG_SPL_BUILD)
+#if !defined(CONFIG_XPL_BUILD)
 
 #define MAX_RECORD_BYTES     (8*1024) /* 4 kbytes */
 
@@ -289,9 +296,10 @@ static char *rsn_str[] = {
 };
 
 static char *sts_str[] = {
-			  "STS = HAB_SUCCESS (0xF0)\n",
+			  "STS = HAB_STS_ANY (0x00)\n",
 			  "STS = HAB_FAILURE (0x33)\n",
 			  "STS = HAB_WARNING (0x69)\n",
+			  "STS = HAB_SUCCESS (0xF0)\n",
 			  "STS = INVALID\n",
 			  NULL
 };
@@ -336,8 +344,7 @@ static uint8_t hab_statuses[5] = {
 	HAB_STS_ANY,
 	HAB_FAILURE,
 	HAB_WARNING,
-	HAB_SUCCESS,
-	-1
+	HAB_SUCCESS
 };
 
 static uint8_t hab_reasons[26] = {
@@ -365,8 +372,7 @@ static uint8_t hab_reasons[26] = {
 	HAB_UNS_ITEM,
 	HAB_UNS_KEY,
 	HAB_UNS_PROTOCOL,
-	HAB_UNS_STATE,
-	-1
+	HAB_UNS_STATE
 };
 
 static uint8_t hab_contexts[12] = {
@@ -380,8 +386,7 @@ static uint8_t hab_contexts[12] = {
 	HAB_CTX_COMMAND,
 	HAB_CTX_AUT_DAT,
 	HAB_CTX_ASSERT,
-	HAB_CTX_EXIT,
-	-1
+	HAB_CTX_EXIT
 };
 
 static uint8_t hab_engines[16] = {
@@ -399,30 +404,35 @@ static uint8_t hab_engines[16] = {
 	HAB_ENG_ROM,
 	HAB_ENG_HDCP,
 	HAB_ENG_RTL,
-	HAB_ENG_SW,
-	-1
+	HAB_ENG_SW
 };
 
-static inline uint8_t get_idx(uint8_t *list, uint8_t tgt)
+static inline u32 get_idx(u8 *list, u8 tgt, u32 size)
 {
-	uint8_t idx = 0;
-	uint8_t element = list[idx];
-	while (element != -1) {
+	u32 idx = 0;
+	u8 element;
+
+	while (idx < size) {
+		element = list[idx];
 		if (element == tgt)
 			return idx;
-		element = list[++idx];
+		++idx;
 	}
-	return -1;
+	return idx;
 }
 
 static void process_event_record(uint8_t *event_data, size_t bytes)
 {
 	struct record *rec = (struct record *)event_data;
 
-	printf("\n\n%s", sts_str[get_idx(hab_statuses, rec->contents[0])]);
-	printf("%s", rsn_str[get_idx(hab_reasons, rec->contents[1])]);
-	printf("%s", ctx_str[get_idx(hab_contexts, rec->contents[2])]);
-	printf("%s", eng_str[get_idx(hab_engines, rec->contents[3])]);
+	printf("\n\n%s", sts_str[get_idx(hab_statuses, rec->contents[0],
+	       ARRAY_SIZE(hab_statuses))]);
+	printf("%s", rsn_str[get_idx(hab_reasons, rec->contents[1],
+	       ARRAY_SIZE(hab_reasons))]);
+	printf("%s", ctx_str[get_idx(hab_contexts, rec->contents[2],
+	       ARRAY_SIZE(hab_contexts))]);
+	printf("%s", eng_str[get_idx(hab_engines, rec->contents[3],
+	       ARRAY_SIZE(hab_engines))]);
 }
 
 static void display_event(uint8_t *event_data, size_t bytes)
@@ -659,7 +669,7 @@ static int do_authenticate_image_or_failover(struct cmd_tbl *cmdtp, int flag,
 {
 	int ret = CMD_RET_FAILURE;
 
-	if (argc != 4) {
+	if (argc < 3) {
 		ret = CMD_RET_USAGE;
 		goto error;
 	}
@@ -700,7 +710,7 @@ U_BOOT_CMD(
 		"addr length ivt_offset\n"
 		"addr - image hex address\n"
 		"length - image hex length\n"
-		"ivt_offset - hex offset of IVT in the image"
+		"ivt_offset - hex offset of IVT in the image (optional)"
 	  );
 
 U_BOOT_CMD(
@@ -712,11 +722,11 @@ U_BOOT_CMD(
 U_BOOT_CMD(
 		hab_auth_img_or_fail, 4, 0,
 		do_authenticate_image_or_failover,
-		"authenticate image via HAB on failure drop to USB BootROM mode",
+		"authenticate image via HAB. Switch to USB BootROM mode on failure",
 		"addr length ivt_offset\n"
 		"addr - image hex address\n"
 		"length - image hex length\n"
-		"ivt_offset - hex offset of IVT in the image"
+		"ivt_offset - hex offset of IVT in the image (optional)"
 	  );
 
 U_BOOT_CMD(
@@ -725,7 +735,7 @@ U_BOOT_CMD(
 		""
 	  );
 
-#endif /* !defined(CONFIG_SPL_BUILD) */
+#endif /* !defined(CONFIG_XPL_BUILD) */
 
 /* Get CSF Header length */
 static int get_hab_hdr_len(struct hab_hdr *hdr)
@@ -868,18 +878,30 @@ static int validate_ivt(struct ivt *ivt_initial)
 
 bool imx_hab_is_enabled(void)
 {
-	struct imx_sec_config_fuse_t *fuse =
-		(struct imx_sec_config_fuse_t *)&imx_sec_config_fuse;
+	struct imx_fuse *sec_config =
+		(struct imx_fuse *)&imx_sec_config_fuse;
+	struct imx_fuse *field_return =
+		(struct imx_fuse *)&imx_field_return_fuse;
 	uint32_t reg;
+	bool is_enabled;
 	int ret;
 
-	ret = fuse_read(fuse->bank, fuse->word, &reg);
+	ret = fuse_read(sec_config->bank, sec_config->word, &reg);
 	if (ret) {
-		puts("\nSecure boot fuse read error\n");
+		puts("Secure boot fuse read error\n");
 		return ret;
 	}
+	is_enabled = reg & IS_HAB_ENABLED_BIT;
+	if (is_enabled) {
+		ret = fuse_read(field_return->bank, field_return->word, &reg);
+		if (ret) {
+			puts("Field return fuse read error\n");
+			return ret;
+		}
+		is_enabled = (reg & FIELD_RETURN_FUSE_MASK) != FIELD_RETURN_PATTERN;
+	}
 
-	return (reg & IS_HAB_ENABLED_BIT) == IS_HAB_ENABLED_BIT;
+	return is_enabled;
 }
 
 int imx_hab_authenticate_image(uint32_t ddr_start, uint32_t image_size,
@@ -932,19 +954,19 @@ int imx_hab_authenticate_image(uint32_t ddr_start, uint32_t image_size,
 	printf("ivt entry = 0x%08x, dcd = 0x%08x, csf = 0x%08x\n", ivt->entry,
 	       ivt->dcd, ivt->csf);
 	puts("Dumping IVT\n");
-	print_buffer(ivt_addr, (void *)(ivt_addr), 4, 0x8, 0);
+	print_buffer(ivt_addr, (void *)(uintptr_t)(ivt_addr), 4, 0x8, 0);
 
 	puts("Dumping CSF Header\n");
-	print_buffer(ivt->csf, (void *)(ivt->csf), 4, 0x10, 0);
+	print_buffer(ivt->csf, (void *)(uintptr_t)(ivt->csf), 4, 0x10, 0);
 
-#if  !defined(CONFIG_SPL_BUILD)
+#if  !defined(CONFIG_XPL_BUILD)
 	get_hab_status();
 #endif
 
 	puts("\nCalling authenticate_image in ROM\n");
 	printf("\tivt_offset = 0x%x\n", ivt_offset);
 	printf("\tstart = 0x%08lx\n", start);
-	printf("\tbytes = 0x%x\n", bytes);
+	printf("\tbytes = 0x%lx\n", (ulong)bytes);
 #endif
 
 #ifndef CONFIG_ARM64
@@ -987,7 +1009,7 @@ int imx_hab_authenticate_image(uint32_t ddr_start, uint32_t image_size,
 	}
 
 hab_exit_failure_print_status:
-#if !defined(CONFIG_SPL_BUILD)
+#if !defined(CONFIG_XPL_BUILD)
 	get_hab_status();
 #endif
 

@@ -4,7 +4,6 @@
  * David Feng <fenghua@phytium.com.cn>
  */
 
-#include <common.h>
 #include <asm/esr.h>
 #include <asm/global_data.h>
 #include <asm/ptrace.h>
@@ -35,6 +34,40 @@ int disable_interrupts(void)
 static void show_efi_loaded_images(struct pt_regs *regs)
 {
 	efi_print_image_infos((void *)regs->elr);
+}
+
+static void dump_far(unsigned long esr)
+{
+	unsigned long el, far;
+
+	switch ((esr >> 26) & 0b111111) {
+	case 0x20:
+	case 0x21:
+	case 0x24:
+	case 0x25:
+	case 0x22:
+	case 0x34:
+	case 0x35:
+		break;
+	default:
+		return;
+	}
+
+	asm("mrs	%0, CurrentEl": "=r" (el));
+
+	switch (el >> 2) {
+	case 1:
+		asm("mrs	%0, FAR_EL1": "=r" (far));
+		break;
+	case 2:
+		asm("mrs	%0, FAR_EL2": "=r" (far));
+		break;
+	default:
+		/* don't print anything to make output pretty */
+		return;
+	}
+
+	printf(", far 0x%lx", far);
 }
 
 static void dump_instr(struct pt_regs *regs)
@@ -165,7 +198,9 @@ void do_sync(struct pt_regs *pt_regs)
 	    smh_emulate_trap(pt_regs))
 		return;
 	efi_restore_gd();
-	printf("\"Synchronous Abort\" handler, esr 0x%08lx\n", pt_regs->esr);
+	printf("\"Synchronous Abort\" handler, esr 0x%08lx", pt_regs->esr);
+	dump_far(pt_regs->esr);
+	printf("\n");
 	show_regs(pt_regs);
 	show_efi_loaded_images(pt_regs);
 	panic("Resetting CPU ...\n");

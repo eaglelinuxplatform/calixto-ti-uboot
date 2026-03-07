@@ -4,38 +4,15 @@
  * Written by Simon Glass <sjg@chromium.org>
  */
 
-#include <common.h>
 #include <env.h>
 #include <env_internal.h>
 #include <log.h>
 #include <asm/global_data.h>
 #include <linux/bitops.h>
 #include <linux/bug.h>
+#include <linux/errno.h>
 
 DECLARE_GLOBAL_DATA_PTR;
-
-#if defined(CONFIG_NEEDS_MANUAL_RELOC)
-void env_fix_drivers(void)
-{
-	struct env_driver *drv;
-	const int n_ents = ll_entry_count(struct env_driver, env_driver);
-	struct env_driver *entry;
-
-	drv = ll_entry_start(struct env_driver, env_driver);
-	for (entry = drv; entry != drv + n_ents; entry++) {
-		if (entry->name)
-			entry->name += gd->reloc_off;
-		if (entry->load)
-			entry->load += gd->reloc_off;
-		if (entry->save)
-			entry->save += gd->reloc_off;
-		if (entry->erase)
-			entry->erase += gd->reloc_off;
-		if (entry->init)
-			entry->init += gd->reloc_off;
-	}
-}
-#endif
 
 static struct env_driver *_env_driver_lookup(enum env_location loc)
 {
@@ -217,9 +194,7 @@ int env_load(void)
 			printf("OK\n");
 			gd->env_load_prio = prio;
 
-#if !CONFIG_IS_ENABLED(ENV_APPEND)
 			return 0;
-#endif
 		} else if (ret == -ENOMSG) {
 			/* Handle "bad CRC" case */
 			if (best_prio == -1)

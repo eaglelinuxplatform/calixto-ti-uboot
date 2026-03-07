@@ -3,11 +3,11 @@
  * Copyright (C) 2013-2014, 2018 Synopsys, Inc. All rights reserved.
  */
 
-#include <common.h>
+#include <config.h>
 #include <clock_legacy.h>
 #include <init.h>
 #include <malloc.h>
-#include <vsprintf.h>
+#include <stdio.h>
 #include <asm/arcregs.h>
 #include <asm/cache.h>
 #include <asm/global_data.h>

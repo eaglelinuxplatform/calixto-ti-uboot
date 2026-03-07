@@ -7,7 +7,6 @@
  * Based on dwc3-generic.c.
  */
 
-#include <common.h>
 #include <dm.h>
 #include <dm/device_compat.h>
 #include <dm/device-internal.h>
@@ -100,15 +99,6 @@ static int dwc3_layerscape_of_to_plat(struct udevice *dev)
 }
 
 #if CONFIG_IS_ENABLED(DM_USB_GADGET)
-int dm_usb_gadget_handle_interrupts(struct udevice *dev)
-{
-	struct dwc3_layerscape_priv *priv = dev_get_priv(dev);
-
-	dwc3_gadget_uboot_handle_interrupt(&priv->dwc3);
-
-	return 0;
-}
-
 static int dwc3_layerscape_peripheral_probe(struct udevice *dev)
 {
 	struct dwc3_layerscape_priv *priv = dev_get_priv(dev);
@@ -123,10 +113,24 @@ static int dwc3_layerscape_peripheral_remove(struct udevice *dev)
 	return dwc3_layerscape_remove(dev, priv);
 }
 
+static int dwc3_layerscape_gadget_handle_interrupts(struct udevice *dev)
+{
+	struct dwc3_layerscape_priv *priv = dev_get_priv(dev);
+
+	dwc3_gadget_uboot_handle_interrupt(&priv->dwc3);
+
+	return 0;
+}
+
+static const struct usb_gadget_generic_ops dwc3_layerscape_gadget_ops = {
+	.handle_interrupts	= dwc3_layerscape_gadget_handle_interrupts,
+};
+
 U_BOOT_DRIVER(dwc3_layerscape_peripheral) = {
 	.name	= "dwc3-layerscape-peripheral",
 	.id	= UCLASS_USB_GADGET_GENERIC,
 	.of_to_plat = dwc3_layerscape_of_to_plat,
+	.ops	= &dwc3_layerscape_gadget_ops,
 	.probe = dwc3_layerscape_peripheral_probe,
 	.remove = dwc3_layerscape_peripheral_remove,
 	.priv_auto	= sizeof(struct dwc3_layerscape_priv),
@@ -134,8 +138,7 @@ U_BOOT_DRIVER(dwc3_layerscape_peripheral) = {
 };
 #endif
 
-#if defined(CONFIG_SPL_USB_HOST_SUPPORT) || \
-	!defined(CONFIG_SPL_BUILD) && defined(CONFIG_USB_HOST)
+#if CONFIG_IS_ENABLED(USB_HOST)
 static int dwc3_layerscape_host_probe(struct udevice *dev)
 {
 	struct xhci_hcor *hcor;
@@ -194,7 +197,7 @@ static int dwc3_layerscape_bind(struct udevice *dev)
 		driver = "dwc3-layerscape-peripheral";
 		break;
 #endif
-#if defined(CONFIG_SPL_USB_HOST_SUPPORT) || !defined(CONFIG_SPL_BUILD)
+#if CONFIG_IS_ENABLED(USB_HOST)
 	case USB_DR_MODE_HOST:
 		dev_dbg(dev, "Using host mode\n");
 		driver = "dwc3-layerscape-host";

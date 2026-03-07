@@ -5,7 +5,6 @@
 
 #define LOG_CATEGORY UCLASS_SCMI_AGENT
 
-#include <common.h>
 #include <dm.h>
 #include <errno.h>
 #include <mailbox.h>
@@ -94,13 +93,14 @@ static int setup_channel(struct udevice *dev, struct scmi_mbox_channel *chan)
 }
 
 static int scmi_mbox_get_channel(struct udevice *dev,
+				 struct udevice *protocol,
 				 struct scmi_channel **channel)
 {
 	struct scmi_mbox_channel *base_chan = dev_get_plat(dev);
 	struct scmi_mbox_channel *chan;
 	int ret;
 
-	if (!dev_read_prop(dev, "shmem", NULL)) {
+	if (!dev_read_prop(protocol, "shmem", NULL)) {
 		/* Uses agent base channel */
 		*channel = container_of(base_chan, struct scmi_channel, ref);
 
@@ -112,7 +112,7 @@ static int scmi_mbox_get_channel(struct udevice *dev,
 		return -ENOMEM;
 
 	/* Setup a dedicated channel for the protocol */
-	ret = setup_channel(dev, chan);
+	ret = setup_channel(protocol, chan);
 	if (ret) {
 		free(chan);
 		return ret;

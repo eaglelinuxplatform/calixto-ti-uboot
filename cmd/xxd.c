@@ -4,7 +4,6 @@
  * Roger Knecht <rknecht@pm.de>
  */
 
-#include <common.h>
 #include <command.h>
 #include <display_options.h>
 #include <fs.h>
@@ -73,11 +72,9 @@ static int do_xxd(struct cmd_tbl *cmdtp, int flag, int argc,
 	return 0;
 }
 
-#ifdef CONFIG_SYS_LONGHELP
-static char xxd_help_text[] =
+U_BOOT_LONGHELP(xxd,
 	"<interface> <dev[:part]> <file>\n"
-	"  - Print file from 'dev' on 'interface' as hexdump to standard output\n";
-#endif
+	"  - Print file from 'dev' on 'interface' as hexdump to standard output\n");
 
 U_BOOT_CMD(xxd, 4, 1, do_xxd,
 	   "Print file as hexdump to standard output",

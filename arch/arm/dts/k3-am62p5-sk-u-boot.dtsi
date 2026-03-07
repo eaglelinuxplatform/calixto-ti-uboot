@@ -11,51 +11,103 @@
 		stdout-path = "serial2:115200n8";
 		tick-timer = &main_timer0;
 	};
+
+	reserved-memory {
+		bootph-pre-ram;
+	};
+
+	panel_lvds: panel-lvds {
+		bootph-pre-ram;
+		compatible = "simple-panel";
+		status= "okay";
+		width-mm = <217>;
+		height-mm = <136>;
+		data-mapping = "vesa-24";
+		panel-timing {
+				bootph-pre-ram;
+				clock-frequency = <150274>;
+				hactive = <1920>;
+				vactive = <1200>;
+				hback-porch = <32>;
+				hfront-porch = <52>;
+				vback-porch = <24>;
+				vfront-porch = <8>;
+				hsync-len = <24>;
+				vsync-len = <3>;
+				de-active = <1>;
+		};
+	};
 };
 
-&main_bcdma {
-	reg = <0x00 0x485c0100 0x00 0x100>,
-	      <0x00 0x4c000000 0x00 0x20000>,
-	      <0x00 0x4a820000 0x00 0x20000>,
-	      <0x00 0x4aa40000 0x00 0x20000>,
-	      <0x00 0x4bc00000 0x00 0x100000>,
-	      <0x00 0x48600000 0x00 0x8000>,
-	      <0x00 0x484a4000 0x00 0x2000>,
-	      <0x00 0x484c2000 0x00 0x2000>;
-	reg-names = "gcfg", "bchanrt", "rchanrt", "tchanrt",
-		    "ringrt", "cfg", "tchan", "rchan";
+&dss0 {
+	compatible = "ti,am625-dss";
+	clocks = <&k3_clks 186 6>,
+		 <&k3_clks 186 0>,
+		 <&k3_clks 186 2>;
+	ti,am65x-oldi-io-ctrl = <&dss_oldi_io_ctrl>;
 };
 
-&main_pktdma {
-	reg = <0x00 0x485c0000 0x00 0x100>,
-	      <0x00 0x4a800000 0x00 0x20000>,
-	      <0x00 0x4aa00000 0x00 0x40000>,
-	      <0x00 0x4b800000 0x00 0x400000>,
-	      <0x00 0x485e0000 0x00 0x20000>,
-	      <0x00 0x484a0000 0x00 0x4000>,
-	      <0x00 0x484c0000 0x00 0x2000>,
-	      <0x00 0x48430000 0x00 0x4000>;
-	reg-names = "gcfg", "rchanrt", "tchanrt", "ringrt",
-		    "cfg", "tchan", "rchan", "rflow";
-};
-
-&usbss0 {
+&wkup_r5fss0_core0_memory_region {
 	bootph-pre-ram;
 };
 
-&usb0 {
-	/* Enable peripheral mode only during bootup
-	 * to support DFU while allowing Linux to stay
-	 * in OTG mode
-	 */
-	dr_mode = "peripheral";
+&cbass_wakeup {
 	bootph-pre-ram;
 };
 
 &dmsc {
 	bootph-pre-ram;
-	k3_sysreset: sysreset-controller {
-		compatible = "ti,sci-sysreset";
-		bootph-pre-ram;
-	};
+};
+
+/* Required for USB DFU Boot */
+&usb0 {
+	bootph-all;
+};
+
+&ddr_pmctrl {
+	bootph-pre-ram;
+};
+
+&canuart_wake {
+	bootph-pre-ram;
+};
+
+&wkup_r5fss0 {
+	bootph-pre-ram;
+};
+
+&wkup_r5fss0_core0 {
+	bootph-pre-ram;
+};
+
+&cpsw_mac_syscon {
+	bootph-all;
+};
+
+&cpsw_port1 {
+	bootph-all;
+};
+
+&main_pktdma {
+	bootph-all;
+};
+
+&main_rgmii1_pins_default {
+	bootph-all;
+};
+
+&main_mdio1_pins_default {
+	bootph-all;
+};
+
+&cpsw3g_phy0 {
+	bootph-all;
+};
+
+&cpsw3g_mdio {
+	bootph-all;
+};
+
+&phy_gmii_sel {
+	bootph-all;
 };

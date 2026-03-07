@@ -6,6 +6,19 @@ comment "USB Host Controller Drivers"
 config USB_HOST
 	bool
 	select DM_USB
+	help
+	  Enable access to USB (Universal Serial Bus) host devices so that
+	  SPL can load U-Boot from a connected USB peripheral, such as a USB
+	  flash stick. While USB takes a little longer to start up than most
+	  buses, it is very flexible since many different types of storage
+	  device can be attached.
+
+config SPL_USB_HOST
+	bool "Support USB host drivers"
+	depends on SPL
+	help
+	  For detailed help see USB_HOST Kconfig symbol. This option enables
+	  the drivers in drivers/usb/host as part of an SPL build.
 
 config USB_XHCI_HCD
 	bool "xHCI HCD (USB 3.0) support"
@@ -26,7 +39,6 @@ config USB_XHCI_DWC3
 config USB_XHCI_DWC3_OF_SIMPLE
 	bool "DesignWare USB3 DRD Generic OF Simple Glue Layer"
 	depends on DM_USB
-	default y if ARCH_ROCKCHIP
 	default y if DRA7XX
 	help
 	  Support USB2/3 functionality in simple SoC integrations with
@@ -56,6 +68,14 @@ config USB_XHCI_MVEBU
 	  SoCs, which includes Armada8K, Armada3700 and other Armada
 	  family SoCs.
 
+config USB_XHCI_GENERIC
+	bool "Generic SoC USB 3.0 support"
+	depends on OF_CONTROL
+	default n
+	help
+	  Choose this option to add support for USB 3.0 driver for SoCs
+	  that do not need platform specific code, like on emulated targets.
+
 config USB_XHCI_OCTEON
 	bool "Support for Marvell Octeon family on-chip xHCI USB controller"
 	depends on ARCH_OCTEON
@@ -77,18 +97,18 @@ config USB_XHCI_OMAP
 
 config USB_XHCI_PCI
 	bool "Support for PCI-based xHCI USB controller"
-	depends on DM_USB
+	depends on DM_USB && PCI
 	default y if X86
 	help
 	  Enables support for the PCI-based xHCI controller.
 
 config USB_XHCI_RCAR
-	bool "Renesas RCar USB 3.0 support"
+	bool "Renesas R-Car USB 3.0 support"
 	default y
-	depends on ARCH_RMOBILE
+	depends on ARCH_RENESAS
 	help
 	  Choose this option to add support for USB 3.0 driver on Renesas
-	  RCar Gen3 SoCs.
+	  R-Car Gen3 SoCs.
 
 config USB_XHCI_STI
 	bool "Support for STMicroelectronics STiH407 family on-chip xHCI USB controller"
@@ -198,10 +218,10 @@ config USB_EHCI_MX6
 
 config USB_EHCI_MX7
 	bool "Support for i.MX7 on-chip EHCI USB controller"
-	depends on ARCH_MX7 || IMX8M
+	depends on ARCH_MX7 || IMX8M || IMX93
 	select EHCI_HCD_INIT_AFTER_RESET if ARCH_MX7
-	select PHY if IMX8M
-	select NOP_PHY if IMX8M
+	select PHY if IMX8M || IMX93
+	select NOP_PHY if IMX8M || IMX93
 	default y
 	---help---
 	  Enables support for the on-chip EHCI controller on i.MX7 SoCs.
@@ -218,7 +238,6 @@ config USB_EHCI_MXS
 config USB_EHCI_NPCM
 	bool "Support for Nuvoton NPCM on-chip EHCI USB controller"
 	depends on ARCH_NPCM
-	default n
 	---help---
 	  Enables support for the on-chip EHCI controller on
 	  Nuvoton NPCM chips.
@@ -355,7 +374,6 @@ config USB_OHCI_DA8XX
 config USB_OHCI_NPCM
 	bool "Support for Nuvoton NPCM on-chip OHCI USB controller"
 	depends on ARCH_NPCM
-	default n
 	---help---
 	  Enables support for the on-chip OHCI controller on
 	  Nuvoton NPCM chips.

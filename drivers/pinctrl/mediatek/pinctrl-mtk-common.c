@@ -4,7 +4,6 @@
  * Author: Ryder Lee <ryder.lee@mediatek.com>
  */
 
-#include <common.h>
 #include <dm.h>
 #include <dm/device-internal.h>
 #include <dm/lists.h>
@@ -304,6 +303,19 @@ static const char *mtk_get_function_name(struct udevice *dev,
 	return priv->soc->funcs[selector].name;
 }
 
+static int mtk_pinmux_set(struct udevice *dev, unsigned int pin_selector,
+			  unsigned int func_selector)
+{
+	int err;
+
+	err = mtk_hw_set_value(dev, pin_selector, PINCTRL_PIN_REG_MODE,
+			       func_selector);
+	if (err)
+		return err;
+
+	return 0;
+}
+
 static int mtk_pinmux_group_set(struct udevice *dev,
 				unsigned int group_selector,
 				unsigned int func_selector)
@@ -314,7 +326,7 @@ static int mtk_pinmux_group_set(struct udevice *dev,
 	int i;
 
 	for (i = 0; i < grp->num_pins; i++) {
-		int *pin_modes = grp->data;
+		const int *pin_modes = grp->data;
 
 		mtk_hw_set_value(dev, grp->pins[i], PINCTRL_PIN_REG_MODE,
 				 pin_modes[i]);
@@ -349,10 +361,10 @@ int mtk_pinconf_bias_set_v1(struct udevice *dev, u32 pin, bool disable,
 {
 	int err;
 
-	/* try pupd_r1_r0 if pullen_pullsel return error */
+	/* set pupd_r1_r0 if pullen_pullsel succeeded */
 	err = mtk_pinconf_bias_set_pullen_pullsel(dev, pin, disable, pullup,
 						  val);
-	if (err)
+	if (!err)
 		return mtk_pinconf_bias_set_pupd_r1_r0(dev, pin, disable,
 						       pullup, val);
 
@@ -513,7 +525,7 @@ int mtk_pinconf_drive_set_v0(struct udevice *dev, u32 pin, u32 arg)
 			return err;
 	}
 
-	return 0;
+	return err;
 }
 
 int mtk_pinconf_drive_set_v1(struct udevice *dev, u32 pin, u32 arg)
@@ -531,7 +543,7 @@ int mtk_pinconf_drive_set_v1(struct udevice *dev, u32 pin, u32 arg)
 			return err;
 	}
 
-	return 0;
+	return err;
 }
 
 int mtk_pinconf_drive_set(struct udevice *dev, u32 pin, u32 arg)
@@ -647,6 +659,7 @@ const struct pinctrl_ops mtk_pinctrl_ops = {
 	.get_group_name = mtk_get_group_name,
 	.get_functions_count = mtk_get_functions_count,
 	.get_function_name = mtk_get_function_name,
+	.pinmux_set = mtk_pinmux_set,
 	.pinmux_group_set = mtk_pinmux_group_set,
 #if CONFIG_IS_ENABLED(PINCONF)
 	.pinconf_num_params = ARRAY_SIZE(mtk_conf_params),
@@ -658,7 +671,7 @@ const struct pinctrl_ops mtk_pinctrl_ops = {
 };
 
 #if CONFIG_IS_ENABLED(DM_GPIO) || \
-    (defined(CONFIG_SPL_BUILD) && defined(CONFIG_SPL_GPIO))
+    (defined(CONFIG_XPL_BUILD) && defined(CONFIG_SPL_GPIO))
 static int mtk_gpio_get(struct udevice *dev, unsigned int off)
 {
 	int val, err;
@@ -748,6 +761,15 @@ static int mtk_gpiochip_register(struct udevice *parent)
 	if (!drv)
 		return -ENOENT;
 
+	/*
+	 * Support upstream linux DTSI that define gpio-controller
+	 * in the root node (instead of a dedicated subnode)
+	 */
+	if (dev_read_bool(parent, "gpio-controller")) {
+		node = dev_ofnode(parent);
+		goto bind;
+	}
+
 	ret = -ENOENT;
 	dev_for_each_subnode(node, parent)
 		if (ofnode_read_bool(node, "gpio-controller")) {
@@ -758,6 +780,7 @@ static int mtk_gpiochip_register(struct udevice *parent)
 	if (ret)
 		return ret;
 
+bind:
 	ret = device_bind_with_driver_data(parent, &mtk_gpio_driver,
 					   "mediatek_gpio", 0, node,
 					   &dev);
@@ -768,11 +791,20 @@ static int mtk_gpiochip_register(struct udevice *parent)
 }
 #endif
 
+int mtk_pinctrl_common_bind(struct udevice *dev)
+{
+#if CONFIG_IS_ENABLED(DM_GPIO) || \
+    (defined(CONFIG_XPL_BUILD) && defined(CONFIG_SPL_GPIO))
+	return mtk_gpiochip_register(dev);
+#else
+	return 0;
+#endif
+}
+
 int mtk_pinctrl_common_probe(struct udevice *dev,
-			     struct mtk_pinctrl_soc *soc)
+			     const struct mtk_pinctrl_soc *soc)
 {
 	struct mtk_pinctrl_priv *priv = dev_get_priv(dev);
-	int ret = 0;
 	u32 i = 0;
 	fdt_addr_t addr;
 	u32 base_calc = soc->base_calc;
@@ -790,10 +822,5 @@ int mtk_pinctrl_common_probe(struct udevice *dev,
 		priv->base[i] = (void __iomem *)addr;
 	}
 
-#if CONFIG_IS_ENABLED(DM_GPIO) || \
-    (defined(CONFIG_SPL_BUILD) && defined(CONFIG_SPL_GPIO))
-	ret = mtk_gpiochip_register(dev);
-#endif
-
-	return ret;
+	return 0;
 }

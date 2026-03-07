@@ -12,12 +12,12 @@
  * KBC.
  */
 
-#include <common.h>
 #include <cros_ec.h>
 #include <dm.h>
 #include <errno.h>
 #include <log.h>
 #include <spi.h>
+#include <time.h>
 
 int cros_ec_spi_packet(struct udevice *udev, int out_bytes, int in_bytes)
 {
@@ -151,7 +151,7 @@ int cros_ec_spi_command(struct udevice *udev, uint8_t cmd, int cmd_version,
 
 	/* Response code is first byte of message */
 	if (p[0] != EC_RES_SUCCESS) {
-		printf("%s: Returned status %d\n", __func__, p[0]);
+		log_debug("Returned status %d\n", p[0]);
 		return -(int)(p[0]);
 	}
 

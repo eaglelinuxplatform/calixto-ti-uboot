@@ -6,7 +6,6 @@
  * Author: Kishon Vijay Abraham I <kishon@ti.com>
  */
 
-#include <common.h>
 #include <clk-uclass.h>
 #include <dm.h>
 #include <log.h>
@@ -16,7 +15,6 @@
 #include <dt-bindings/phy/phy.h>
 #include <generic-phy.h>
 #include <asm/io.h>
-#include <asm/arch/sys_proto.h>
 #include <power-domain.h>
 #include <regmap.h>
 #include <syscon.h>

@@ -5,7 +5,6 @@
  * (C) Copyright 2017 Vasily Khoruzhick <anarsoul@gmail.com>
  */
 
-#include <common.h>
 #include <display.h>
 #include <log.h>
 #include <video_bridge.h>
@@ -17,6 +16,7 @@
 #include <asm/arch/lcdc.h>
 #include <asm/global_data.h>
 #include <asm/gpio.h>
+#include <sunxi_gpio.h>
 
 struct sunxi_lcd_priv {
 	struct display_timing timing;

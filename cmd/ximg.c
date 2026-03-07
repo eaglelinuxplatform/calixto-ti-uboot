@@ -7,15 +7,16 @@
  * Kai-Uwe Bloem, Auerswald GmbH & Co KG, <linux-development@auerswald.de>
  */
 
-
 /*
  * Multi Image extract
  */
-#include <common.h>
 #include <command.h>
 #include <cpu_func.h>
 #include <env.h>
 #include <gzip.h>
+#if IS_ENABLED(CONFIG_ZSTD)
+#include <linux/zstd.h>
+#endif
 #include <image.h>
 #include <malloc.h>
 #include <mapmem.h>
@@ -26,11 +27,6 @@
 #include <asm/byteorder.h>
 #include <asm/cache.h>
 #include <asm/io.h>
-
-#ifndef CFG_SYS_XIMG_LEN
-/* use 8MByte as default max gunzip size */
-#define CFG_SYS_XIMG_LEN	0x800000
-#endif
 
 static int
 do_imgextract(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
@@ -52,7 +48,7 @@ do_imgextract(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 	size_t		fit_len;
 #endif
 #ifdef CONFIG_GZIP
-	uint		unc_len = CFG_SYS_XIMG_LEN;
+	uint		unc_len = CONFIG_SYS_XIMG_LEN;
 #endif
 	uint8_t		comp;
 
@@ -243,6 +239,26 @@ do_imgextract(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 			}
 			break;
 #endif /* CONFIG_BZIP2 */
+#if IS_ENABLED(CONFIG_ZSTD)
+		case IH_COMP_ZSTD:
+			{
+				int ret;
+				struct abuf in, out;
+
+				printf("   Uncompressing part %d ... ", part);
+
+				abuf_init_set(&in, (void *)data, len);
+				abuf_init_set(&out, (void *)dest, unc_len);
+				ret = zstd_decompress(&in, &out);
+				if (ret < 0) {
+					printf("ZSTD ERROR %d - "
+					       "image not loaded\n", ret);
+					return 1;
+				}
+				len = ret;
+			}
+			break;
+#endif
 		default:
 			printf("Unimplemented compression type %d\n", comp);
 			return 1;
@@ -258,8 +274,7 @@ do_imgextract(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 	return 0;
 }
 
-#ifdef CONFIG_SYS_LONGHELP
-static char imgextract_help_text[] =
+U_BOOT_LONGHELP(imgextract,
 	"addr part [dest]\n"
 	"    - extract <part> from legacy image at <addr> and copy to <dest>"
 #if defined(CONFIG_FIT)
@@ -267,8 +282,7 @@ static char imgextract_help_text[] =
 	"addr uname [dest]\n"
 	"    - extract <uname> subimage from FIT image at <addr> and copy to <dest>"
 #endif
-	"";
-#endif
+	);
 
 U_BOOT_CMD(
 	imxtract, 4, 1, do_imgextract,

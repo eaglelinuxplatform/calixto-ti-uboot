@@ -82,7 +82,6 @@ struct yaffsfs_Handle {
 	short int useCount;
 };
 
-
 struct yaffsfs_DirSearchContxt {
 	struct yaffs_dirent de;	/* directory entry */
 	YCHAR name[NAME_MAX + 1];	/* name of directory being searched */
@@ -468,7 +467,7 @@ static int yaffsfs_alt_dir_path(const YCHAR *path, YCHAR **ret_path)
 	return 0;
 }
 
-LIST_HEAD(yaffsfs_deviceList);
+static LIST_HEAD(yaffsfs_deviceList);
 
 /*
  * yaffsfs_FindDevice

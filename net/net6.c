@@ -9,12 +9,12 @@
 
 /* Simple IPv6 network layer implementation */
 
-#include <common.h>
 #include <env_internal.h>
 #include <malloc.h>
 #include <net.h>
 #include <net6.h>
 #include <ndisc.h>
+#include <vsprintf.h>
 
 /* NULL IPv6 address */
 struct in6_addr const net_null_addr_ip6 = ZERO_IPV6_ADDR;
@@ -413,6 +413,7 @@ int net_ip6_handler(struct ethernet_hdr *et, struct ip6_hdr *ip6, int len)
 			break;
 		case IPV6_NDISC_NEIGHBOUR_SOLICITATION:
 		case IPV6_NDISC_NEIGHBOUR_ADVERTISEMENT:
+		case IPV6_NDISC_ROUTER_ADVERTISEMENT:
 			ndisc_receive(et, ip6, len);
 			break;
 		default:

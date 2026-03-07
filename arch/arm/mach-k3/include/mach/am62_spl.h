@@ -23,7 +23,7 @@
 
 #define BOOT_DEVICE_USB			0x2A
 #define BOOT_DEVICE_DFU			0x0A
-#define BOOT_DEVICE_NAND		0x0B
+#define BOOT_DEVICE_GPMC_NAND		0x0B
 #define BOOT_DEVICE_GPMC_NOR		0x0C
 #define BOOT_DEVICE_XSPI		0x0E
 #define BOOT_DEVICE_NOBOOT		0x0F
@@ -32,7 +32,7 @@
 #define BOOT_DEVICE_ETHERNET		0x04
 #define BOOT_DEVICE_MMC2		0x08
 #define BOOT_DEVICE_MMC1		0x09
-#define BOOT_DEVICE_RAM                 0x0F
+#define BOOT_DEVICE_RAM			0x0F
 /* Invalid */
 #define BOOT_DEVICE_MMC2_2		0x1F
 

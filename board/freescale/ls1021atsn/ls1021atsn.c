@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /* Copyright 2016-2019, 2021 NXP
  */
-#include <common.h>
 #include <clock_legacy.h>
 #include <fdt_support.h>
 #include <init.h>
@@ -12,6 +11,7 @@
 #include <asm/arch/ls102xa_soc.h>
 #include <asm/arch/fsl_serdes.h>
 #include <asm/global_data.h>
+#include <asm/sections.h>
 #include <linux/delay.h>
 #include "../common/sleep.h"
 #include <fsl_validate.h>
@@ -27,7 +27,7 @@ DECLARE_GLOBAL_DATA_PTR;
 
 static void ddrmc_init(void)
 {
-#if (!defined(CONFIG_SPL) || defined(CONFIG_SPL_BUILD))
+#if (!defined(CONFIG_SPL) || defined(CONFIG_XPL_BUILD))
 	struct ccsr_ddr *ddr = (struct ccsr_ddr *)CFG_SYS_FSL_DDR_ADDR;
 	u32 temp_sdram_cfg, tmp;
 
@@ -105,7 +105,7 @@ static void ddrmc_init(void)
 		out_be32(&ddr->sdram_cfg_2, temp_sdram_cfg);
 	}
 #endif
-#endif /* !defined(CONFIG_SPL) || defined(CONFIG_SPL_BUILD) */
+#endif /* !defined(CONFIG_SPL) || defined(CONFIG_XPL_BUILD) */
 }
 
 int dram_init(void)
@@ -116,7 +116,7 @@ int dram_init(void)
 
 	gd->ram_size = get_ram_size((void *)PHYS_SDRAM, PHYS_SDRAM_SIZE);
 
-#if defined(CONFIG_DEEP_SLEEP) && !defined(CONFIG_SPL_BUILD)
+#if defined(CONFIG_DEEP_SLEEP) && !defined(CONFIG_XPL_BUILD)
 	fsl_dp_resume();
 #endif
 
@@ -156,7 +156,7 @@ int board_early_init_f(void)
 	return 0;
 }
 
-#ifdef CONFIG_SPL_BUILD
+#ifdef CONFIG_XPL_BUILD
 void board_init_f(ulong dummy)
 {
 	void (*second_uboot)(void);
@@ -214,7 +214,7 @@ int board_init(void)
 	return 0;
 }
 
-#if defined(CONFIG_SPL_BUILD)
+#if defined(CONFIG_XPL_BUILD)
 void spl_board_init(void)
 {
 	ls102xa_smmu_stream_id_init();

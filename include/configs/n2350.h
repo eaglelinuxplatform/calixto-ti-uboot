@@ -7,8 +7,6 @@
 #ifndef _CONFIG_N2350_H
 #define _CONFIG_N2350_H
 
-#define PHY_ANEG_TIMEOUT	8000	/* PHY needs a longer aneg time */
-
 /* Keep device tree and initrd in lower memory so the kernel can access them */
 #define RELOCATION_LIMITS_ENV_SETTINGS  \
 	"fdt_high=0x10000000\0"         \
@@ -20,14 +18,7 @@
  */
 #include "mv-common.h"
 
-/* Include the common distro boot environment */
-#ifndef CONFIG_SPL_BUILD
-
-#define BOOT_TARGET_DEVICES(func) \
-	func(SCSI, scsi, 0) \
-	func(USB, usb, 0) \
-	func(PXE, pxe, na) \
-	func(DHCP, dhcp, na)
+#ifndef CONFIG_XPL_BUILD
 
 #define KERNEL_ADDR_R	__stringify(0x1000000)
 #define FDT_ADDR_R	__stringify(0x2000000)
@@ -42,15 +33,12 @@
 	"scriptaddr=" SCRIPT_ADDR_R "\0" \
 	"pxefile_addr_r=" PXEFILE_ADDR_R "\0"
 
-#include <config_distro_bootcmd.h>
-
 #define CFG_EXTRA_ENV_SETTINGS \
 	RELOCATION_LIMITS_ENV_SETTINGS \
 	LOAD_ADDRESS_ENV_SETTINGS \
 	"fdtfile=" CONFIG_DEFAULT_DEVICE_TREE ".dtb\0" \
-	"console=ttyS0,115200\0" \
-	BOOTENV
+	"console=ttyS0,115200\0"
 
-#endif /* CONFIG_SPL_BUILD */
+#endif /* CONFIG_XPL_BUILD */
 
 #endif /* _CONFIG_N2350_H */

@@ -6,7 +6,6 @@
  * author: Lukasz Majewski <l.majewski@samsung.com>
  */
 
-#include <common.h>
 #include <log.h>
 #include <malloc.h>
 #include <errno.h>
@@ -17,6 +16,7 @@
 #include <mmc.h>
 #include <part.h>
 #include <command.h>
+#include <linux/printk.h>
 
 static unsigned char *dfu_file_buf;
 static u64 dfu_file_buf_len;
@@ -232,7 +232,8 @@ int dfu_flush_medium_mmc(struct dfu_entity *dfu)
 		break;
 	case DFU_SCRIPT:
 		/* script may have changed the dfu_alt_info */
-		dfu_reinit_needed = true;
+		if (dfu_alt_info_changed)
+			dfu_reinit_needed = true;
 		break;
 	case DFU_RAW_ADDR:
 	case DFU_SKIP:
@@ -268,7 +269,6 @@ int dfu_get_medium_size_mmc(struct dfu_entity *dfu, u64 *size)
 		return -1;
 	}
 }
-
 
 static int mmc_file_buf_read(struct dfu_entity *dfu, u64 offset, void *buf,
 			     long *len)
@@ -384,6 +384,16 @@ int dfu_fill_entity_mmc(struct dfu_entity *dfu, char *devstr, char **argv, int a
 		dfu->data.mmc.lba_start		= second_arg;
 		dfu->data.mmc.lba_size		= third_arg;
 		dfu->data.mmc.lba_blk_size	= mmc->read_bl_len;
+
+		/*
+		 * In case the size is zero (i.e. mmc raw 0x10 0),
+		 * assume the user intends to use whole device.
+		 */
+		if (third_arg == 0) {
+			struct blk_desc *blk_dev = mmc_get_blk_desc(mmc);
+
+			dfu->data.mmc.lba_size = blk_dev->lba;
+		}
 
 		/*
 		 * Check for an extra entry at dfu_alt_info env variable

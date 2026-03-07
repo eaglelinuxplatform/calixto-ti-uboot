@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0+
 
-obj-$(CONFIG_TI_K3_NAVSS_UDMA) += k3-udma.o
+obj-$(CONFIG_TI_K3_NAVSS_UDMA) += k3-udma-common.o k3-udma.o
+obj-$(CONFIG_TI_K3_UDMA_AM62L) += k3-udma-common.o k3-udma-am62l.o
 obj-$(CONFIG_TI_K3_PSIL) += k3-psil-data.o
 k3-psil-data-y += k3-psil.o
 k3-psil-data-$(CONFIG_SOC_K3_AM654) += k3-psil-am654.o
@@ -11,3 +12,5 @@ k3-psil-data-$(CONFIG_SOC_K3_AM625) += k3-psil-am62.o
 k3-psil-data-$(CONFIG_SOC_K3_AM62A7) += k3-psil-am62a.o
 k3-psil-data-$(CONFIG_SOC_K3_J784S4) += k3-psil-j784s4.o
 k3-psil-data-$(CONFIG_SOC_K3_AM62P5) += k3-psil-am62p.o
+k3-psil-data-$(CONFIG_SOC_K3_J722S) += k3-psil-am62p.o
+k3-psil-data-$(CONFIG_SOC_K3_AM62L3) += k3-psil-am62l.o

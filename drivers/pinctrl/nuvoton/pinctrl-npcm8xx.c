@@ -48,6 +48,7 @@
 #define GPIO_OES	0x70 /* Output Enable Set */
 #define GPIO_OEC	0x74 /* Output Enable Clear */
 
+#define NPCM8XX_NUM_GPIO_BANK	8
 #define NPCM8XX_GPIO_PER_BANK	32
 #define GPIOX_OFFSET	16
 
@@ -329,6 +330,7 @@ struct group_info {
 
 static const struct group_info npcm8xx_groups[] = {
 	FUNC_LIST
+	{FN_gpio, "GPIO", NULL, 0, 0, 0}
 };
 
 /* Pin flags */
@@ -808,6 +810,9 @@ static bool is_gpio_persist(struct udevice *dev, uint bank)
 	status = npcm_get_reset_status();
 	dev_dbg(dev, "reset status: 0x%x\n", status);
 
+	if (status & PORST)
+		return false;
+
 	if (status & CORST)
 		regmap_read(priv->rst_regmap, CORSTC, &val);
 	else if (status & WD0RST)
@@ -900,12 +905,12 @@ static int npcm8xx_pinconf_set(struct udevice *dev, unsigned int selector,
 		setbits_le32(base + GPIO_OES, BIT(gpio));
 	case PIN_CONFIG_OUTPUT:
 		dev_dbg(dev, "set pin %d output %d\n", pin, arg);
-		clrbits_le32(base + GPIO_IEM, BIT(gpio));
-		setbits_le32(base + GPIO_OES, BIT(gpio));
 		if (arg)
 			setbits_le32(base + GPIO_DOUT, BIT(gpio));
 		else
 			clrbits_le32(base + GPIO_DOUT, BIT(gpio));
+		clrbits_le32(base + GPIO_IEM, BIT(gpio));
+		setbits_le32(base + GPIO_OES, BIT(gpio));
 		break;
 	case PIN_CONFIG_DRIVE_PUSH_PULL:
 		dev_dbg(dev, "set pin %d push pull\n", pin);
@@ -963,6 +968,18 @@ static int npcm8xx_pinconf_set(struct udevice *dev, unsigned int selector,
 }
 #endif
 
+static void npcm8xx_pinctrl_clear_events(struct npcm8xx_pinctrl_priv *priv)
+{
+	void __iomem *base;
+	int i;
+
+	for (i = 0; i < NPCM8XX_NUM_GPIO_BANK; i++) {
+		base = priv->gpio_base + (0x1000 * i);
+		clrbits_le32(base + GPIO_EVEN, 0xFFFFFFFF);
+		setbits_le32(base + GPIO_EVST, 0xFFFFFFFF);
+	}
+}
+
 static struct pinctrl_ops npcm8xx_pinctrl_ops = {
 	.set_state	= pinctrl_generic_set_state,
 	.get_pins_count = npcm8xx_get_pins_count,
@@ -997,6 +1014,11 @@ static int npcm8xx_pinctrl_probe(struct udevice *dev)
 	if (IS_ERR(priv->rst_regmap))
 		return -EINVAL;
 
+	/*
+	 * Clear all previous gpio events, otherwise it may produce
+	 * unexpected interrupts during kernel booting.
+	 */
+	npcm8xx_pinctrl_clear_events(priv);
 	return 0;
 }
 

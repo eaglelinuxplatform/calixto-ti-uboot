@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0+
-# Copyright (c) 2022 Texas Instruments Incorporated - https://www.ti.com/
+# Copyright (c) 2022-2023 Texas Instruments Incorporated - https://www.ti.com/
 # Written by Neha Malcom Francis <n-francis@ti.com>
 #
 
@@ -32,7 +32,7 @@ class Entry_ti_secure_rom(Entry_x509_cert):
         - core: core on which bootloader runs, valid cores are 'secure' and 'public'
         - content: phandle of SPL in case of legacy bootflow or phandles of component binaries
           in case of combined bootflow
-        - core-opts (optional): split-mode (0) or lockstep mode (1) set to 0 by default
+        - core-opts (optional): lockstep (0) or split (2) mode set to 0 by default
 
     The following properties are only for generating a combined bootflow binary:
         - sysfw-inner-cert: boolean if binary contains sysfw inner certificate
@@ -66,7 +66,6 @@ class Entry_ti_secure_rom(Entry_x509_cert):
         super().ReadNode()
         self.combined = fdt_util.GetBool(self._node, 'combined', False)
         self.countersign = fdt_util.GetBool(self._node, 'countersign', False)
-        self.fsstub = fdt_util.GetBool(self._node, 'fsstub', False)
         self.load_addr = fdt_util.GetInt(self._node, 'load', 0x00000000)
         self.sw_rev = fdt_util.GetInt(self._node, 'sw-rev', 1)
         self.sha = fdt_util.GetInt(self._node, 'sha', 512)
@@ -81,6 +80,11 @@ class Entry_ti_secure_rom(Entry_x509_cert):
             self.dm_data = fdt_util.GetBool(self._node, 'dm-data', False)
             if self.dm_data:
                 self.load_addr_dm_data = fdt_util.GetInt(self._node, 'load-dm-data', 0x00000000)
+
+        self.tee = fdt_util.GetBool(self._node, 'content-tee', False)
+        if self.tee:
+            self.load_addr_tee = fdt_util.GetInt(self._node, 'load-tee', 0x00000000)
+
         self.req_dist_name = {'C': 'US',
                     'ST': 'TX',
                     'L': 'Dallas',
@@ -88,6 +92,7 @@ class Entry_ti_secure_rom(Entry_x509_cert):
                     'OU': 'Processors',
                     'CN': 'TI Support',
                     'emailAddress': 'support@ti.com'}
+        self.debug = fdt_util.GetBool(self._node, 'debug', False)
 
     def NonCombinedGetCertificate(self, required):
         """Generate certificate for legacy boot flow
@@ -219,7 +224,32 @@ compSize = INTEGER:{imagesize_dm_data}
 shaType  = OID:{self.sha_type}
 shaValue = FORMAT:HEX,OCT:{hashval_dm_data}"""
 
-        self.total_size = self.imagesize_sbl +  self.imagesize_sysfw + self.imagesize_sysfw_data + imagesize_sysfw_inner_cert + imagesize_dm_data
+        # tee
+        self.tee_ext_boot_sequence_string = ""
+        self.tee_ext_boot_block = ""
+        imagesize_tee = 0
+        if self.tee:
+            self.content = fdt_util.GetPhandleList(self._node, 'content-tee')
+            input_data_tee = self.GetContents(required)
+
+            input_fname_tee = tools.get_output_filename('input.%s' % uniq)
+            tools.write_file(input_fname_tee, input_data_tee)
+
+            indata_tee = tools.read_file(input_fname_tee)
+            hashval_tee = hashlib.sha512(indata_tee).hexdigest()
+            imagesize_tee = len(indata_tee)
+            self.num_comps += 1
+            self.tee_ext_boot_sequence_string = "tee=SEQUENCE:tee"
+            self.tee_ext_boot_block = f"""[tee]
+compType = INTEGER:17
+bootCore = INTEGER:16
+compOpts = INTEGER:0
+destAddr = FORMAT:HEX,OCT:{self.load_addr_tee:08x}
+compSize = INTEGER:{imagesize_tee}
+shaType  = OID:{self.sha_type}
+shaValue = FORMAT:HEX,OCT:{hashval_tee}"""
+
+        self.total_size = self.imagesize_sbl +  self.imagesize_sysfw + self.imagesize_sysfw_data + imagesize_sysfw_inner_cert + imagesize_dm_data + imagesize_tee
         return super().GetCertificate(required=required, type='rom-combined')
 
     def GetCertificate(self, required):
@@ -250,8 +280,6 @@ shaValue = FORMAT:HEX,OCT:{hashval_dm_data}"""
     def ProcessContents(self):
         # The blob may have changed due to WriteSymbols()
         data = self.data
-        if data is None:
-            data = self.GetCertificate(True)
         return self.ProcessContentsUpdate(data)
 
     def AddBintools(self, btools):

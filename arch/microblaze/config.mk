@@ -11,11 +11,7 @@ PLATFORM_CPPFLAGS += -fdata-sections -ffunction-sections
 
 LDFLAGS_FINAL += --gc-sections
 
-ifeq ($(CONFIG_SPL_BUILD),)
-PLATFORM_CPPFLAGS += -fPIC
-endif
-
-ifeq ($(CONFIG_STATIC_RELA),y)
+ifeq ($(CONFIG_XPL_BUILD),)
 PLATFORM_CPPFLAGS += -fPIC
 LDFLAGS_u-boot += -pic
 endif

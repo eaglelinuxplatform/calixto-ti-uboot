@@ -5,7 +5,6 @@
 
 #define LOG_CATEGORY	UCLASS_SYSINFO
 
-#include <common.h>
 #include <bloblist.h>
 #include <command.h>
 #include <cros_ec.h>
@@ -33,7 +32,7 @@ struct cros_gpio_info {
 	int flags;
 };
 
-static int coral_check_ll_boot(void *ctx, struct event *event)
+static int coral_check_ll_boot(void)
 {
 	if (!ll_boot_init()) {
 		printf("Running as secondary loader");
@@ -57,7 +56,7 @@ static int coral_check_ll_boot(void *ctx, struct event *event)
 
 	return 0;
 }
-EVENT_SPY(EVT_MISC_INIT_F, coral_check_ll_boot);
+EVENT_SPY_SIMPLE(EVT_MISC_INIT_F, coral_check_ll_boot);
 
 int arch_misc_init(void)
 {
@@ -148,7 +147,7 @@ static int coral_get_str(struct udevice *dev, int id, size_t size, char *val)
 {
 	int ret;
 
-	if (IS_ENABLED(CONFIG_SPL_BUILD))
+	if (IS_ENABLED(CONFIG_XPL_BUILD))
 		return -ENOSYS;
 
 	switch (id) {

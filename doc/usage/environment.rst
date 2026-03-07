@@ -81,6 +81,12 @@ Example::
         echo CONFIG_SYS_BOARD boot failed - please check your image
         echo Load address is CONFIG_SYS_LOAD_ADDR
 
+Settings which are common to a group of boards can use #include to bring in
+a common file in the `include/env` directory, containing environment
+settings. For example::
+
+   #include <env/ti/mmc.env>
+
 If CONFIG_ENV_SOURCE_FILE is empty and the default filename is not present, then
 the old-style C environment is used instead. See below.
 
@@ -94,7 +100,7 @@ to add environment variables.
 
 Board maintainers are encouraged to migrate to the text-based environment as it
 is easier to maintain. The distro-board script still requires the old-style
-environment but work is underway to address this.
+environments, so use :doc:`/develop/bootstd/index` instead.
 
 
 List of environment variables
@@ -184,6 +190,10 @@ bootm_size
 bootstopkeysha256, bootdelaykey, bootstopkey
     See README.autoboot
 
+button_cmd_0, button_cmd_0_name ... button_cmd_N, button_cmd_N_name
+    Used to map commands to run when a button is held during boot.
+    See CONFIG_BUTTON_CMD.
+
 updatefile
     Location of the software update file on a TFTP server, used
     by the automatic software update feature. Please refer to
@@ -210,7 +220,7 @@ fdt_high
     0xffffffffffffffff (64-bit machines) then
     the fdt will not be copied at all on boot.  For this
     to work it must reside in writable memory, have
-    sufficient padding on the end of it for u-boot to
+    sufficient padding on the end of it for U-Boot to
     add the information it needs into it, and the memory
     must be accessible by the kernel. This usage is strongly discouraged
     however as it also stops U-Boot from ensuring the device tree starting
@@ -300,6 +310,10 @@ ethrotate
     anything other than "no", U-Boot does go through all
     available network interfaces.
 
+httpdstp
+    If this is set, the value is used for HTTP's TCP
+    destination port instead of the default port 80.
+
 netretry
     When set to "no" each network operation will
     either succeed or fail without retrying.
@@ -308,6 +322,20 @@ netretry
     are tried once without success.
     Useful on scripts which control the retry operation
     themselves.
+
+phy_aneg_timeout
+    If set, the specified value will override CONFIG_PHY_ANEG_TIMEOUT.
+    This variable has the same base and unit as CONFIG_PHY_ANEG_TIMEOUT
+    which is "decimal" and "millisecond" respectively. The default value
+    of CONFIG_PHY_ANEG_TIMEOUT may be sufficient for most use-cases, but
+    certain link-partners may require a larger timeout due to the Ethernet
+    PHY they use. Alternatively, the timeout can be reduced as well if the
+    use-case demands it.
+
+rng_seed_size
+    Size of random value added to device-tree node /chosen/rng-seed.
+    This variable is given as a decimal number.
+    If unset, 64 bytes is used as the default.
 
 silent_linux
     If set then Linux will be told to boot silently, by
@@ -351,6 +379,19 @@ tftpwindowsize
     window size as described by RFC 7440.
     This means the count of blocks we can receive before
     sending ack to server.
+
+usb_ignorelist
+    Ignore USB devices to prevent binding them to an USB device driver. This can
+    be used to ignore devices are for some reason undesirable or causes crashes
+    u-boot's USB stack.
+    An example for undesired behavior is the keyboard emulation of security keys
+    like Yubikeys. U-boot currently supports only a single USB keyboard device
+    so try to probe an useful keyboard device. The default environment blocks
+    Yubico devices as common devices emulating keyboards.
+    Devices are matched by idVendor and idProduct. The variable contains a comma
+    separated list of idVendor:idProduct pairs as hexadecimal numbers joined
+    by a colon. '*' functions as a wildcard for idProduct to block all devices
+    with the specified idVendor.
 
 vlan
     When set to a value < 4095 the traffic over
@@ -467,12 +508,12 @@ Automatically updated variables
 -------------------------------
 
 The following environment variables may be used and automatically
-updated by the network boot commands ("bootp" and "rarpboot"),
+updated by the network boot commands ("bootp", "dhcp" and "rarpboot"),
 depending the information provided by your boot server:
 
-=========  ===================================================
+========== ===================================================================
 Variable   Notes
-=========  ===================================================
+========== ===================================================================
 bootfile   see above
 dnsip      IP address of your Domain Name Server
 dnsip2     IP address of your secondary Domain Name Server
@@ -482,7 +523,10 @@ ipaddr     See above
 netmask    Subnet Mask
 rootpath   Pathname of the root filesystem on the NFS server
 serverip   see above
-=========  ===================================================
+ipaddrN    IP address for interface N (>0) (NET_LWIP dhcp only)
+netmaskN   Subnet mask for interface N (>0) (NET_LWIP dhcp only)
+gatewayipN IP address of the Gateway for interface N (>0) (NET_LWIP dhcp only)
+========== ===================================================================
 
 
 Special environment variables

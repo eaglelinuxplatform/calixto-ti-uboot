@@ -55,59 +55,6 @@ struct udevice;
 #define TPM2_PT_MAX_COMMAND_SIZE	(u32)(TPM2_PT_FIXED + 30)
 #define TPM2_PT_MAX_RESPONSE_SIZE	(u32)(TPM2_PT_FIXED + 31)
 
-/*
- * event types, cf.
- * "TCG Server Management Domain Firmware Profile Specification",
- * rev 1.00, 2020-05-01
- */
-#define EV_POST_CODE			((u32)0x00000001)
-#define EV_NO_ACTION			((u32)0x00000003)
-#define EV_SEPARATOR			((u32)0x00000004)
-#define EV_ACTION			((u32)0x00000005)
-#define EV_TAG				((u32)0x00000006)
-#define EV_S_CRTM_CONTENTS		((u32)0x00000007)
-#define EV_S_CRTM_VERSION		((u32)0x00000008)
-#define EV_CPU_MICROCODE		((u32)0x00000009)
-#define EV_PLATFORM_CONFIG_FLAGS	((u32)0x0000000A)
-#define EV_TABLE_OF_DEVICES		((u32)0x0000000B)
-#define EV_COMPACT_HASH			((u32)0x0000000C)
-
-/*
- * event types, cf.
- * "TCG PC Client Platform Firmware Profile Specification", Family "2.0"
- * Level 00 Version 1.05 Revision 23, May 7, 2021
- */
-#define EV_EFI_EVENT_BASE			((u32)0x80000000)
-#define EV_EFI_VARIABLE_DRIVER_CONFIG		((u32)0x80000001)
-#define EV_EFI_VARIABLE_BOOT			((u32)0x80000002)
-#define EV_EFI_BOOT_SERVICES_APPLICATION	((u32)0x80000003)
-#define EV_EFI_BOOT_SERVICES_DRIVER		((u32)0x80000004)
-#define EV_EFI_RUNTIME_SERVICES_DRIVER		((u32)0x80000005)
-#define EV_EFI_GPT_EVENT			((u32)0x80000006)
-#define EV_EFI_ACTION				((u32)0x80000007)
-#define EV_EFI_PLATFORM_FIRMWARE_BLOB		((u32)0x80000008)
-#define EV_EFI_HANDOFF_TABLES			((u32)0x80000009)
-#define EV_EFI_PLATFORM_FIRMWARE_BLOB2		((u32)0x8000000A)
-#define EV_EFI_HANDOFF_TABLES2			((u32)0x8000000B)
-#define EV_EFI_VARIABLE_BOOT2			((u32)0x8000000C)
-#define EV_EFI_HCRTM_EVENT			((u32)0x80000010)
-#define EV_EFI_VARIABLE_AUTHORITY		((u32)0x800000E0)
-#define EV_EFI_SPDM_FIRMWARE_BLOB		((u32)0x800000E1)
-#define EV_EFI_SPDM_FIRMWARE_CONFIG		((u32)0x800000E2)
-
-#define EFI_CALLING_EFI_APPLICATION         \
-	"Calling EFI Application from Boot Option"
-#define EFI_RETURNING_FROM_EFI_APPLICATION  \
-	"Returning from EFI Application from Boot Option"
-#define EFI_EXIT_BOOT_SERVICES_INVOCATION   \
-	"Exit Boot Services Invocation"
-#define EFI_EXIT_BOOT_SERVICES_FAILED       \
-	"Exit Boot Services Returned with Failure"
-#define EFI_EXIT_BOOT_SERVICES_SUCCEEDED    \
-	"Exit Boot Services Returned with Success"
-#define EFI_DTB_EVENT_STRING \
-	"DTB DATA"
-
 /* TPMS_TAGGED_PROPERTY Structure */
 struct tpms_tagged_property {
 	u32 property;
@@ -150,26 +97,9 @@ struct tpms_capability_data {
 } __packed;
 
 /**
- * SHA1 Event Log Entry Format
- *
- * @pcr_index:	PCRIndex event extended to
- * @event_type:	Type of event (see EFI specs)
- * @digest:	Value extended into PCR index
- * @event_size:	Size of event
- * @event:	Event data
- */
-struct tcg_pcr_event {
-	u32 pcr_index;
-	u32 event_type;
-	u8 digest[TPM2_SHA1_DIGEST_SIZE];
-	u32 event_size;
-	u8 event[];
-} __packed;
-
-/**
  * Definition of TPMU_HA Union
  */
-union tmpu_ha {
+union tpmu_ha {
 	u8 sha1[TPM2_SHA1_DIGEST_SIZE];
 	u8 sha256[TPM2_SHA256_DIGEST_SIZE];
 	u8 sm3_256[TPM2_SM3_256_DIGEST_SIZE];
@@ -185,7 +115,7 @@ union tmpu_ha {
  */
 struct tpmt_ha {
 	u16 hash_alg;
-	union tmpu_ha digest;
+	union tpmu_ha digest;
 } __packed;
 
 /**
@@ -197,23 +127,6 @@ struct tpmt_ha {
 struct tpml_digest_values {
 	u32 count;
 	struct tpmt_ha digests[TPM2_NUM_PCR_BANKS];
-} __packed;
-
-/**
- * Crypto Agile Log Entry Format
- *
- * @pcr_index:	PCRIndex event extended to
- * @event_type:	Type of event
- * @digests:	List of digestsextended to PCR index
- * @event_size: Size of the event data
- * @event:	Event data
- */
-struct tcg_pcr_event2 {
-	u32 pcr_index;
-	u32 event_type;
-	struct tpml_digest_values digests;
-	u32 event_size;
-	u8 event[];
 } __packed;
 
 /**
@@ -340,6 +253,63 @@ enum tpm2_algorithms {
 	TPM2_ALG_SHA512		= 0x0D,
 	TPM2_ALG_NULL		= 0x10,
 	TPM2_ALG_SM3_256	= 0x12,
+};
+
+/**
+ * struct digest_info - details of supported digests
+ *
+ * @hash_name:			hash name
+ * @hash_alg:			hash algorithm id
+ * @hash_mask:			hash registry mask
+ * @hash_len:			hash digest length
+ */
+struct digest_info {
+	const char *hash_name;
+	u16 hash_alg;
+	u32 hash_mask;
+	u16 hash_len;
+};
+
+/* Algorithm Registry */
+#define TCG2_BOOT_HASH_ALG_SHA1    0x00000001
+#define TCG2_BOOT_HASH_ALG_SHA256  0x00000002
+#define TCG2_BOOT_HASH_ALG_SHA384  0x00000004
+#define TCG2_BOOT_HASH_ALG_SHA512  0x00000008
+#define TCG2_BOOT_HASH_ALG_SM3_256 0x00000010
+
+static const struct digest_info hash_algo_list[] = {
+#if IS_ENABLED(CONFIG_SHA1)
+	{
+		"sha1",
+		TPM2_ALG_SHA1,
+		TCG2_BOOT_HASH_ALG_SHA1,
+		TPM2_SHA1_DIGEST_SIZE,
+	},
+#endif
+#if IS_ENABLED(CONFIG_SHA256)
+	{
+		"sha256",
+		TPM2_ALG_SHA256,
+		TCG2_BOOT_HASH_ALG_SHA256,
+		TPM2_SHA256_DIGEST_SIZE,
+	},
+#endif
+#if IS_ENABLED(CONFIG_SHA384)
+	{
+		"sha384",
+		TPM2_ALG_SHA384,
+		TCG2_BOOT_HASH_ALG_SHA384,
+		TPM2_SHA384_DIGEST_SIZE,
+	},
+#endif
+#if IS_ENABLED(CONFIG_SHA512)
+	{
+		"sha512",
+		TPM2_ALG_SHA512,
+		TCG2_BOOT_HASH_ALG_SHA512,
+		TPM2_SHA512_DIGEST_SIZE,
+	},
+#endif
 };
 
 /* NV index attributes */
@@ -541,6 +511,16 @@ u32 tpm2_get_capability(struct udevice *dev, u32 capability, u32 property,
 			void *buf, size_t prop_count);
 
 /**
+ * tpm2_get_pcr_info() - get the supported, active PCRs and number of banks
+ *
+ * @dev:		TPM device
+ * @pcrs:		struct tpml_pcr_selection of available PCRs
+ *
+ * @return 0 on success, code of operation or negative errno on failure
+ */
+int tpm2_get_pcr_info(struct udevice *dev, struct tpml_pcr_selection *pcrs);
+
+/**
  * Issue a TPM2_DictionaryAttackLockReset command.
  *
  * @dev		TPM device
@@ -689,5 +669,83 @@ u32 tpm2_report_state(struct udevice *dev, uint vendor_cmd, uint vendor_subcmd,
  */
 u32 tpm2_enable_nvcommits(struct udevice *dev, uint vendor_cmd,
 			  uint vendor_subcmd);
+
+/**
+ * tpm2_auto_start() - start up the TPM and perform selftests.
+ *                     If a testable function has not been tested and is
+ *                     requested the TPM2  will return TPM_RC_NEEDS_TEST.
+ *
+ * @param dev		TPM device
+ * Return: TPM2_RC_TESTING, if TPM2 self-test is in progress.
+ *         TPM2_RC_SUCCESS, if testing of all functions is complete without
+ *         functional failures.
+ *         TPM2_RC_FAILURE, if any test failed.
+ *         TPM2_RC_INITIALIZE, if the TPM has not gone through the Startup
+ *         sequence
+
+ */
+u32 tpm2_auto_start(struct udevice *dev);
+
+/**
+ * tpm2_name_to_algorithm() - Return an algorithm id given a supported
+ *			      algorithm name
+ *
+ * @name: algorithm name
+ * Return: enum tpm2_algorithms or -EINVAL
+ */
+enum tpm2_algorithms tpm2_name_to_algorithm(const char *name);
+
+/**
+ * tpm2_algorithm_name() - Return an algorithm name string for a
+ *			   supported algorithm id
+ *
+ * @algorithm_id: algorithm defined in enum tpm2_algorithms
+ * Return: algorithm name string or ""
+ */
+const char *tpm2_algorithm_name(enum tpm2_algorithms);
+
+/**
+ * tpm2_algorithm_to_len() - Return an algorithm length for supported algorithm id
+ *
+ * @algorithm_id: algorithm defined in enum tpm2_algorithms
+ * Return: len or 0 if not supported
+ */
+u16 tpm2_algorithm_to_len(enum tpm2_algorithms algo);
+
+/*
+ * When measured boot is enabled via EFI or bootX commands all the algorithms
+ * above are selected by our Kconfigs. Due to U-Boots nature of being small there
+ * are cases where we need some functionality from the TPM -- e.g storage or RNG
+ * but we don't want to support measurements.
+ *
+ * The choice of hash algorithms are determined by the platform and the TPM
+ * configuration. Failing to cap a PCR in a bank which the platform left
+ * active is a security vulnerability. It permits the unsealing of secrets
+ * if an attacker can replay a good set of measurements into an unused bank.
+ *
+ * On top of that a previous stage bootloader (e.g TF-A), migh pass an eventlog
+ * since it doesn't have a TPM driver, which U-Boot needs to replace. The algorit h
+ * choice is a compile time option in that case and we need to make sure we conform.
+ *
+ * Add a variable here that sums the supported algorithms U-Boot was compiled
+ * with so we can refuse to do measurements if we don't support all of them
+ */
+
+/**
+ * tpm2_allow_extend() - Check if extending PCRs is allowed and safe
+ *
+ * @dev: TPM device
+ * Return: true if allowed
+ */
+bool tpm2_allow_extend(struct udevice *dev);
+
+/**
+ * tpm2_is_active_pcr() - check the pcr_select. If at least one of the PCRs
+ *			  supports the algorithm add it on the active ones
+ *
+ * @selection: PCR selection structure
+ * Return: True if the algorithm is active
+ */
+bool tpm2_is_active_pcr(struct tpms_pcr_selection *selection);
 
 #endif /* __TPM_V2_H */

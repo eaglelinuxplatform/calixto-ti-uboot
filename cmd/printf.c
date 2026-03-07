@@ -84,12 +84,12 @@
  * We try to be compatible.
  */
 
-#include <common.h>
 #include <ctype.h>
 #include <errno.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <vsprintf.h>
 
 #define WANT_HEX_ESCAPES 0
 #define PRINT_CONVERSION_ERROR 1
@@ -144,10 +144,10 @@ static void printf_str(struct print_inf *inf, char *format, ...)
 	i = vsnprintf(inf->str + inf->offset, remaining, format, args);
 	va_end(args);
 
-	if (i >= remaining)
-		inf->error |= PRINT_TRUNCATED_ERROR;
-	else if (i < 0)
+	if (i < 0)
 		inf->error |= PRINT_CONVERSION_ERROR;
+	else if ((unsigned int)i >= remaining)
+		inf->error |= PRINT_TRUNCATED_ERROR;
 	else
 		inf->offset += i;
 }

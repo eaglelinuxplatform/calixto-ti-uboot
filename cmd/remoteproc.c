@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2015
- * Texas Instruments Incorporated - http://www.ti.com/
+ * Texas Instruments Incorporated - https://www.ti.com/
  */
-#include <common.h>
 #include <command.h>
 #include <dm.h>
 #include <errno.h>

@@ -64,7 +64,6 @@
  * Adapted from cmd_mem.c which is copyright Wolfgang Denk (wd@denx.de).
  */
 
-#include <common.h>
 #include <bootretry.h>
 #include <cli.h>
 #include <command.h>
@@ -1699,18 +1698,6 @@ static int do_i2c_show_bus(struct cmd_tbl *cmdtp, int flag, int argc,
 
 		for (i = 0; i < CFG_SYS_NUM_I2C_BUSES; i++) {
 			printf("Bus %d:\t%s", i, I2C_ADAP_NR(i)->name);
-#ifndef CFG_SYS_I2C_DIRECT_BUS
-			int j;
-
-			for (j = 0; j < CFG_SYS_I2C_MAX_HOPS; j++) {
-				if (i2c_bus[i].next_hop[j].chip == 0)
-					break;
-				printf("->%s@0x%2x:%d",
-				       i2c_bus[i].next_hop[j].mux.name,
-				       i2c_bus[i].next_hop[j].chip,
-				       i2c_bus[i].next_hop[j].channel);
-			}
-#endif
 			printf("\n");
 		}
 #endif
@@ -1735,17 +1722,6 @@ static int do_i2c_show_bus(struct cmd_tbl *cmdtp, int flag, int argc,
 			return -1;
 		}
 		printf("Bus %d:\t%s", i, I2C_ADAP_NR(i)->name);
-#ifndef CFG_SYS_I2C_DIRECT_BUS
-			int j;
-			for (j = 0; j < CFG_SYS_I2C_MAX_HOPS; j++) {
-				if (i2c_bus[i].next_hop[j].chip == 0)
-					break;
-				printf("->%s@0x%2x:%d",
-				       i2c_bus[i].next_hop[j].mux.name,
-				       i2c_bus[i].next_hop[j].chip,
-				       i2c_bus[i].next_hop[j].channel);
-			}
-#endif
 		printf("\n");
 #endif
 	}
@@ -1939,16 +1915,6 @@ static struct cmd_tbl cmd_i2c_sub[] = {
 	U_BOOT_CMD_MKENT(speed, 1, 1, do_i2c_bus_speed, "", ""),
 };
 
-static __maybe_unused void i2c_reloc(void)
-{
-	static int relocated;
-
-	if (!relocated) {
-		fixup_cmdtable(cmd_i2c_sub, ARRAY_SIZE(cmd_i2c_sub));
-		relocated = 1;
-	};
-}
-
 /**
  * do_i2c() - Handle the "i2c" command-line command
  * @cmdtp:	Command data struct pointer
@@ -1962,10 +1928,6 @@ static __maybe_unused void i2c_reloc(void)
 static int do_i2c(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 {
 	struct cmd_tbl *c;
-
-#ifdef CONFIG_NEEDS_MANUAL_RELOC
-	i2c_reloc();
-#endif
 
 	if (argc < 2)
 		return CMD_RET_USAGE;
@@ -1983,8 +1945,7 @@ static int do_i2c(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 }
 
 /***************************************************/
-#ifdef CONFIG_SYS_LONGHELP
-static char i2c_help_text[] =
+U_BOOT_LONGHELP(i2c,
 #if CONFIG_IS_ENABLED(SYS_I2C_LEGACY) || CONFIG_IS_ENABLED(DM_I2C)
 	"bus [muxtype:muxaddr:muxchannel] - show I2C bus info\n"
 	"i2c " /* That's the prefix for the crc32 command below. */
@@ -2013,8 +1974,7 @@ static char i2c_help_text[] =
 #if defined(CONFIG_CMD_SDRAM)
 	"i2c sdram chip - print SDRAM configuration information\n"
 #endif
-	"i2c speed [speed] - show or set I2C bus speed";
-#endif
+	"i2c speed [speed] - show or set I2C bus speed");
 
 U_BOOT_CMD(
 	i2c, 7, 1, do_i2c,

@@ -3,7 +3,6 @@
  * Copyright (C) 2016 Google, Inc
  */
 
-#include <common.h>
 #include <bios_emul.h>
 #include <dm.h>
 #include <errno.h>
@@ -774,8 +773,7 @@ static int bd82x6x_video_probe(struct udevice *dev)
 
 	/* Use write-combining for the graphics memory, 256MB */
 	fbbase = IS_ENABLED(CONFIG_VIDEO_COPY) ? plat->copy_base : plat->base;
-	mtrr_add_request(MTRR_TYPE_WRCOMB, fbbase, 256 << 20);
-	mtrr_commit(true);
+	mtrr_set_next_var(MTRR_TYPE_WRCOMB, fbbase, 256 << 20);
 
 	return 0;
 }

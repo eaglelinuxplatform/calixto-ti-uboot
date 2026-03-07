@@ -1144,7 +1144,6 @@ static int ddr3_fast_path_dynamic_cs_size_config(u32 cs_ena)
 	uint64_t cs_mem_size = 0;
 	uint64_t mem_total_size_c, cs_mem_size_c;
 
-
 #ifdef DEVICE_MAX_DRAM_ADDRESS_SIZE
 	u32 physical_mem_size;
 	u32 max_mem_size = DEVICE_MAX_DRAM_ADDRESS_SIZE;
@@ -1361,13 +1360,6 @@ int mv_ddr_pre_training_soc_config(const char *ddr_type)
 	    SUSPEND_WAKEUP_ENABLED_GPIO_DETECTED) {
 		reg_bit_set(SDRAM_INIT_CTRL_REG,
 			    DRAM_RESET_MASK_MASKED << DRAM_RESET_MASK_OFFS);
-	}
-
-	/* Check if DRAM is already initialized  */
-	if (reg_read(REG_BOOTROM_ROUTINE_ADDR) &
-	    (1 << REG_BOOTROM_ROUTINE_DRAM_INIT_OFFS)) {
-		printf("%s Training Sequence - 2nd boot - Skip\n", ddr_type);
-		return MV_OK;
 	}
 
 	/* Fix read ready phases for all SOC in reg 0x15c8 */

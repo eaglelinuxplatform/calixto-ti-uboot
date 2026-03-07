@@ -17,21 +17,6 @@ config MX7D
 	select ROM_UNIFIED_SECTIONS
 	imply CMD_FUSE
 
-config TEXT_BASE
-	default 0x87800000
-
-config SPL_TEXT_BASE
-	depends on SPL
-	default 0x00912000
-
-config OPTEE_TZDRAM_SIZE
-	hex "Amount of Trust-Zone RAM for the OPTEE image"
-	default 0x0000000
-	depends on OPTEE_LIB
-	help
-	  The size of pre-allocated Trust Zone DRAM to allocate for the OPTEE
-	  runtime.
-
 choice
 	prompt "MX7 board select"
 	optional
@@ -95,6 +80,7 @@ config TARGET_WARP7
 	select DM_THERMAL
 	select MX7D
 	imply CMD_DM
+	imply OF_UPSTREAM
 
 config TARGET_COLIBRI_IMX7
 	bool "Support Colibri iMX7S/iMX7D modules"

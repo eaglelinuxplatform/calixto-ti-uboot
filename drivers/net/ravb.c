@@ -8,7 +8,6 @@
  * Based on the SuperH Ethernet driver.
  */
 
-#include <common.h>
 #include <clk.h>
 #include <cpu_func.h>
 #include <dm.h>
@@ -131,7 +130,6 @@ struct ravb_priv {
 	struct mii_dev		*bus;
 	void __iomem		*iobase;
 	struct clk_bulk		clks;
-	struct gpio_desc	reset_gpio;
 };
 
 static inline void ravb_flush_dcache(u32 addr, u32 len)
@@ -310,20 +308,11 @@ static int ravb_phy_config(struct udevice *dev)
 	struct ravb_priv *eth = dev_get_priv(dev);
 	struct eth_pdata *pdata = dev_get_plat(dev);
 	struct phy_device *phydev;
-	int mask = 0xffffffff, reg;
+	int reg;
 
-	if (dm_gpio_is_valid(&eth->reset_gpio)) {
-		dm_gpio_set_value(&eth->reset_gpio, 1);
-		mdelay(20);
-		dm_gpio_set_value(&eth->reset_gpio, 0);
-		mdelay(1);
-	}
-
-	phydev = phy_find_by_mask(eth->bus, mask);
+	phydev = phy_connect(eth->bus, -1, dev, pdata->phy_interface);
 	if (!phydev)
 		return -ENODEV;
-
-	phy_connect_dev(phydev, dev, pdata->phy_interface);
 
 	eth->phydev = phydev;
 
@@ -402,8 +391,8 @@ static int ravb_dmac_init(struct udevice *dev)
 	writel(0x00222210, eth->iobase + RAVB_REG_TGC);
 
 	/* Delay CLK: 2ns (not applicable on R-Car E3/D3) */
-	if ((rmobile_get_cpu_type() == RMOBILE_CPU_TYPE_R8A77990) ||
-	    (rmobile_get_cpu_type() == RMOBILE_CPU_TYPE_R8A77995))
+	if ((renesas_get_cpu_type() == RENESAS_CPU_TYPE_R8A77990) ||
+	    (renesas_get_cpu_type() == RENESAS_CPU_TYPE_R8A77995))
 		return 0;
 
 	if (!dev_read_u32(dev, "rx-internal-delay-ps", &delay)) {
@@ -505,7 +494,6 @@ static int ravb_probe(struct udevice *dev)
 {
 	struct eth_pdata *pdata = dev_get_plat(dev);
 	struct ravb_priv *eth = dev_get_priv(dev);
-	struct ofnode_phandle_args phandle_args;
 	struct mii_dev *mdiodev;
 	void __iomem *iobase;
 	int ret;
@@ -516,17 +504,6 @@ static int ravb_probe(struct udevice *dev)
 	ret = clk_get_bulk(dev, &eth->clks);
 	if (ret < 0)
 		goto err_mdio_alloc;
-
-	ret = dev_read_phandle_with_args(dev, "phy-handle", NULL, 0, 0, &phandle_args);
-	if (!ret) {
-		gpio_request_by_name_nodev(phandle_args.node, "reset-gpios", 0,
-					   &eth->reset_gpio, GPIOD_IS_OUT);
-	}
-
-	if (!dm_gpio_is_valid(&eth->reset_gpio)) {
-		gpio_request_by_name(dev, "reset-gpios", 0, &eth->reset_gpio,
-				     GPIOD_IS_OUT);
-	}
 
 	mdiodev = mdio_alloc();
 	if (!mdiodev) {
@@ -578,8 +555,6 @@ static int ravb_remove(struct udevice *dev)
 	free(eth->phydev);
 	mdio_unregister(eth->bus);
 	mdio_free(eth->bus);
-	if (dm_gpio_is_valid(&eth->reset_gpio))
-		dm_gpio_free(dev, &eth->reset_gpio);
 	unmap_physmem(eth->iobase, MAP_NOCACHE);
 
 	return 0;
@@ -674,7 +649,6 @@ static const struct eth_ops ravb_ops = {
 int ravb_of_to_plat(struct udevice *dev)
 {
 	struct eth_pdata *pdata = dev_get_plat(dev);
-	const fdt32_t *cell;
 
 	pdata->iobase = dev_read_addr(dev);
 
@@ -682,10 +656,7 @@ int ravb_of_to_plat(struct udevice *dev)
 	if (pdata->phy_interface == PHY_INTERFACE_MODE_NA)
 		return -EINVAL;
 
-	pdata->max_speed = 1000;
-	cell = fdt_getprop(gd->fdt_blob, dev_of_offset(dev), "max-speed", NULL);
-	if (cell)
-		pdata->max_speed = fdt32_to_cpu(*cell);
+	pdata->max_speed = dev_read_u32_default(dev, "max-speed", 1000);
 
 	sprintf(bb_miiphy_buses[0].name, dev->name);
 
@@ -694,6 +665,7 @@ int ravb_of_to_plat(struct udevice *dev)
 
 static const struct udevice_id ravb_ids[] = {
 	{ .compatible = "renesas,etheravb-rcar-gen3" },
+	{ .compatible = "renesas,etheravb-rcar-gen4" },
 	{ }
 };
 

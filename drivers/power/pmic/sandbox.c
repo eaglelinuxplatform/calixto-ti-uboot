@@ -6,12 +6,12 @@
 
 #define LOG_CATEGORY	UCLASS_PMIC
 
-#include <common.h>
 #include <fdtdec.h>
 #include <errno.h>
 #include <dm.h>
 #include <i2c.h>
 #include <log.h>
+#include <linux/printk.h>
 #include <power/pmic.h>
 #include <power/regulator.h>
 #include <power/sandbox_pmic.h>

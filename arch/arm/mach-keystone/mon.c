@@ -2,13 +2,12 @@
 /*
  * K2x: Secure commands file
  *
- * Copyright (C) 2012-2019 Texas Instruments Incorporated - http://www.ti.com/
+ * Copyright (C) 2012-2019 Texas Instruments Incorporated - https://www.ti.com/
  */
 
 #include <hang.h>
 #include <image.h>
 #include <asm/unaligned.h>
-#include <common.h>
 #include <command.h>
 #include <mach/mon.h>
 #include <spl.h>
@@ -135,7 +134,7 @@ void board_fit_image_post_process(const void *fit, int node, void **p_image,
 	 * via YMODEM. This is done to avoid disturbing the YMODEM serial
 	 * protocol transactions.
 	 */
-	if (!(IS_ENABLED(CONFIG_SPL_BUILD) &&
+	if (!(IS_ENABLED(CONFIG_XPL_BUILD) &&
 	      IS_ENABLED(CONFIG_SPL_YMODEM_SUPPORT) &&
 	      spl_boot_device() == BOOT_DEVICE_UART))
 		printf("Authentication passed\n");

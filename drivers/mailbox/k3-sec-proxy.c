@@ -2,11 +2,10 @@
 /*
  * Texas Instruments' K3 Secure proxy Driver
  *
- * Copyright (C) 2017-2018 Texas Instruments Incorporated - http://www.ti.com/
+ * Copyright (C) 2017-2018 Texas Instruments Incorporated - https://www.ti.com/
  *	Lokesh Vutla <lokeshvutla@ti.com>
  */
 
-#include <common.h>
 #include <log.h>
 #include <malloc.h>
 #include <asm/global_data.h>
@@ -84,9 +83,9 @@ struct k3_sec_proxy_mbox {
 	struct mbox_chan chan;
 	struct k3_sec_proxy_desc *desc;
 	struct k3_sec_proxy_thread *chans;
-	phys_addr_t target_data;
-	phys_addr_t scfg;
-	phys_addr_t rt;
+	void *target_data;
+	void *scfg;
+	void *rt;
 };
 
 static inline u32 sp_readl(void __iomem *addr, unsigned int offset)
@@ -319,20 +318,20 @@ static int k3_sec_proxy_of_to_priv(struct udevice *dev,
 		return -ENODEV;
 	}
 
-	spm->target_data = devfdt_get_addr_name(dev, "target_data");
-	if (spm->target_data == FDT_ADDR_T_NONE) {
+	spm->target_data = dev_read_addr_name_ptr(dev, "target_data");
+	if (!spm->target_data) {
 		dev_err(dev, "No reg property for target data base\n");
 		return -EINVAL;
 	}
 
-	spm->scfg = devfdt_get_addr_name(dev, "scfg");
-	if (spm->rt == FDT_ADDR_T_NONE) {
+	spm->scfg = dev_read_addr_name_ptr(dev, "scfg");
+	if (!spm->scfg) {
 		dev_err(dev, "No reg property for Secure Cfg base\n");
 		return -EINVAL;
 	}
 
-	spm->rt = devfdt_get_addr_name(dev, "rt");
-	if (spm->rt == FDT_ADDR_T_NONE) {
+	spm->rt = dev_read_addr_name_ptr(dev, "rt");
+	if (!spm->rt) {
 		dev_err(dev, "No reg property for Real Time Cfg base\n");
 		return -EINVAL;
 	}
@@ -409,7 +408,7 @@ static int k3_sec_proxy_remove(struct udevice *dev)
 	return 0;
 }
 
-static const u32 am6x_valid_threads[] = { 0, 1, 4, 5, 6, 7, 8, 9, 11, 12, 13, 20, 21, 22, 23 };
+static const u32 am6x_valid_threads[] = { 0, 1, 4, 5, 6, 7, 8, 9, 11, 12, 13, 20, 21, 22, 23, 28, 29 };
 
 static const struct k3_sec_proxy_desc am654_desc = {
 	.thread_count = 90,

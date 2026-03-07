@@ -4,8 +4,8 @@
  *
  */
 
-#include <common.h>
 #include <fdt_support.h>
+#include <linux/errno.h>
 #include <asm/io.h>
 #include <asm/gic-v3.h>
 #include <asm/global_data.h>
@@ -183,7 +183,7 @@ int dram_init_banksize(void)
 }
 
 /* Limit RAM used by U-Boot to the DDR first bank End region */
-phys_size_t board_get_usable_ram_top(phys_size_t total_size)
+phys_addr_t board_get_usable_ram_top(phys_size_t total_size)
 {
 	return BCM_NS3_MEM_END;
 }

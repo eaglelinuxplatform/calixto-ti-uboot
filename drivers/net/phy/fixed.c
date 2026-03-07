@@ -6,7 +6,6 @@
  */
 
 #include <config.h>
-#include <common.h>
 #include <malloc.h>
 #include <phy.h>
 #include <dm.h>
@@ -93,7 +92,7 @@ static int fixedphy_shutdown(struct phy_device *phydev)
 	return 0;
 }
 
-static struct phy_driver fixedphy_driver = {
+U_BOOT_PHY_DRIVER(fixedphy) = {
 	.uid		= PHY_FIXED_ID,
 	.mask		= 0xffffffff,
 	.name		= "Fixed PHY",
@@ -103,9 +102,3 @@ static struct phy_driver fixedphy_driver = {
 	.startup	= fixedphy_startup,
 	.shutdown	= fixedphy_shutdown,
 };
-
-int phy_fixed_init(void)
-{
-	phy_register(&fixedphy_driver);
-	return 0;
-}

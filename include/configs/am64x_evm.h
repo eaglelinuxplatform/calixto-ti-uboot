@@ -9,32 +9,31 @@
 #ifndef __CONFIG_AM642_EVM_H
 #define __CONFIG_AM642_EVM_H
 
-#include <linux/sizes.h>
-#include <config_distro_bootcmd.h>
-#include <environment/ti/mmc.h>
-#include <asm/arch/am64_hardware.h>
-#include <environment/ti/k3_dfu.h>
+/**
+ * define AM64X_SK_TIBOOT3_IMAGE_GUID - firmware GUID for AM64X sk tiboot3.bin
+ * define AM64X_SK_SPL_IMAGE_GUID     - firmware GUID for AM64X sk SPL
+ * define AM64X_SK_UBOOT_IMAGE_GUID   - firmware GUID for AM64X sk UBOOT
+ *
+ * These GUIDs are used in capsules updates to identify the corresponding
+ * firmware object.
+ *
+ * Board developers using this as a starting reference should
+ * define their own GUIDs to ensure that firmware repositories (like
+ * LVFS) do not confuse them.
+ */
+#define AM64X_SK_TIBOOT3_IMAGE_GUID \
+	EFI_GUID(0xede0a0d5, 0x9116, 0x4bfb, 0xaa, 0x54, \
+		0x09, 0xe9, 0x7b, 0x5a, 0xfe, 0x1a)
 
-/* DDR Configuration */
-#define CFG_SYS_SDRAM_BASE1		0x880000000
+#define AM64X_SK_SPL_IMAGE_GUID \
+	EFI_GUID(0x77678f5c, 0x64d4, 0x4910, 0xad, 0x75, \
+		0x52, 0xc9, 0xd9, 0x5c, 0xdb, 0x1d)
+
+#define AM64X_SK_UBOOT_IMAGE_GUID \
+	EFI_GUID(0xc6ad43a9, 0x7d31, 0x4f5d, 0x83, 0xe9, \
+		0xb8, 0xef, 0xec, 0xae, 0x05, 0xbf)
 
 /* Now for the remaining common defines */
 #include <configs/ti_armv7_common.h>
-
-/* NAND Driver config */
-#define CFG_SYS_NAND_BASE		0x51000000
-
-#define CFG_SYS_NAND_ECCPOS		{ 2, 3, 4, 5, 6, 7, 8, 9, \
-					 10, 11, 12, 13, 14, 15, 16, 17, \
-					 18, 19, 20, 21, 22, 23, 24, 25, \
-					 26, 27, 28, 29, 30, 31, 32, 33, \
-					 34, 35, 36, 37, 38, 39, 40, 41, \
-					 42, 43, 44, 45, 46, 47, 48, 49, \
-					 50, 51, 52, 53, 54, 55, 56, 57, }
-
-#define CFG_SYS_NAND_ECCSIZE		512
-
-#define CFG_SYS_NAND_ECCBYTES		14
-/*-- end NAND config --*/
 
 #endif /* __CONFIG_AM642_EVM_H */

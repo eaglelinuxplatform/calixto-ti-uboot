@@ -4,7 +4,6 @@
  * Copyright 2020 Linaro
  */
 
-#include <common.h>
 #include <command.h>
 #include <cpu_func.h>
 #include <hang.h>
@@ -21,6 +20,7 @@
 #include <asm/mach-imx/mxc_i2c.h>
 #include <asm/mach-imx/gpio.h>
 #include <asm/arch/ddr.h>
+#include <asm/sections.h>
 
 #include <dm/uclass.h>
 #include <dm/device.h>

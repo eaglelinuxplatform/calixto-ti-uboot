@@ -9,7 +9,6 @@
 
 #define pr_fmt(fmt)	"nand: " fmt
 
-#include <common.h>
 #include <watchdog.h>
 #ifndef __UBOOT__
 #include <linux/compat.h>
@@ -17,6 +16,7 @@
 #endif
 #include <linux/bitops.h>
 #include <linux/mtd/nand.h>
+#include <linux/printk.h>
 
 /**
  * nanddev_isbad() - Check if a block is bad

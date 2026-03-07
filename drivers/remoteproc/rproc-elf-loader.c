@@ -2,7 +2,6 @@
 /*
  * Copyright (C) 2019, STMicroelectronics - All Rights Reserved
  */
-#include <common.h>
 #include <cpu_func.h>
 #include <dm.h>
 #include <elf.h>
@@ -11,6 +10,7 @@
 #include <asm/cache.h>
 #include <dm/device_compat.h>
 #include <linux/compat.h>
+#include <linux/printk.h>
 
 /**
  * struct resource_table - firmware resource table header

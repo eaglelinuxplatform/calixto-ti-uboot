@@ -4,16 +4,19 @@
  * Rohit Choraria <rohitkc@ti.com>
  */
 
-#include <common.h>
+#include <config.h>
 #include <log.h>
+#include <system-constants.h>
 #include <asm/io.h>
-#include <dm/uclass.h>
+#include <dm.h>
 #include <linux/errno.h>
 
 #ifdef CONFIG_ARCH_OMAP2PLUS
 #include <asm/arch/mem.h>
 #endif
 
+#include <linux/io.h>
+#include <linux/ioport.h>
 #include <linux/mtd/omap_gpmc.h>
 #include <linux/mtd/nand_ecc.h>
 #include <linux/mtd/rawnand.h>
@@ -353,8 +356,8 @@ static void __maybe_unused omap_enable_hwecc_bch(struct mtd_info *mtd,
  * Support calculating of BCH4/8/16 ECC vectors for one sector
  * within a page. Sector number is in @sector.
  */
-static int omap_calculate_ecc_bch(struct mtd_info *mtd, const u8 *dat,
-				  u8 *ecc_code)
+static int __maybe_unused omap_calculate_ecc_bch(struct mtd_info *mtd, const u8 *dat,
+						 u8 *ecc_code)
 {
 	struct nand_chip *chip = mtd_to_nand(mtd);
 	struct omap_nand_info *info = nand_get_controller_data(chip);
@@ -713,16 +716,15 @@ static int omap_read_page_bch(struct mtd_info *mtd, struct nand_chip *chip,
 	uint8_t *ecc_code = chip->buffers->ecccode;
 	uint32_t *eccpos = chip->ecc.layout->eccpos;
 	uint8_t *oob = chip->oob_poi;
-	uint32_t data_pos;
 	uint32_t oob_pos;
+	u32 data_pos = 0;
 
-	data_pos = 0;
 	/* oob area start */
 	oob_pos = (eccsize * eccsteps) + chip->ecc.layout->eccpos[0];
 	oob += chip->ecc.layout->eccpos[0];
 
 	for (i = 0; eccsteps; eccsteps--, i += eccbytes, p += eccsize,
-				oob += eccbytes) {
+	     oob += eccbytes) {
 		/* Enable ECC engine */
 		chip->ecc.hwctl(mtd, NAND_ECC_READ);
 
@@ -1009,7 +1011,7 @@ static int omap_select_ecc_scheme(struct nand_chip *nand,
 	return 0;
 }
 
-#ifndef CONFIG_SPL_BUILD
+#ifndef CONFIG_XPL_BUILD
 /*
  * omap_nand_switch_ecc - switch the ECC operation between different engines
  * (h/w and s/w) and different algorithms (hamming and BCHx)
@@ -1070,7 +1072,7 @@ int __maybe_unused omap_nand_switch_ecc(uint32_t hardware, uint32_t eccstrength)
 		err = nand_scan_tail(mtd);
 	return err;
 }
-#endif /* CONFIG_SPL_BUILD */
+#endif /* CONFIG_XPL_BUILD */
 
 /*
  * Board-specific NAND initialization. The following members of the
@@ -1087,7 +1089,7 @@ int __maybe_unused omap_nand_switch_ecc(uint32_t hardware, uint32_t eccstrength)
  *   nand_scan about special functionality. See the defines for further
  *   explanation
  */
-int gpmc_nand_init(struct nand_chip *nand)
+int gpmc_nand_init(struct nand_chip *nand, void __iomem *nand_base)
 {
 	int32_t gpmc_config = 0;
 	int cs = cs_next++;
@@ -1127,7 +1129,7 @@ int gpmc_nand_init(struct nand_chip *nand)
 	info->control = NULL;
 	info->cs = cs;
 	info->ws = wscfg[cs];
-	info->fifo = (void __iomem *)CFG_SYS_NAND_BASE;
+	info->fifo = nand_base;
 	nand_set_controller_data(nand, &omap_nand_info[cs]);
 	nand->cmd_ctrl	= omap_nand_hwcontrol;
 	nand->options	|= NAND_NO_PADDING | NAND_CACHEPRG;
@@ -1177,11 +1179,21 @@ static int gpmc_nand_probe(struct udevice *dev)
 {
 	struct nand_chip *nand = dev_get_priv(dev);
 	struct mtd_info *mtd = nand_to_mtd(nand);
+	struct resource res;
+	void __iomem *base;
 	int ret;
 
-	ret = gpmc_nand_init(nand);
+	ret = dev_read_resource(dev, 0, &res);
 	if (ret)
 		return ret;
+
+	base = devm_ioremap(dev, res.start, resource_size(&res));
+	ret = gpmc_nand_init(nand, base);
+	if (ret)
+		return ret;
+
+	mtd->dev = dev;
+	nand_set_flash_node(nand, dev_ofnode(dev));
 
 	ret = nand_scan(mtd, CONFIG_SYS_NAND_MAX_CHIPS);
 	if (ret)
@@ -1235,7 +1247,7 @@ void board_nand_init(void)
 
 int board_nand_init(struct nand_chip *nand)
 {
-	return gpmc_nand_init(nand);
+	return gpmc_nand_init(nand, (void __iomem *)CFG_SYS_NAND_BASE);
 }
 
 #endif /* CONFIG_SYS_NAND_SELF_INIT */
@@ -1264,7 +1276,7 @@ static int nand_is_bad_block(int block)
 
 static int nand_read_page(int block, int page, uchar *dst)
 {
-	int page_addr = block * CONFIG_SYS_NAND_PAGE_COUNT + page;
+	int page_addr = block * SYS_NAND_BLOCK_PAGES + page;
 	loff_t ofs = page_addr * CONFIG_SYS_NAND_PAGE_SIZE;
 	int ret;
 	size_t len = CONFIG_SYS_NAND_PAGE_SIZE;

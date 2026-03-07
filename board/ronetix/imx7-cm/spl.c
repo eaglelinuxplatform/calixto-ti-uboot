@@ -5,7 +5,6 @@
  * Author: Ilko Iliev <iliev@ronetix.at>
  */
 
-#include <common.h>
 #include <cpu_func.h>
 #include <init.h>
 #include <asm/arch/clock.h>
@@ -16,6 +15,7 @@
 #include <asm/arch-mx7/mx7-ddr.h>
 #include <asm/mach-imx/iomux-v3.h>
 #include <asm/gpio.h>
+#include <asm/sections.h>
 #include <fsl_esdhc_imx.h>
 #include <spl.h>
 

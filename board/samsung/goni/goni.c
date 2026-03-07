@@ -5,7 +5,6 @@
  *  Kyungmin Park <kyungmin.park@samsung.com>
  */
 
-#include <common.h>
 #include <init.h>
 #include <log.h>
 #include <asm/global_data.h>
@@ -13,6 +12,7 @@
 #include <asm/arch/mmc.h>
 #include <dm.h>
 #include <linux/delay.h>
+#include <linux/printk.h>
 #include <power/pmic.h>
 #include <usb/dwc2_udc.h>
 #include <asm/arch/cpu.h>

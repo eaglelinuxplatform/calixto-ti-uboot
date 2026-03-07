@@ -3,7 +3,6 @@
  * Copyright (c) 2013 The Chromium OS Authors.
  */
 
-#include <common.h>
 #include <command.h>
 #include <dm.h>
 #include <env.h>
@@ -11,6 +10,7 @@
 #include <asm/unaligned.h>
 #include <linux/string.h>
 #include <tpm-common.h>
+#include <tpm_api.h>
 #include "tpm-user-utils.h"
 
 static struct udevice *tpm_dev;
@@ -365,6 +365,21 @@ int do_tpm_init(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 		return rc;
 
 	return report_return_code(tpm_init(dev));
+}
+
+int do_tpm_autostart(struct cmd_tbl *cmdtp, int flag, int argc,
+		     char *const argv[])
+{
+	struct udevice *dev;
+	int rc;
+
+	if (argc != 1)
+		return CMD_RET_USAGE;
+	rc = get_tpm(&dev);
+	if (rc)
+		return rc;
+
+	return report_return_code(tpm_auto_start(dev));
 }
 
 int do_tpm(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])

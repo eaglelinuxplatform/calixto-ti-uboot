@@ -2,7 +2,7 @@
 /*
  * K3: Architecture common definitions
  *
- * Copyright (C) 2018-2023 Texas Instruments Incorporated - https://www.ti.com/
+ * Copyright (C) 2018-2024 Texas Instruments Incorporated - https://www.ti.com/
  *	Lokesh Vutla <lokeshvutla@ti.com>
  */
 
@@ -10,12 +10,21 @@
 #include <asm/hardware.h>
 #include <mach/security.h>
 
-#define K3_FIREWALL_BACKGROUND_BIT (8)
+/* keep ram_top in the 32-bit address space */
+#define CFG_MAX_MEM_MAPPED		0x100000000
+
+#define K3_FIREWALL_BACKGROUND_BIT	(8)
+#define K3_SPEED_GRADE_UNKNOWN		'\0'
 
 struct fwl_data {
 	const char *name;
 	u16 fwl_id;
 	u16 regions;
+};
+
+struct k3_speed_grade_map {
+	char speed_grade;
+	u32 a_core_frequency;
 };
 
 enum k3_firewall_region_type {
@@ -35,13 +44,33 @@ enum k3_device_type {
 void setup_k3_mpu_regions(void);
 int early_console_init(void);
 void disable_linefill_optimization(void);
+int remove_fwl_region(struct fwl_data *fwl);
 void remove_fwl_configs(struct fwl_data *fwl_data, size_t fwl_data_size);
 int load_firmware(char *name_fw, char *name_loadaddr, u32 *loadaddr);
 void k3_sysfw_print_ver(void);
-void spl_enable_dcache(void);
-void mmr_unlock(phys_addr_t base, u32 partition);
+void k3_dm_print_ver(void);
+void spl_enable_cache(void);
+char k3_get_speed_grade(void);
+const struct k3_speed_grade_map *k3_get_speed_grade_map(void);
+void k3_fix_rproc_clock(const char *path);
+void mmr_unlock(uintptr_t base, u32 partition);
 bool is_rom_loaded_sysfw(struct rom_extended_boot_data *data);
 enum k3_device_type get_device_type(void);
-void ti_secure_image_post_process(void **p_image, size_t *p_size);
+struct ti_sci_handle *get_ti_sci_handle(void);
+void do_board_detect(void);
 void ti_secure_image_check_binary(void **p_image, size_t *p_size);
 void wkup_ctrl_remove_can_io_isolation_if_set(void);
+bool wkup_ctrl_is_lpm_exit(void);
+int wkup_r5f_am62_lpm_meta_data_addr(u32 *meta_data_addr);
+void lpm_resume_from_ddr(u32 meta_data_addr);
+int shutdown_mcu_r5_core1(void);
+#if IS_ENABLED(CONFIG_SPL_OS_BOOT_SECURE) && !IS_ENABLED(CONFIG_ARM64)
+int k3_r5_falcon_bootmode(void);
+#endif
+#if (IS_ENABLED(CONFIG_K3_QOS))
+void setup_qos(void);
+#else
+static inline void setup_qos(void)
+{
+}
+#endif

@@ -6,11 +6,14 @@
 #include "imx8mm-u-boot.dtsi"
 
 / {
-	firmware {
-		optee {
-			compatible = "linaro,optee-tz";
-			method = "smc";
-		};
+	aliases {
+		eeprom0 = &eeprom_module;
+		eeprom1 = &eeprom_carrier_board;
+		eeprom2 = &eeprom_display_adapter;
+	};
+
+	sysinfo {
+		compatible = "toradex,sysinfo";
 	};
 
 	wdt-reboot {
@@ -18,12 +21,6 @@
 		bootph-pre-ram;
 		wdt = <&wdog1>;
 	};
-};
-
-&{/aliases} {
-	eeprom0 = &eeprom_module;
-	eeprom1 = &eeprom_carrier_board;
-	eeprom2 = &eeprom_display_adapter;
 };
 
 &{/soc@0/bus@30800000/i2c@30a20000/pmic@25} {
@@ -34,7 +31,11 @@
 	bootph-pre-ram;
 };
 
-&binman_uboot {
+&aips4 {
+	bootph-pre-ram;
+};
+
+&binman_imx_fit {
 	offset = <0x5fc00>;
 };
 
@@ -56,6 +57,15 @@
 
 &gpio5 {
 	bootph-pre-ram;
+
+	ctrl-sleep-moci-hog {
+		bootph-pre-ram;
+		gpio-hog;
+		output-high;
+		gpios = <1 GPIO_ACTIVE_HIGH>;
+		line-name = "CTRL_SLEEP_MOCI#";
+
+	};
 };
 
 &i2c1 {
@@ -88,6 +98,10 @@
 	};
 };
 
+&pinctrl_ctrl_sleep_moci {
+	bootph-pre-ram;
+};
+
 &pinctrl_i2c1 {
 	bootph-pre-ram;
 };
@@ -113,6 +127,19 @@
 };
 
 &uart1 {
+	bootph-pre-ram;
+};
+
+&usbmisc1 {
+	bootph-pre-ram;
+};
+
+/* Verdin USB_1 */
+&usbotg1 {
+	bootph-pre-ram;
+};
+
+&usbphynop1 {
 	bootph-pre-ram;
 };
 

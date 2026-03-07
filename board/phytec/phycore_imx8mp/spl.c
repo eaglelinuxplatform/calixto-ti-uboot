@@ -4,7 +4,6 @@
  * Author: Teresa Remmet <t.remmet@phytec.de>
  */
 
-#include <common.h>
 #include <asm/arch/clock.h>
 #include <asm/arch/ddr.h>
 #include <asm/arch/imx8mp_pins.h>
@@ -21,15 +20,103 @@
 #include <power/pca9450.h>
 #include <spl.h>
 
+#include "lpddr4_timing.h"
+#include "../common/imx8m_som_detection.h"
+
 DECLARE_GLOBAL_DATA_PTR;
+
+#define EEPROM_ADDR		0x51
+#define EEPROM_ADDR_FALLBACK	0x59
 
 int spl_board_boot_device(enum boot_device boot_dev_spl)
 {
 	return BOOT_DEVICE_BOOTROM;
 }
 
+enum phytec_imx8mp_ddr_eeprom_code {
+	PHYTEC_IMX8MP_DDR_1GB = 2,
+	PHYTEC_IMX8MP_DDR_2GB = 3,
+	PHYTEC_IMX8MP_DDR_4GB = 5,
+	PHYTEC_IMX8MP_DDR_8GB = 7,
+	PHYTEC_IMX8MP_DDR_4GB_2GHZ = 8,
+};
+
 void spl_dram_init(void)
 {
+	int ret;
+	bool use_2ghz_timings = false;
+	enum phytec_imx8mp_ddr_eeprom_code size = PHYTEC_EEPROM_INVAL;
+
+	ret = phytec_eeprom_data_setup_fallback(NULL, 0, EEPROM_ADDR,
+						EEPROM_ADDR_FALLBACK);
+	if (ret && !IS_ENABLED(CONFIG_PHYCORE_IMX8MP_RAM_SIZE_FIX))
+		goto out;
+
+	ret = phytec_imx8m_detect(NULL);
+	if (!ret)
+		phytec_print_som_info(NULL);
+
+	if (IS_ENABLED(CONFIG_PHYCORE_IMX8MP_RAM_SIZE_FIX)) {
+		if (IS_ENABLED(CONFIG_PHYCORE_IMX8MP_RAM_SIZE_1GB))
+			size = PHYTEC_IMX8MP_DDR_1GB;
+		else if (IS_ENABLED(CONFIG_PHYCORE_IMX8MP_RAM_SIZE_2GB))
+			size = PHYTEC_IMX8MP_DDR_2GB;
+		else if (IS_ENABLED(CONFIG_PHYCORE_IMX8MP_RAM_SIZE_4GB))
+			size = PHYTEC_IMX8MP_DDR_4GB;
+		else if (IS_ENABLED(CONFIG_PHYCORE_IMX8MP_RAM_SIZE_8GB))
+			size = PHYTEC_IMX8MP_DDR_8GB;
+	} else {
+		size = phytec_get_imx8m_ddr_size(NULL);
+	}
+
+	if (IS_ENABLED(CONFIG_PHYCORE_IMX8MP_RAM_FREQ_FIX)) {
+		if (IS_ENABLED(CONFIG_PHYCORE_IMX8MP_USE_2GHZ_RAM_TIMINGS)) {
+			if (size == PHYTEC_IMX8MP_DDR_4GB)
+				size = PHYTEC_IMX8MP_DDR_4GB_2GHZ;
+			else
+				use_2ghz_timings = true;
+		} else if (IS_ENABLED(CONFIG_PHYCORE_IMX8MP_USE_1_5GHZ_RAM_TIMINGS)) {
+			if (size == PHYTEC_IMX8MP_DDR_4GB_2GHZ)
+				size = PHYTEC_IMX8MP_DDR_4GB;
+			else
+				use_2ghz_timings = false;
+		}
+	} else {
+		u8 rev = phytec_get_rev(NULL);
+		u8 somtype = phytec_get_som_type(NULL);
+
+		if (rev != PHYTEC_EEPROM_INVAL &&
+		    (rev >= 3 || (somtype == SOM_TYPE_PCL && rev >= 1)))
+			use_2ghz_timings = true;
+	}
+
+	switch (size) {
+	case PHYTEC_IMX8MP_DDR_1GB:
+		if (use_2ghz_timings)
+			set_dram_timings_2ghz_1gb();
+		else
+			set_dram_timings_1_5ghz_1gb();
+		break;
+	case PHYTEC_IMX8MP_DDR_2GB:
+		if (use_2ghz_timings)
+			set_dram_timings_2ghz_2gb();
+		break;
+	case PHYTEC_IMX8MP_DDR_4GB:
+		set_dram_timings_1_5ghz_4gb();
+		break;
+	case PHYTEC_IMX8MP_DDR_4GB_2GHZ:
+		set_dram_timings_2ghz_4gb();
+		break;
+	case PHYTEC_IMX8MP_DDR_8GB:
+		set_dram_timings_2ghz_8gb();
+		break;
+	default:
+		goto out;
+	}
+	ddr_init(&dram_timing);
+	return;
+out:
+	printf("Could not detect correct RAM size. Fallback to default.\n");
 	ddr_init(&dram_timing);
 }
 

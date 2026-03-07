@@ -7,7 +7,6 @@
 #ifndef _DM_OF_H
 #define _DM_OF_H
 
-#include <asm/u-boot.h>
 #include <asm/global_data.h>
 
 /* integer value within a device tree property which references another node */
@@ -62,6 +61,8 @@ struct device_node {
 	struct device_node *child;
 	struct device_node *sibling;
 };
+
+#define BAD_OF_ROOT	0xdead11e3
 
 #define OF_MAX_PHANDLE_ARGS 16
 

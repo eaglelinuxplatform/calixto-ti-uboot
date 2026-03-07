@@ -11,9 +11,9 @@
  * http://code.google.com/p/inih/
  */
 
-#include <common.h>
 #include <command.h>
 #include <env.h>
+#include <vsprintf.h>
 #include <linux/ctype.h>
 #include <linux/string.h>
 
@@ -89,7 +89,7 @@ static char *memgets(char *str, int num, char **mem, size_t *memsize)
 		end = *mem + *memsize;
 		newline = 0;
 	}
-	len = min((end - *mem) + newline, num);
+	len = min((int)(end - *mem) + newline, num);
 	memcpy(str, *mem, len);
 	if (len < num)
 		str[len] = '\0';

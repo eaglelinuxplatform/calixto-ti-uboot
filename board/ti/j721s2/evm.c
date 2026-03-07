@@ -2,12 +2,11 @@
 /*
  * Board specific initialization for J721S2 EVM
  *
- * Copyright (C) 2021 Texas Instruments Incorporated - http://www.ti.com/
+ * Copyright (C) 2021 Texas Instruments Incorporated - https://www.ti.com/
  *	David Huang <d-huang@ti.com>
  *
  */
 
-#include <common.h>
 #include <env.h>
 #include <fdt_support.h>
 #include <generic-phy.h>
@@ -15,17 +14,17 @@
 #include <init.h>
 #include <log.h>
 #include <net.h>
-#include <asm/arch/sys_proto.h>
 #include <asm/arch/hardware.h>
 #include <asm/gpio.h>
 #include <asm/io.h>
 #include <spl.h>
-#include <asm/arch/sys_proto.h>
 #include <dm.h>
 #include <dm/uclass-internal.h>
 #include <dm/root.h>
+#include <asm/arch/k3-ddr.h>
 
 #include "../common/board_detect.h"
+#include "../common/fdt_ops.h"
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -34,18 +33,7 @@ int board_init(void)
 	return 0;
 }
 
-int dram_init(void)
-{
-#ifdef CONFIG_PHYS_64BIT
-	gd->ram_size = 0x100000000;
-#else
-	gd->ram_size = 0x80000000;
-#endif
-
-	return 0;
-}
-
-phys_size_t board_get_usable_ram_top(phys_size_t total_size)
+phys_addr_t board_get_usable_ram_top(phys_size_t total_size)
 {
 #ifdef CONFIG_PHYS_64BIT
 	/* Limit RAM used by U-Boot to the DDR low region */
@@ -54,23 +42,6 @@ phys_size_t board_get_usable_ram_top(phys_size_t total_size)
 #endif
 
 	return gd->ram_top;
-}
-
-int dram_init_banksize(void)
-{
-	/* Bank 0 declares the memory available in the DDR low region */
-	gd->bd->bi_dram[0].start = CFG_SYS_SDRAM_BASE;
-	gd->bd->bi_dram[0].size = 0x7fffffff;
-	gd->ram_size = 0x80000000;
-
-#ifdef CONFIG_PHYS_64BIT
-	/* Bank 1 declares the memory available in the DDR high region */
-	gd->bd->bi_dram[1].start = CFG_SYS_SDRAM_BASE1;
-	gd->bd->bi_dram[1].size = 0x37fffffff;
-	gd->ram_size = 0x400000000;
-#endif
-
-	return 0;
 }
 
 /* Enables the spi-nand dts node, if onboard mux is set to spinand */
@@ -91,6 +62,9 @@ static void __maybe_unused detect_enable_spinand(void *blob)
 			return;
 
 		nand_offset = fdt_node_offset_by_compatible(blob, -1, "spi-nand");
+		if (nand_offset < 0)
+			return;
+
 		nor_offset = fdt_node_offset_by_compatible(blob,
 							   fdt_parent_offset(blob, nand_offset),
 							   "jedec,spi-nor");
@@ -104,9 +78,15 @@ static void __maybe_unused detect_enable_spinand(void *blob)
 	}
 }
 
-#if defined(CONFIG_SPL_BUILD)
+#if defined(CONFIG_XPL_BUILD)
 void spl_perform_fixups(struct spl_image_info *spl_image)
 {
+	if (IS_ENABLED(CONFIG_K3_DDRSS)) {
+		if (IS_ENABLED(CONFIG_K3_INLINE_ECC))
+			fixup_ddr_driver_for_ecc(spl_image);
+	} else {
+		fixup_memory_node(spl_image);
+	}
 	detect_enable_spinand(spl_image->fdt_addr);
 }
 #endif
@@ -114,18 +94,10 @@ void spl_perform_fixups(struct spl_image_info *spl_image)
 #if defined(CONFIG_OF_LIBFDT) && defined(CONFIG_OF_BOARD_SETUP)
 int ft_board_setup(void *blob, struct bd_info *bd)
 {
-	int ret;
-
-	ret = fdt_fixup_msmc_ram(blob, "/bus@100000", "sram@70000000");
-	if (ret < 0)
-		ret = fdt_fixup_msmc_ram(blob, "/interconnect@100000",
-					 "sram@70000000");
-	if (ret)
-		printf("%s: fixing up msmc ram failed %d\n", __func__, ret);
 
 	detect_enable_spinand(blob);
 
-	return ret;
+	return 0;
 }
 #endif
 
@@ -173,6 +145,12 @@ int checkboard(void)
 	return 0;
 }
 
+static struct ti_fdt_map ti_j721s2_evm_fdt_map[] = {
+	{"j721s2", "ti/k3-j721s2-common-proc-board.dtb"},
+	{"am68-sk", "ti/k3-am68-sk-base-board.dtb"},
+	{ /* Sentinel. */ }
+};
+
 static void setup_board_eeprom_env(void)
 {
 	char *name = "j721s2";
@@ -190,6 +168,7 @@ static void setup_board_eeprom_env(void)
 
 invalid_eeprom:
 	set_board_info_env_am6(name);
+	ti_set_fdt_env(name, ti_j721s2_evm_fdt_map);
 }
 
 static void setup_serial(void)
@@ -290,7 +269,7 @@ static int probe_daughtercards(void)
 		printf("Detected: %s rev %s\n", ep.name, ep.version);
 		daughter_card_detect_flags[i] = true;
 
-		if (!IS_ENABLED(CONFIG_SPL_BUILD)) {
+		if (!IS_ENABLED(CONFIG_XPL_BUILD)) {
 			int j;
 			/*
 			 * Populate any MAC addresses from daughtercard into the U-Boot
@@ -308,7 +287,7 @@ static int probe_daughtercards(void)
 		}
 	}
 
-	if (!IS_ENABLED(CONFIG_SPL_BUILD)) {
+	if (!IS_ENABLED(CONFIG_XPL_BUILD)) {
 		char name_overlays[1024] = { 0 };
 
 		for (i = 0; i < ARRAY_SIZE(ext_cards); i++) {
@@ -392,23 +371,19 @@ void spl_board_init(void)
 	int ret;
 
 	if (IS_ENABLED(CONFIG_ESM_K3)) {
-		ret = uclass_get_device_by_name(UCLASS_MISC, "esm@700000",
-						&dev);
-		if (ret)
-			printf("MISC init for esm@700000 failed: %d\n", ret);
+		const char * const esms[] = {"esm@700000", "esm@40800000", "esm@42080000"};
 
-		ret = uclass_get_device_by_name(UCLASS_MISC, "esm@40800000",
-						&dev);
-		if (ret)
-			printf("MISC init for esm@40800000 failed: %d\n", ret);
-
-		ret = uclass_get_device_by_name(UCLASS_MISC, "esm@42080000",
-						&dev);
-		if (ret)
-			printf("MISC init for esm@42080000 failed: %d\n", ret);
+		for (int i = 0; i < ARRAY_SIZE(esms); ++i) {
+			ret = uclass_get_device_by_name(UCLASS_MISC, esms[i],
+							&dev);
+			if (ret) {
+				printf("MISC init for %s failed: %d\n", esms[i], ret);
+				break;
+			}
+		}
 	}
 
-	if (IS_ENABLED(CONFIG_ESM_PMIC) && !board_is_am68_sk_som()) {
+	if (IS_ENABLED(CONFIG_ESM_PMIC) && ret == 0) {
 		ret = uclass_get_device_by_driver(UCLASS_MISC,
 						  DM_DRIVER_GET(pmic_esm),
 						  &dev);
@@ -416,66 +391,3 @@ void spl_board_init(void)
 			printf("ESM PMIC init failed: %d\n", ret);
 	}
 }
-
-/* Support for the various EVM / SK families */
-#if defined(CONFIG_SPL_OF_LIST) && defined(CONFIG_TI_I2C_BOARD_DETECT)
-void do_dt_magic(void)
-{
-	int ret, rescan, mmc_dev = -1;
-	static struct mmc *mmc;
-
-	do_board_detect();
-
-	/*
-	 * Board detection has been done.
-	 * Let us see if another dtb wouldn't be a better match
-	 * for our board
-	 */
-	if (IS_ENABLED(CONFIG_CPU_V7R)) {
-		ret = fdtdec_resetup(&rescan);
-		if (!ret && rescan) {
-			dm_uninit();
-			dm_init_and_scan(true);
-		}
-	}
-
-	/*
-	 * Because of multi DTB configuration, the MMC device has
-	 * to be re-initialized after reconfiguring FDT inorder to
-	 * boot from MMC. Do this when boot mode is MMC and ROM has
-	 * not loaded SYSFW.
-	 */
-	switch (spl_boot_device()) {
-	case BOOT_DEVICE_MMC1:
-		mmc_dev = 0;
-		break;
-	case BOOT_DEVICE_MMC2:
-	case BOOT_DEVICE_MMC2_2:
-		mmc_dev = 1;
-		break;
-	}
-
-	if (mmc_dev > 0 && !check_rom_loaded_sysfw()) {
-		ret = mmc_init_device(mmc_dev);
-		if (!ret) {
-			mmc = find_mmc_device(mmc_dev);
-			if (mmc) {
-				ret = mmc_init(mmc);
-				if (ret)
-					printf("mmc init failed with error: %d\n", ret);
-			}
-		}
-	}
-}
-#endif
-
-#ifdef CONFIG_SPL_BUILD
-void board_init_f(ulong dummy)
-{
-	k3_spl_init();
-#if defined(CONFIG_SPL_OF_LIST) && defined(CONFIG_TI_I2C_BOARD_DETECT)
-	do_dt_magic();
-#endif
-	k3_mem_init();
-}
-#endif

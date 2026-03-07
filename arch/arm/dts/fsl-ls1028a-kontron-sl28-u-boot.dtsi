@@ -64,7 +64,7 @@
 
 &binman {
 	u-boot-update {
-		filename = "u-boot.update";
+		filename = "u-boot-update.bin";
 
 		fit {
 			description = "FIT update image";
@@ -202,4 +202,8 @@
 
 &sysclk {
 	bootph-all;
+};
+
+&usb0 {
+	dr_mode = "host";
 };

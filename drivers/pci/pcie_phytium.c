@@ -7,11 +7,11 @@
  * Copyright (C) 2019
  */
 
-#include <common.h>
 #include <dm.h>
 #include <pci.h>
 #include <asm/global_data.h>
 #include <asm/io.h>
+#include <linux/printk.h>
 
 /**
  * struct phytium_pcie - phytium PCIe controller state

@@ -185,11 +185,6 @@ static inline int flag_is_changeable_p(uint32_t flag)
 }
 #endif
 
-static inline void mfence(void)
-{
-	__asm__ __volatile__("mfence" : : : "memory");
-}
-
 /**
  * cpu_enable_paging_pae() - Enable PAE-paging
  *
@@ -262,6 +257,7 @@ void cpu_call32(ulong code_seg32, ulong target, ulong table);
  *
  * @setup_base:	Pointer to the setup.bin information for the kernel
  * @target:	Pointer to the start of the kernel image
+ * Return: -EFAULT if the kernel returned; otherwise does not return
  */
 int cpu_jump_to_64bit(ulong setup_base, ulong target);
 
@@ -296,5 +292,12 @@ u32 cpu_get_stepping(void);
  * Return: address size (typically 32 or 36)
  */
 int cpu_phys_address_size(void);
+
+void board_final_init(void);
+void board_final_cleanup(void);
+
+#ifndef CONFIG_EFI_STUB
+int reserve_arch(void);
+#endif
 
 #endif

@@ -4,7 +4,6 @@
  * Written by Simon Glass <sjg@chromium.org>
  */
 
-#include <common.h>
 #include <dm.h>
 #include <log.h>
 #include <usb.h>
@@ -124,11 +123,7 @@ static int sandbox_submit_int(struct udevice *bus, struct usb_device *udev,
 	return ret;
 }
 
-int usb_gadget_handle_interrupts(int index)
-{
-	return 0;
-}
-
+#if !CONFIG_IS_ENABLED(DM_USB_GADGET)
 int usb_gadget_register_driver(struct usb_gadget_driver *driver)
 {
 	struct sandbox_udc *dev = this_controller;
@@ -144,6 +139,7 @@ int usb_gadget_unregister_driver(struct usb_gadget_driver *driver)
 
 	return 0;
 }
+#endif
 
 static int sandbox_alloc_device(struct udevice *dev, struct usb_device *udev)
 {

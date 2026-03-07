@@ -3,9 +3,9 @@
  * Copyright 2008-2009 Freescale Semiconductor, Inc.
  */
 
-#include <common.h>
 #include <command.h>
 #include <cpu_func.h>
+#include <vsprintf.h>
 
 static int cpu_status_all(void)
 {
@@ -42,7 +42,6 @@ cpu_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 		return 1;
 	}
 
-
 	if (argc == 3) {
 		if (strncmp(argv[2], "reset", 5) == 0)
 			cpu_reset(cpuid);
@@ -66,8 +65,7 @@ cpu_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 	return 0;
 }
 
-#ifdef CONFIG_SYS_LONGHELP
-static char cpu_help_text[] =
+U_BOOT_LONGHELP(cpu,
 	    "<num> reset                 - Reset cpu <num>\n"
 	"cpu status                      - Status of all cpus\n"
 	"cpu <num> status                - Status of cpu <num>\n"
@@ -86,8 +84,7 @@ static char cpu_help_text[] =
 	"     When cpu <num> is released r4 and r5 = 0.\n" \
 	"     r7 will contain the size of the initial mapped area"
 #endif
-	"";
-#endif
+	);
 
 U_BOOT_CMD(
 	cpu, CONFIG_SYS_MAXARGS, 1, cpu_cmd,

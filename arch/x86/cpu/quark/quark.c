@@ -3,7 +3,6 @@
  * Copyright (C) 2015, Bin Meng <bmeng.cn@gmail.com>
  */
 
-#include <common.h>
 #include <cpu_func.h>
 #include <event.h>
 #include <init.h>
@@ -19,6 +18,7 @@
 #include <asm/arch/device.h>
 #include <asm/arch/msg_port.h>
 #include <asm/arch/quark.h>
+#include <asm/u-boot-x86.h>
 #include <linux/delay.h>
 
 static void quark_setup_mtrr(void)
@@ -107,7 +107,7 @@ static void quark_setup_bars(void)
 		       CONFIG_PCIE_ECAM_BASE | MEM_BAR_EN);
 }
 
-static void quark_pcie_early_init(void)
+static int quark_pcie_early_init(void)
 {
 	/*
 	 * Step1: Assert PCIe signal PERST#
@@ -146,6 +146,8 @@ static void quark_pcie_early_init(void)
 	/* Mixer Load Lane 1 */
 	msg_port_io_clrbits(MSG_PORT_PCIE_AFE, PCIE_RXPICTRL0_L1,
 			    (1 << 6) | (1 << 7));
+
+	return 0;
 }
 
 static void quark_usb_early_init(void)
@@ -248,32 +250,20 @@ int arch_cpu_init(void)
 	return 0;
 }
 
-static int quark_init_pcie(void *ctx, struct event *event)
-{
-	/*
-	 * Initialize PCIe controller
-	 *
-	 * Quark SoC holds the PCIe controller in reset following a power on.
-	 * U-Boot needs to release the PCIe controller from reset. The PCIe
-	 * controller (D23:F0/F1) will not be visible in PCI configuration
-	 * space and any access to its PCI configuration registers will cause
-	 * system hang while it is held in reset.
-	 */
-	quark_pcie_early_init();
-
-	return 0;
-}
-EVENT_SPY(EVT_DM_POST_INIT, quark_init_pcie);
+/*
+ * Initialize PCIe controller
+ *
+ * Quark SoC holds the PCIe controller in reset following a power on.
+ * U-Boot needs to release the PCIe controller from reset. The PCIe
+ * controller (D23:F0/F1) will not be visible in PCI configuration
+ * space and any access to its PCI configuration registers will cause
+ * system hang while it is held in reset.
+ */
+EVENT_SPY_SIMPLE(EVT_DM_POST_INIT_F, quark_pcie_early_init);
 
 int checkcpu(void)
 {
 	return 0;
-}
-
-int print_cpuinfo(void)
-{
-	post_code(POST_CPU_INFO);
-	return default_print_cpuinfo();
 }
 
 static void quark_pcie_init(void)

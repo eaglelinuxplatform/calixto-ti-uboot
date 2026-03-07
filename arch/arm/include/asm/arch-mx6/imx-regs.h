@@ -23,7 +23,7 @@
 #define GPU_ARB_END_ADDR                0x01803FFF
 #define APBH_DMA_ARB_BASE_ADDR          0x01804000
 #define APBH_DMA_ARB_END_ADDR           0x0180BFFF
-#define M4_BOOTROM_BASE_ADDR			0x007F8000
+#define MCU_BOOTROM_BASE_ADDR			0x007F8000
 
 #elif !defined(CONFIG_MX6SLL)
 #define CAAM_ARB_BASE_ADDR              0x00100000
@@ -384,7 +384,6 @@
 			  MX6UL_LCDIF1_BASE_ADDR :		\
 			  ((is_mx6ull()) ?	\
 			  MX6ULL_LCDIF1_BASE_ADDR : MX6SX_LCDIF1_BASE_ADDR)))
-
 
 extern void imx_get_mac_from_fuse(int dev_id, unsigned char *mac);
 

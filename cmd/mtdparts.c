@@ -70,7 +70,6 @@
  *
  */
 
-#include <common.h>
 #include <command.h>
 #include <env.h>
 #include <log.h>
@@ -292,7 +291,6 @@ static void current_save(void)
 	index_partitions();
 }
 
-
 /**
  * Produce a mtd_info given a type and num.
  *
@@ -401,7 +399,6 @@ static int part_validate_eraseblock(struct mtdids *id, struct part_info *part)
 
 	return 0;
 }
-
 
 /**
  * Performs sanity check for supplied partition. Offset and size are
@@ -1129,7 +1126,6 @@ static int generate_mtdparts(char *buf, u32 buflen)
 			p += len;
 			maxlen -= len;
 
-
 			/* add offset only when there is a gap between
 			 * partitions */
 			if ((!prev_part && (offset != 0)) ||
@@ -1710,7 +1706,6 @@ static int parse_mtdids(const char *const ids)
 	return 0;
 }
 
-
 /**
  * Parse and initialize global mtdids mapping and create global
  * device/partition list.
@@ -2079,8 +2074,7 @@ U_BOOT_CMD(
 	"    - change active partition (e.g. part-id = nand0,1) of a MTD device"
 );
 
-#ifdef CONFIG_SYS_LONGHELP
-static char mtdparts_help_text[] =
+U_BOOT_LONGHELP(mtdparts,
 	"\n"
 	"    - list partition table\n"
 	"mtdparts delall\n"
@@ -2122,8 +2116,7 @@ static char mtdparts_help_text[] =
 	"<size>     := standard linux memsize OR '-' to denote all remaining space\n"
 	"<offset>   := partition start offset within the device\n"
 	"<name>     := '(' NAME ')'\n"
-	"<ro-flag>  := when set to 'ro' makes partition read-only (not used, passed to kernel)";
-#endif
+	"<ro-flag>  := when set to 'ro' makes partition read-only (not used, passed to kernel)");
 
 U_BOOT_CMD(
 	mtdparts,	6,	0,	do_mtdparts,

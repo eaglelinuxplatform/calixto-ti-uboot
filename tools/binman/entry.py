@@ -100,6 +100,17 @@ class Entry(object):
             appear in the map
         optional (bool): True if this entry contains an optional external blob
         overlap (bool): True if this entry overlaps with others
+        preserve (bool): True if this entry should be preserved when updating
+            firmware. This means that it will not be changed by the update.
+            This is just a signal: enforcement of this is up to the updater.
+            This flag does not automatically propagate down to child entries.
+        build_done (bool): Indicates that the entry data has been built and does
+            not need to be done again. This is only used with 'binman replace',
+            to stop sections from being rebuilt if their entries have not been
+            replaced
+        symbols_base (int): Use this value as the assumed load address of the
+            target entry, when calculating the symbol value. If None, this is
+            0 for blobs and the image-start address for ELF files
     """
     fake_dir = None
 
@@ -148,6 +159,10 @@ class Entry(object):
         self.overlap = False
         self.elf_base_sym = None
         self.offset_from_elf = None
+        self.preserve = False
+        self.build_done = False
+        self.no_write_symbols = False
+        self.symbols_base = None
 
     @staticmethod
     def FindEntryClass(etype, expanded):
@@ -304,11 +319,16 @@ class Entry(object):
         self.overlap = fdt_util.GetBool(self._node, 'overlap')
         if self.overlap:
             self.required_props += ['offset', 'size']
+        self.assume_size = fdt_util.GetInt(self._node, 'assume-size', 0)
 
         # This is only supported by blobs and sections at present
         self.compress = fdt_util.GetString(self._node, 'compress', 'none')
         self.offset_from_elf = fdt_util.GetPhandleNameOffset(self._node,
                                                              'offset-from-elf')
+
+        self.preserve = fdt_util.GetBool(self._node, 'preserve')
+        self.no_write_symbols = fdt_util.GetBool(self._node, 'no-write-symbols')
+        self.symbols_base = fdt_util.GetInt(self._node, 'symbols-base')
 
     def GetDefaultFilename(self):
         return None
@@ -460,6 +480,9 @@ class Entry(object):
     def ObtainContents(self, skip_entry=None, fake_size=0):
         """Figure out the contents of an entry.
 
+        For missing blobs (where allow-missing is enabled), the contents are set
+        to b'' and self.missing is set to True.
+
         Args:
             skip_entry (Entry): Entry to skip when obtaining section contents
             fake_size (int): Size of fake file to create if needed
@@ -558,8 +581,16 @@ class Entry(object):
     def GetEntryArgsOrProps(self, props, required=False):
         """Return the values of a set of properties
 
+        Looks up the named entryargs and returns the value for each. If any
+        required ones are missing, the error is reported to the user.
+
         Args:
-            props: List of EntryArg objects
+            props (list of EntryArg): List of entry arguments to look up
+            required (bool): True if these entry arguments are required
+
+        Returns:
+            list of values: one for each item in props, the type is determined
+                by the EntryArg's 'datatype' property (str or int)
 
         Raises:
             ValueError if a property is not found
@@ -680,14 +711,22 @@ class Entry(object):
     def WriteSymbols(self, section):
         """Write symbol values into binary files for access at run time
 
+        As a special case, if symbols_base is not specified and this is an
+        end-at-4gb image, a symbols_base of 0 is used
+
         Args:
           section: Section containing the entry
         """
-        if self.auto_write_symbols:
+        if self.auto_write_symbols and not self.no_write_symbols:
             # Check if we are writing symbols into an ELF file
             is_elf = self.GetDefaultFilename() == self.elf_fname
+
+            symbols_base = self.symbols_base
+            if symbols_base is None and self.GetImage()._end_4gb:
+                symbols_base = 0
+
             elf.LookupAndWriteSymbols(self.elf_fname, self, section.GetImage(),
-                                      is_elf, self.elf_base_sym)
+                                      is_elf, self.elf_base_sym, symbols_base)
 
     def CheckEntries(self):
         """Check that the entry offsets are correct
@@ -795,7 +834,7 @@ class Entry(object):
                 as missing
         """
         print('''Binman Entry Documentation
-===========================
+==========================
 
 This file describes the entry types supported by binman. These entry types can
 be placed in an image one by one to build up a final firmware image. It is
@@ -1006,6 +1045,7 @@ features to produce new behaviours.
         else:
             self.contents_size = self.pre_reset_size
         ok = self.ProcessContentsUpdate(data)
+        self.build_done = False
         self.Detail('WriteData: size=%x, ok=%s' % (len(data), ok))
         section_ok = self.section.WriteChildData(self)
         return ok and section_ok
@@ -1027,6 +1067,14 @@ features to produce new behaviours.
             True if the section could be updated successfully, False if the
                 data is such that the section could not update
         """
+        self.build_done = False
+        entry = self.section
+
+        # Now we must rebuild all sections above this one
+        while entry and entry != entry.section:
+            self.build_done = False
+            entry = entry.section
+
         return True
 
     def GetSiblingOrder(self):
@@ -1104,7 +1152,7 @@ features to produce new behaviours.
         If there are faked blobs, the entries are added to the list
 
         Args:
-            fake_blobs_list: List of Entry objects to be added to
+            faked_blobs_list: List of Entry objects to be added to
         """
         # This is meaningless for anything other than blobs
         pass
@@ -1172,6 +1220,9 @@ features to produce new behaviours.
             self.uncomp_size = len(indata)
             if self.comp_bintool.is_present():
                 data = self.comp_bintool.compress(indata)
+                uniq = self.GetUniqueName()
+                fname = tools.get_output_filename(f'comp.{uniq}')
+                tools.write_file(fname, data)
             else:
                 self.record_missing_bintool(self.comp_bintool)
                 data = tools.get_bytes(0, 1024)
@@ -1288,10 +1339,6 @@ features to produce new behaviours.
         """
         data = b''
         for entry in entries:
-            # First get the input data and put it in a file. If not available,
-            # try later.
-            if not entry.ObtainContents(fake_size=fake_size):
-                return None, None, None
             data += entry.GetData()
         uniq = self.GetUniqueName()
         fname = tools.get_output_filename(f'{prefix}.{uniq}')
@@ -1349,3 +1396,28 @@ features to produce new behaviours.
         val = elf.GetSymbolOffset(entry.elf_fname, sym_name,
                                   entry.elf_base_sym)
         return val + offset
+
+    def mark_build_done(self):
+        """Mark an entry as already built"""
+        self.build_done = True
+        entries = self.GetEntries()
+        if entries:
+            for entry in entries.values():
+                entry.mark_build_done()
+
+    def UpdateSignatures(self, privatekey_fname, algo, input_fname):
+        self.Raise('Updating signatures is not supported with this entry type')
+
+    def FdtContents(self, fdt_etype):
+        """Get the contents of an FDT for a particular phase
+
+        Args:
+            fdt_etype (str): Filename of the phase of the FDT to return, e.g.
+                'u-boot-tpl-dtb'
+
+        Returns:
+            tuple:
+                fname (str): Filename of .dtb
+                bytes: Contents of FDT (possibly run through fdtgrep)
+        """
+        return self.section.FdtContents(fdt_etype)

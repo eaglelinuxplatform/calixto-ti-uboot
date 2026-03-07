@@ -7,11 +7,8 @@
  #define _SCSI_H
 
 #include <asm/cache.h>
+#include <bouncebuf.h>
 #include <linux/dma-direction.h>
-
-/* Fix this to the maximum */
-#define SCSI_MAX_DEVICE \
-	(CONFIG_SYS_SCSI_MAX_SCSI_ID * CONFIG_SYS_SCSI_MAX_LUN)
 
 struct udevice;
 
@@ -98,7 +95,6 @@ struct scsi_cmd {
 #define	M_X_WIDE_REQ	(0x03)
 #define	M_X_PPR_REQ	(0x04)
 
-
 /*
 **	Status
 */
@@ -133,7 +129,6 @@ struct scsi_cmd {
 #define SENSE_ABORTED_COMMAND	0xB
 #define SENSE_VOLUME_OVERFLOW	0xD
 #define SENSE_MISCOMPARE			0xE
-
 
 #define SCSI_CHANGE_DEF	0x40		/* Change Definition (Optional) */
 #define SCSI_COMPARE		0x39		/* Compare (O) */
@@ -298,6 +293,24 @@ struct scsi_ops {
 	 * @return 0 if OK, -ve on error
 	 */
 	int (*bus_reset)(struct udevice *dev);
+
+#if IS_ENABLED(CONFIG_BOUNCE_BUFFER)
+	/**
+	 * buffer_aligned() - test memory alignment of block operation buffer
+	 *
+	 * Some devices have limited DMA capabilities and require that the
+	 * buffers passed to them fit specific properties. This optional
+	 * callback can be used to indicate whether a buffer alignment is
+	 * suitable for the device DMA or not, and trigger use of generic
+	 * bounce buffer implementation to help use of unsuitable buffers
+	 * at the expense of performance degradation.
+	 *
+	 * @dev:	Block device associated with the request
+	 * @state:	Bounce buffer state
+	 * @return 1 if OK, 0 if unaligned
+	 */
+	int (*buffer_aligned)(struct udevice *dev, struct bounce_buffer *state);
+#endif	/* CONFIG_BOUNCE_BUFFER */
 };
 
 #define scsi_get_ops(dev)        ((struct scsi_ops *)(dev)->driver->ops)
@@ -335,11 +348,6 @@ int scsi_scan(bool verbose);
  * @verbose:	true to show information about each device found
  */
 int scsi_scan_dev(struct udevice *dev, bool verbose);
-
-#ifndef CONFIG_DM_SCSI
-void scsi_low_level_init(int busdevfunc);
-void scsi_init(void);
-#endif
 
 #define SCSI_IDENTIFY					0xC0  /* not used */
 

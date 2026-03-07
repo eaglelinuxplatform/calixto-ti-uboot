@@ -4,7 +4,6 @@
  */
 #define LOG_CATEGORY UCLASS_REMOTEPROC
 
-#include <common.h>
 #include <dm.h>
 #include <errno.h>
 #include <fdtdec.h>
@@ -14,6 +13,7 @@
 #include <asm/io.h>
 #include <dm/device_compat.h>
 #include <linux/err.h>
+#include <linux/printk.h>
 
 /**
  * struct stm32_copro_privdata - power processor private data

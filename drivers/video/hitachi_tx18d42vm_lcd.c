@@ -5,11 +5,11 @@
  * (C) Copyright 2015 Hans de Goede <hdegoede@redhat.com>
  */
 
-#include <common.h>
 #include <malloc.h>
 #include <linux/delay.h>
 
 #include <asm/gpio.h>
+#include <sunxi_gpio.h>
 #include <errno.h>
 
 /*

@@ -682,7 +682,6 @@ struct xhci_input_control_ctx {
 	__le32	rsvd2[6];
 };
 
-
 /**
  * struct xhci_device_context_array
  * @dev_context_ptr	array of 64-bit DMA addresses for device contexts
@@ -698,7 +697,6 @@ struct xhci_device_context_array {
  * TODO: change this to be dynamically sized at HC mem init time since the HC
  * might not be able to handle the maximum number of devices possible.
  */
-
 
 struct xhci_transfer_event {
 	/* 64-bit buffer address, or immediate data */
@@ -835,7 +833,6 @@ struct xhci_event_cmd {
 #define TRB_TO_STREAM_ID(p)		((((p) & (0xffff << 16)) >> 16))
 #define STREAM_ID_FOR_TRB(p)		((((p)) & 0xffff) << 16)
 
-
 /* Port Status Change Event TRB fields */
 /* Port ID - bits 31:24 */
 #define GET_PORT_ID(p)			(((p) & (0xff << 24)) >> 24)
@@ -901,6 +898,8 @@ union xhci_trb {
 
 /* TRB type IDs */
 typedef enum {
+	/* reserved, used as a software sentinel */
+	TRB_NONE = 0,
 	/* bulk, interrupt, isoc scatter/gather, and control data stage */
 	TRB_NORMAL = 1,
 	/* setup stage for control transfers */
@@ -1132,12 +1131,9 @@ int xhci_hcd_init(int index, struct xhci_hccr **ret_hccr,
 					struct xhci_hcor **ret_hcor);
 void xhci_hcd_stop(int index);
 
-
 /*************************************************************
 	EXTENDED CAPABILITY DEFINITIONS
 *************************************************************/
-/* Up to 16 ms to halt an HC */
-#define XHCI_MAX_HALT_USEC	(16*1000)
 /* HC not running - set to 1 when run/stop bit is cleared. */
 #define XHCI_STS_HALT		(1 << 0)
 

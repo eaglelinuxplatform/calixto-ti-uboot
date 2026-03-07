@@ -10,7 +10,6 @@
 
 /* Simple U-Boot driver for the PrimeCell PL010/PL011 UARTs */
 
-#include <common.h>
 #include <asm/global_data.h>
 /* For get_bus_freq() */
 #include <clock_legacy.h>
@@ -20,6 +19,7 @@
 #include <watchdog.h>
 #include <asm/io.h>
 #include <serial.h>
+#include <spl.h>
 #include <dm/device_compat.h>
 #include <dm/platform_data/serial_pl01x.h>
 #include <linux/compiler.h>
@@ -273,6 +273,28 @@ __weak struct serial_device *default_serial_console(void)
 	return &pl01x_serial_drv;
 }
 #else
+
+static int pl01x_serial_getinfo(struct udevice *dev,
+				struct serial_device_info *info)
+{
+	struct pl01x_serial_plat *plat = dev_get_plat(dev);
+
+	/* save code size */
+	if (!not_xpl())
+		return -ENOSYS;
+
+	info->type = SERIAL_CHIP_PL01X;
+	info->addr_space = SERIAL_ADDRESS_SPACE_MEMORY;
+	info->addr = plat->base;
+	info->size = 0x1000;
+	info->reg_width = 4;
+	info->reg_shift = 2;
+	info->reg_offset = 0;
+	info->clock = plat->clock;
+
+	return 0;
+}
+
 int pl01x_serial_setbrg(struct udevice *dev, int baudrate)
 {
 	struct pl01x_serial_plat *plat = dev_get_plat(dev);
@@ -290,13 +312,26 @@ int pl01x_serial_probe(struct udevice *dev)
 {
 	struct pl01x_serial_plat *plat = dev_get_plat(dev);
 	struct pl01x_priv *priv = dev_get_priv(dev);
+	int ret;
 
+#if CONFIG_IS_ENABLED(OF_PLATDATA)
+	struct dtd_serial_pl01x *dtplat = &plat->dtplat;
+
+	priv->regs = (struct pl01x_regs *)dtplat->reg[0];
+	plat->type = dtplat->type;
+#else
 	priv->regs = (struct pl01x_regs *)plat->base;
+#endif
 	priv->type = plat->type;
-	if (!plat->skip_init)
-		return pl01x_generic_serial_init(priv->regs, priv->type);
-	else
+
+	if (!plat->skip_init) {
+		ret = pl01x_generic_serial_init(priv->regs, priv->type);
+		if (ret)
+			return ret;
+		return pl01x_serial_setbrg(dev, gd->baudrate);
+	} else {
 		return 0;
+	}
 }
 
 int pl01x_serial_getc(struct udevice *dev)
@@ -321,7 +356,7 @@ int pl01x_serial_pending(struct udevice *dev, bool input)
 	if (input)
 		return pl01x_tstc(priv->regs);
 	else
-		return fr & UART_PL01x_FR_TXFF ? 0 : 1;
+		return fr & UART_PL01x_FR_TXFE ? 0 : 1;
 }
 
 static const struct dm_serial_ops pl01x_serial_ops = {
@@ -329,9 +364,10 @@ static const struct dm_serial_ops pl01x_serial_ops = {
 	.pending = pl01x_serial_pending,
 	.getc = pl01x_serial_getc,
 	.setbrg = pl01x_serial_setbrg,
+	.getinfo = pl01x_serial_getinfo,
 };
 
-#if CONFIG_IS_ENABLED(OF_CONTROL)
+#if CONFIG_IS_ENABLED(OF_REAL)
 static const struct udevice_id pl01x_serial_id[] ={
 	{.compatible = "arm,pl011", .data = TYPE_PL011},
 	{.compatible = "arm,pl010", .data = TYPE_PL010},
@@ -380,8 +416,10 @@ int pl01x_serial_of_to_plat(struct udevice *dev)
 U_BOOT_DRIVER(serial_pl01x) = {
 	.name	= "serial_pl01x",
 	.id	= UCLASS_SERIAL,
+#if CONFIG_IS_ENABLED(OF_REAL)
 	.of_match = of_match_ptr(pl01x_serial_id),
 	.of_to_plat = of_match_ptr(pl01x_serial_of_to_plat),
+#endif
 	.plat_auto	= sizeof(struct pl01x_serial_plat),
 	.probe = pl01x_serial_probe,
 	.ops	= &pl01x_serial_ops,
@@ -389,6 +427,8 @@ U_BOOT_DRIVER(serial_pl01x) = {
 	.priv_auto	= sizeof(struct pl01x_priv),
 };
 
+DM_DRIVER_ALIAS(serial_pl01x, arm_pl011)
+DM_DRIVER_ALIAS(serial_pl01x, arm_pl010)
 #endif
 
 #if defined(CONFIG_DEBUG_UART_PL010) || defined(CONFIG_DEBUG_UART_PL011)

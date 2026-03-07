@@ -3,7 +3,6 @@
  * (C) Copyright 2019 - 2020 Xilinx, Inc.
  */
 
-#include <common.h>
 #include <command.h>
 #include <fdtdec.h>
 #include <malloc.h>
@@ -72,20 +71,17 @@ static int do_fru(struct cmd_tbl *cmdtp, int flag, int argc,
 }
 
 /***************************************************/
-#ifdef CONFIG_SYS_LONGHELP
-static char fru_help_text[] =
+U_BOOT_LONGHELP(fru,
 	"capture <addr> - Parse and capture FRU table present at address.\n"
 	"fru display - Displays content of FRU table that was captured using\n"
 	"              fru capture command\n"
 	"fru board_gen <addr> <manufacturer> <board name> <serial number>\n"
 	"              <part number> <revision> - Generate FRU format with\n"
 	"              board info area filled based on parameters. <addr> is\n"
-	"              pointing to place where FRU is generated.\n"
-	;
-#endif
+	"              pointing to place where FRU is generated.\n");
 
 U_BOOT_CMD(
 	fru, 8, 1, do_fru,
 	"FRU table info",
 	fru_help_text
-)
+);

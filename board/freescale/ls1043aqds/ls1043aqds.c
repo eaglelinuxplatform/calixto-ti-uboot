@@ -4,7 +4,7 @@
  * Copyright 2019-2020 NXP
  */
 
-#include <common.h>
+#include <config.h>
 #include <clock_legacy.h>
 #include <i2c.h>
 #include <fdt_support.h>
@@ -15,7 +15,6 @@
 #include <asm/io.h>
 #include <asm/arch/clock.h>
 #include <asm/arch/fsl_serdes.h>
-#include <asm/arch/ppa.h>
 #include <asm/arch/fdt.h>
 #include <asm/arch/mmu.h>
 #include <asm/arch/cpu.h>
@@ -289,7 +288,7 @@ int dram_init(void)
 	select_i2c_ch_pca9547(I2C_MUX_CH_DEFAULT, 0);
 	fsl_initdram();
 #if (!defined(CONFIG_SPL) && !defined(CONFIG_TFABOOT)) || \
-	defined(CONFIG_SPL_BUILD)
+	defined(CONFIG_XPL_BUILD)
 	/* This will break-before-make MMU for DDR */
 	update_early_mmu_table();
 #endif
@@ -509,7 +508,6 @@ int config_serdes_mux(void)
 	return 0;
 }
 
-
 #ifdef CONFIG_MISC_INIT_R
 int misc_init_r(void)
 {
@@ -531,10 +529,6 @@ int board_init(void)
 
 #ifdef CFG_SYS_FSL_SERDES
 	config_serdes_mux();
-#endif
-
-#ifdef CONFIG_FSL_LS_PPA
-	ppa_init();
 #endif
 
 	return 0;

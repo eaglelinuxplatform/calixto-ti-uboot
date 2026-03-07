@@ -6,6 +6,7 @@
 #
 
 ---
+
 board-cfg:
     rev:
         boardcfg_abi_maj: 0x0

@@ -2,12 +2,11 @@
 /*
  * Texas Instruments' K3 Error Signalling Module driver
  *
- * Copyright (C) 2019 Texas Instruments Incorporated - http://www.ti.com/
+ * Copyright (C) 2019 Texas Instruments Incorporated - https://www.ti.com/
  *      Tero Kristo <t-kristo@ti.com>
  *
  */
 
-#include <common.h>
 #include <dm.h>
 #include <errno.h>
 #include <asm/io.h>

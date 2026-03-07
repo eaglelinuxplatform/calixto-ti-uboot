@@ -3,7 +3,13 @@
 # (C) Copyright 2000-2002
 # Wolfgang Denk, DENX Software Engineering, wd@denx.de.
 
-CFLAGS_NON_EFI := -fno-pic -ffixed-r9 -ffunction-sections -fdata-sections \
+ifeq ($(CONFIG_ARM64),y)
+FIXED_REG := -ffixed-x18
+else
+FIXED_REG := -ffixed-r9
+endif
+
+CFLAGS_NON_EFI := -fno-pic $(FIXED_REG) -ffunction-sections -fdata-sections \
 		  -fstack-protector-strong
 CFLAGS_EFI := -fpic -fshort-wchar
 
@@ -15,7 +21,7 @@ ifneq ($(LTO_ENABLE),y)
 PLATFORM_RELFLAGS += -ffunction-sections -fdata-sections
 endif
 
-PLATFORM_RELFLAGS += -fno-common -ffixed-r9
+PLATFORM_RELFLAGS += -fno-common $(FIXED_REG)
 PLATFORM_RELFLAGS += $(call cc-option, -msoft-float) \
 		     $(call cc-option,-mgeneral-regs-only) \
       $(call cc-option,-mshort-load-bytes,$(call cc-option,-malignment-traps,))
@@ -34,7 +40,7 @@ PLATFORM_ELFFLAGS += -B arm -O elf32-littlearm
 endif
 
 # Choose between ARM/Thumb instruction sets
-ifeq ($(CONFIG_$(SPL_)SYS_THUMB_BUILD),y)
+ifeq ($(CONFIG_$(XPL_)SYS_THUMB_BUILD),y)
 AFLAGS_IMPLICIT_IT	:= $(call as-option,-Wa$(comma)-mimplicit-it=always)
 PF_CPPFLAGS_ARM		:= $(AFLAGS_IMPLICIT_IT) \
 			$(call cc-option, -mthumb -mthumb-interwork,\
@@ -47,7 +53,7 @@ PF_CPPFLAGS_ARM := $(call cc-option,-marm,) \
 endif
 
 # Only test once
-ifeq ($(CONFIG_$(SPL_)SYS_THUMB_BUILD),y)
+ifeq ($(CONFIG_$(XPL_)SYS_THUMB_BUILD),y)
 archprepare: checkthumb checkgcc6
 
 checkthumb:
@@ -93,7 +99,7 @@ PLATFORM_CPPFLAGS += $(PF_CPPFLAGS_ARM) $(PF_CPPFLAGS_ABI)
 ifneq (,$(findstring -mabi=aapcs-linux,$(PLATFORM_CPPFLAGS)))
 # This file is parsed many times, so the string may get added multiple
 # times. Also, the prefix needs to be different based on whether
-# CONFIG_SPL_BUILD is defined or not. 'filter-out' the existing entry
+# CONFIG_XPL_BUILD is defined or not. 'filter-out' the existing entry
 # before adding the correct one.
 PLATFORM_LIBS := arch/arm/lib/eabi_compat.o \
 	$(filter-out arch/arm/lib/eabi_compat.o, $(PLATFORM_LIBS))
@@ -110,7 +116,7 @@ LDFLAGS_u-boot += -pie
 #
 # http://sourceware.org/bugzilla/show_bug.cgi?id=12532
 #
-ifeq ($(CONFIG_$(SPL_)SYS_THUMB_BUILD),y)
+ifeq ($(CONFIG_$(XPL_)SYS_THUMB_BUILD),y)
 ifeq ($(GAS_BUG_12532),)
 export GAS_BUG_12532:=$(shell if [ $(call binutils-version) -lt 0222 ] ; \
 	then echo y; else echo n; fi)
@@ -120,7 +126,7 @@ PLATFORM_RELFLAGS += -fno-optimize-sibling-calls
 endif
 endif
 
-ifneq ($(CONFIG_SPL_BUILD),y)
+ifneq ($(CONFIG_XPL_BUILD),y)
 # Check that only R_ARM_RELATIVE relocations are generated.
 INPUTS-y += checkarmreloc
 # The movt / movw can hardcode 16 bit parts of the addresses in the
@@ -154,7 +160,7 @@ endif
 ifdef CONFIG_MACH_IMX
 ifneq ($(CONFIG_IMX_CONFIG),"")
 ifdef CONFIG_SPL
-ifndef CONFIG_SPL_BUILD
+ifndef CONFIG_XPL_BUILD
 INPUTS-y += SPL
 endif
 else

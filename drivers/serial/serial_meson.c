@@ -3,7 +3,6 @@
  * (C) Copyright 2016 Beniamino Galvani <b.galvani@gmail.com>
  */
 
-#include <common.h>
 #include <dm.h>
 #include <errno.h>
 #include <fdtdec.h>
@@ -201,7 +200,10 @@ static int meson_serial_pending(struct udevice *dev, bool input)
 
 		return true;
 	} else {
-		return !(status & AML_UART_TX_FULL);
+		if (status & AML_UART_TX_EMPTY)
+			return false;
+
+		return true;
 	}
 }
 
@@ -229,6 +231,7 @@ static const struct dm_serial_ops meson_serial_ops = {
 static const struct udevice_id meson_serial_ids[] = {
 	{ .compatible = "amlogic,meson-uart" },
 	{ .compatible = "amlogic,meson-gx-uart" },
+	{ .compatible = "amlogic,meson-a1-uart" },
 	{ }
 };
 

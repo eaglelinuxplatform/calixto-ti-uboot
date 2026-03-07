@@ -124,6 +124,7 @@ enum serial_stop {
 enum serial_chip_type {
 	SERIAL_CHIP_UNKNOWN = -1,
 	SERIAL_CHIP_16550_COMPATIBLE,
+	SERIAL_CHIP_PL01X,
 };
 
 enum adr_space_type {
@@ -137,6 +138,7 @@ enum adr_space_type {
  * @type:	type of the UART chip
  * @addr_space:	address space to access the registers
  * @addr:	physical address of the registers
+ * @size:	size of the register area in bytes
  * @reg_width:	size (in bytes) of the IO accesses to the registers
  * @reg_offset:	offset to apply to the @addr from the start of the registers
  * @reg_shift:	quantity to shift the register offsets by
@@ -147,6 +149,7 @@ struct serial_device_info {
 	enum serial_chip_type type;
 	enum adr_space_type addr_space;
 	ulong addr;
+	ulong size;
 	u8 reg_width;
 	u8 reg_offset;
 	u8 reg_shift;
@@ -296,9 +299,11 @@ struct dm_serial_ops {
 struct serial_dev_priv {
 	struct stdio_dev *sdev;
 
-	char *buf;
-	int rd_ptr;
-	int wr_ptr;
+#if CONFIG_IS_ENABLED(SERIAL_RX_BUFFER)
+	char buf[CONFIG_SERIAL_RX_BUFFER_SIZE];
+	uint rd_ptr;
+	uint wr_ptr;
+#endif
 };
 
 /* Access the serial operations for a device */
@@ -336,6 +341,13 @@ int serial_setconfig(struct udevice *dev, uint config);
  * Return: 0 if OK, -ve on error
  */
 int serial_getinfo(struct udevice *dev, struct serial_device_info *info);
+
+/**
+ * fetch_baud_from_dtb() - Fetch the baudrate value from DT
+ *
+ * Return: baudrate if OK, -ve on error
+ */
+int fetch_baud_from_dtb(void);
 
 void atmel_serial_initialize(void);
 void mcf_serial_initialize(void);

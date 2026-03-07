@@ -211,6 +211,7 @@ class TestFunctional(unittest.TestCase):
             'u-boot': ['u-boot@lists.denx.de'],
             'simon': [self.leb],
             'fred': [self.fred],
+            'joe': [self.joe],
         }
 
         text = self._get_text('test01.txt')
@@ -240,6 +241,8 @@ class TestFunctional(unittest.TestCase):
         self.assertEqual('Change log missing for v3', next(lines))
         self.assertEqual('Change log for unknown version v4', next(lines))
         self.assertEqual("Alias 'pci' not found", next(lines))
+        while next(lines) != 'Cc processing complete':
+            pass
         self.assertIn('Dry run', next(lines))
         self.assertEqual('', next(lines))
         self.assertIn('Send a total of %d patches' % count, next(lines))
@@ -257,6 +260,7 @@ class TestFunctional(unittest.TestCase):
         self.assertEqual('Postfix:\t  some-branch', next(lines))
         self.assertEqual('Cover: 4 lines', next(lines))
         self.assertEqual('      Cc:  %s' % self.fred, next(lines))
+        self.assertEqual('      Cc:  %s' % self.joe, next(lines))
         self.assertEqual('      Cc:  %s' % self.leb,
                          next(lines))
         self.assertEqual('      Cc:  %s' % mel, next(lines))
@@ -270,7 +274,8 @@ class TestFunctional(unittest.TestCase):
 
         self.assertEqual(('%s %s\0%s' % (args[0], rick, stefan)), cc_lines[0])
         self.assertEqual(
-            '%s %s\0%s\0%s\0%s' % (args[1], self.fred, self.leb, rick, stefan),
+            '%s %s\0%s\0%s\0%s\0%s' % (args[1], self.fred, self.joe, self.leb,
+                                       rick, stefan),
             cc_lines[1])
 
         expected = '''
@@ -288,6 +293,7 @@ Changes in v4:
   change
 - Some changes
 - Some notes for the cover letter
+- fdt: Correct cast for sandbox in fdtdec_setup_mem_size_base()
 
 Simon Glass (2):
   pci: Correct cast for sandbox
@@ -337,6 +343,7 @@ Changes in v4:
 - Multi
   line
   change
+- New
 - Some changes
 
 Changes in v2:
@@ -487,8 +494,8 @@ complicated as possible''')
         # pylint: disable=E1101
         self.repo.checkout(target, strategy=pygit2.GIT_CHECKOUT_FORCE)
         control.setup()
+        orig_dir = os.getcwd()
         try:
-            orig_dir = os.getcwd()
             os.chdir(self.gitdir)
 
             # Check that it can detect the current branch
@@ -538,7 +545,8 @@ complicated as possible''')
             with open('.patman', 'w', buffering=1) as f:
                 f.write('[settings]\n'
                         'get_maintainer_script: dummy-script.sh\n'
-                        'check_patch: False\n')
+                        'check_patch: False\n'
+                        'add_maintainers: True\n')
             with open('dummy-script.sh', 'w', buffering=1) as f:
                 f.write('#!/usr/bin/env python\n'
                         'print("hello@there.com")\n')
@@ -677,8 +685,8 @@ diff --git a/lib/efi_loader/efi_memory.c b/lib/efi_loader/efi_memory.c
         self.repo.checkout(target, strategy=pygit2.GIT_CHECKOUT_FORCE)
 
         # Check that it can detect the current branch
+        orig_dir = os.getcwd()
         try:
-            orig_dir = os.getcwd()
             os.chdir(self.gitdir)
             with self.assertRaises(ValueError) as exc:
                 gitutil.count_commits_to_branch(None)

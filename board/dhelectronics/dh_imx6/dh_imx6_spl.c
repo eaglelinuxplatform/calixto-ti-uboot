@@ -5,7 +5,6 @@
  * Copyright (C) 2017 Marek Vasut <marex@denx.de>
  */
 
-#include <common.h>
 #include <cpu_func.h>
 #include <init.h>
 #include <asm/arch/clock.h>
@@ -21,6 +20,7 @@
 #include <asm/mach-imx/iomux-v3.h>
 #include <asm/mach-imx/mxc_i2c.h>
 #include <asm/io.h>
+#include <asm/sections.h>
 #include <asm/system.h>
 #include <errno.h>
 #include <fuse.h>
@@ -540,7 +540,6 @@ static int spl_dram_perform_cal(struct mx6_ddr_sysinfo const *sysinfo)
 
 	return ret;
 }
-
 
 /* DRAM */
 static void dhcom_spl_dram_init(void)

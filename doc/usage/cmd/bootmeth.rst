@@ -1,15 +1,19 @@
 .. SPDX-License-Identifier: GPL-2.0+:
 
+.. index::
+   single: bootmeth (command)
+
 bootmeth command
 ================
 
-Synopis
--------
+Synopsis
+--------
 
 ::
 
     bootmeth list [-a]          - list selected bootmeths (-a for all)
-    bootmeth order "[<bm> ...]" - select the order of bootmeths\n"
+    bootmeth order "[<bm> ...]" - select the order of bootmeths
+    bootmeth set <bootmeth> <property> <value> - set optional property
 
 
 Description
@@ -18,7 +22,7 @@ Description
 The `bootmeth` command is used to manage bootmeths. It can list them and change
 the order in which they are used.
 
-See :doc:`../../develop/bootstd` for more information.
+See :doc:`/develop/bootstd/index` for more information.
 
 
 .. _bootmeth_order:
@@ -45,7 +49,7 @@ The format looks like this:
 =====  ===  ==================  =================================
 Order  Seq  Name                Description
 =====  ===  ==================  =================================
-    0    0  distro              Syslinux boot from a block device
+    0    0  extlinux            Extlinux boot from a block device
     1    1  efi                 EFI boot from an .efi file
     2    2  pxe                 PXE boot from a network device
     3    3  sandbox             Sandbox boot for testing
@@ -77,7 +81,7 @@ This shows listing bootmeths. All are present and in the normal order::
     => bootmeth list
     Order  Seq  Name                Description
     -----  ---  ------------------  ------------------
-        0    0  distro              Syslinux boot from a block device
+        0    0  distro              Extlinux boot from a block device
         1    1  efi                 EFI boot from an .efi file
         2    2  pxe                 PXE boot from a network device
         3    3  sandbox             Sandbox boot for testing
@@ -92,7 +96,7 @@ Now the order is changed, to include only two of them::
     Order  Seq  Name                Description
     -----  ---  ------------------  ------------------
         0    3  sandbox             Sandbox boot for testing
-        1    0  distro              Syslinux boot from a block device
+        1    0  distro              Extlinux boot from a block device
     -----  ---  ------------------  ------------------
     (2 bootmeths)
 
@@ -102,10 +106,45 @@ which are not::
     => bootmeth list -a
     Order  Seq  Name                Description
     -----  ---  ------------------  ------------------
-        1    0  distro              Syslinux boot from a block device
+        1    0  distro              Extlinux boot from a block device
         -    1  efi                 EFI boot from an .efi file
         -    2  pxe                 PXE boot from a network device
         0    3  sandbox             Sandbox boot for testing
         -    4  efi_mgr             EFI bootmgr flow
     -----  ---  ------------------  ------------------
     (5 bootmeths)
+
+
+bootmeth set
+~~~~~~~~~~~~
+
+Allows setting of bootmeth specific configuration. This allows finer grain
+control over the boot process in specific instances.
+
+
+Supported Configuration Options
+-------------------------------
+
+The following configuration options are currently supported:
+
+========  ===================  ======  ===============================
+Property  Supported Bootmeths  Values  Description
+========  ===================  ======  ===============================
+fallback  extlinux             0 | 1     Enable or disable fallback path
+========  ===================  ======  ===============================
+
+
+Bootmeth set Example
+--------------------
+
+With the bootcount functionality enabled, when the bootlimit is reached, the
+`altbootcmd` environment variable lists the command used for booting rather
+than `bootcmd`. We can set the fallback configuration to cause the fallback
+boot option to be preferred, to revert to a previous known working boot option
+after a failed update for example. So if `bootcmd` is set to::
+
+    bootflow scan -lb
+
+We would set "altbootcmd" to::
+
+    bootmeth set extlinux fallback 1; bootflow scan -lb

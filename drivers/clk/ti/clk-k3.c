@@ -2,15 +2,15 @@
 /*
  * Texas Instruments K3 clock driver
  *
- * Copyright (C) 2020-2021 Texas Instruments Incorporated - http://www.ti.com/
+ * Copyright (C) 2020-2021 Texas Instruments Incorporated - https://www.ti.com/
  *	Tero Kristo <t-kristo@ti.com>
  */
 
-#include <common.h>
 #include <dm.h>
 #include <errno.h>
 #include <soc.h>
 #include <clk-uclass.h>
+#include <k3-avs.h>
 #include "k3-clk.h"
 
 #define PLL_MIN_FREQ	800000000
@@ -59,6 +59,24 @@ static void clk_add_map(struct ti_clk_data *data, struct clk *clk,
 }
 
 static const struct soc_attr ti_k3_soc_clk_data[] = {
+#if IS_ENABLED(CONFIG_SOC_K3_AM625)
+	{
+		.family = "AM62X",
+		.data = &am62x_clk_platdata,
+	},
+#endif
+#if IS_ENABLED(CONFIG_SOC_K3_AM62A7)
+	{
+		.family = "AM62AX",
+		.data = &am62ax_clk_platdata,
+	},
+#endif
+#if IS_ENABLED(CONFIG_SOC_K3_AM62P5)
+	{
+		.family = "AM62PX",
+		.data = &am62px_clk_platdata,
+	},
+#endif
 #if IS_ENABLED(CONFIG_SOC_K3_J721E)
 	{
 		.family = "J721E",
@@ -68,34 +86,27 @@ static const struct soc_attr ti_k3_soc_clk_data[] = {
 		.family = "J7200",
 		.data = &j7200_clk_platdata,
 	},
-#elif CONFIG_SOC_K3_J721S2
+#endif
+#if IS_ENABLED(CONFIG_SOC_K3_J721S2)
 	{
 		.family = "J721S2",
 		.data = &j721s2_clk_platdata,
 	},
 #endif
-#ifdef CONFIG_SOC_K3_AM625
+#if IS_ENABLED(CONFIG_SOC_K3_J722S)
 	{
-		.family = "AM62X",
-		.data = &am62x_clk_platdata,
+		.family = "J722S",
+		.data = &j722s_clk_platdata,
 	},
 #endif
-#ifdef CONFIG_SOC_K3_AM62A7
-	{
-		.family = "AM62AX",
-		.data = &am62ax_clk_platdata,
-	},
-#endif
-#ifdef CONFIG_SOC_K3_J784S4
+#if IS_ENABLED(CONFIG_SOC_K3_J784S4)
 	{
 		.family = "J784S4",
 		.data = &j784s4_clk_platdata,
 	},
-#endif
-#ifdef CONFIG_SOC_K3_AM62P5
 	{
-		.family = "AM62PX",
-		.data = &am62px_clk_platdata,
+		.family = "J742S2",
+		.data = &j784s4_clk_platdata,
 	},
 #endif
 	{ /* sentinel */ }
@@ -252,9 +263,13 @@ static ulong ti_clk_set_rate(struct clk *clk, ulong rate)
 	int div = 1;
 	ulong child_rate;
 	const struct clk_ops *ops;
-	ulong new_rate, rem, temp_rate;
+	ulong new_rate, rem;
 	ulong diff, new_diff;
+	int freq_scale_up = rate >= ti_clk_get_rate(clk) ? 1 : 0;
 
+	if (IS_ENABLED(CONFIG_K3_AVS0) && freq_scale_up)
+		k3_avs_notify_freq(data->map[clk->id].dev_id,
+				   data->map[clk->id].clk_id, rate);
 	/*
 	 * We must propagate rate change to parent if current clock type
 	 * does not allow setting it.
@@ -295,7 +310,7 @@ static ulong ti_clk_set_rate(struct clk *clk, ulong rate)
 	 * following directly a PLL
 	 */
 
-	if ((diff > rate / div / 8) && clk_get_parent(clkp)) {
+	if (diff > rate / div / 2) {
 		ulong pll_tgt;
 		int pll_div = 0;
 
@@ -325,11 +340,9 @@ static ulong ti_clk_set_rate(struct clk *clk, ulong rate)
 		debug("%s: pll_tgt=%u, rate=%u, div=%u\n", __func__,
 		      (u32)pll_tgt, (u32)rate, pll_div);
 
-		temp_rate = clk_set_rate(clkp, pll_tgt);
-		if (temp_rate == pll_tgt)
-			return clk_set_rate(clk, rate / div) * div;
+		clk_set_rate(clkp, pll_tgt);
 
-		clkp = clk;
+		return clk_set_rate(clk, rate / div) * div;
 	}
 
 	/*
@@ -352,6 +365,10 @@ static ulong ti_clk_set_rate(struct clk *clk, ulong rate)
 			      __func__, new_rate, new_diff);
 		}
 	}
+
+	if (IS_ENABLED(CONFIG_K3_AVS0) && !freq_scale_up)
+		k3_avs_notify_freq(data->map[clk->id].dev_id,
+				   data->map[clk->id].clk_id, rate);
 
 	return new_rate;
 }

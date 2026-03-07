@@ -7,7 +7,6 @@
 #include "mkimage.h"
 #include <time.h>
 #else
-#include <common.h>
 #include <log.h>
 #include <malloc.h>
 #include <asm/global_data.h>
@@ -49,7 +48,7 @@ struct image_region *fit_region_make_list(const void *fit,
 	 * Use malloc() except in SPL (to save code size). In SPL the caller
 	 * must allocate the array.
 	 */
-	if (!IS_ENABLED(CONFIG_SPL_BUILD) && !region)
+	if (!IS_ENABLED(CONFIG_XPL_BUILD) && !region)
 		region = calloc(sizeof(*region), count);
 	if (!region)
 		return NULL;
@@ -96,7 +95,7 @@ static int fit_image_setup_verify(struct image_sign_info *info,
 	info->required_keynode = required_keynode;
 	printf("%s:%s", algo_name, info->keyname);
 
-	if (!info->checksum || !info->crypto || !info->padding) {
+	if (!info->checksum || !info->crypto) {
 		*err_msgp = "Unknown signature algorithm";
 		return -1;
 	}
@@ -490,24 +489,15 @@ static int fit_config_verify_required_keys(const void *fit, int conf_noffset,
 	/* Work out what we need to verify */
 	key_node = fdt_subnode_offset(key_blob, 0, FIT_SIG_NODENAME);
 	if (key_node < 0) {
-		if (IS_ENABLED(CONFIG_FIT_SIGNATURE_ENFORCE)) {
-			printf("%s: No signature node found: %s\n", __func__,
-			       fdt_strerror(key_node));
-			return -EPERM;
-		} else {
-			debug("%s: No signature node found: %s\n", __func__,
-			      fdt_strerror(key_node));
-			return 0;
-		}
+		debug("%s: No signature node found: %s\n", __func__,
+		      fdt_strerror(key_node));
+		return 0;
 	}
 
 	/* Get required-mode policy property from DTB */
-	if (!IS_ENABLED(CONFIG_FIT_SIGNATURE_ENFORCE)) {
-		reqd_mode =
-			fdt_getprop(key_blob, key_node, "required-mode", NULL);
-		if (reqd_mode && !strcmp(reqd_mode, "any"))
-			reqd_policy_all = false;
-	}
+	reqd_mode = fdt_getprop(key_blob, key_node, "required-mode", NULL);
+	if (reqd_mode && !strcmp(reqd_mode, "any"))
+		reqd_policy_all = false;
 
 	debug("%s: required-mode policy set to '%s'\n", __func__,
 	      reqd_policy_all ? "all" : "any");
@@ -523,12 +513,10 @@ static int fit_config_verify_required_keys(const void *fit, int conf_noffset,
 		const char *required;
 		int ret;
 
-		if (!IS_ENABLED(CONFIG_FIT_SIGNATURE_ENFORCE)) {
-			required = fdt_getprop(key_blob, noffset,
-					       FIT_KEY_REQUIRED, NULL);
-			if (!required || strcmp(required, "conf"))
-				continue;
-		}
+		required = fdt_getprop(key_blob, noffset, FIT_KEY_REQUIRED,
+				       NULL);
+		if (!required || strcmp(required, "conf"))
+			continue;
 
 		reqd_sigs++;
 

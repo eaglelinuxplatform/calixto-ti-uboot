@@ -245,7 +245,7 @@ class Entry_cbfs(Entry):
             cfile = entry._cbfs_file
             entry.size = cfile.data_len
             entry.offset = cfile.calced_cbfs_offset
-            entry.image_pos = self.image_pos + entry.offset
+            entry.SetImagePos(image_pos + self.offset)
             if entry._cbfs_compress:
                 entry.uncomp_size = cfile.memlen
 
@@ -295,7 +295,7 @@ class Entry_cbfs(Entry):
         # Recreate the data structure, leaving the data for this child alone,
         # so that child.data is used to pack into the FIP.
         self.ObtainContents(skip_entry=child)
-        return True
+        return super().WriteChildData(child)
 
     def AddBintools(self, btools):
         super().AddBintools(btools)

@@ -17,7 +17,6 @@
  * Lukasz Majewski <l.majewski@samsumg.com>
  */
 #undef DEBUG
-#include <common.h>
 #include <clk.h>
 #include <dm.h>
 #include <generic-phy.h>
@@ -28,6 +27,7 @@
 #include <dm/devres.h>
 #include <linux/bug.h>
 #include <linux/delay.h>
+#include <linux/printk.h>
 
 #include <linux/errno.h>
 #include <linux/list.h>
@@ -941,26 +941,13 @@ int dwc2_udc_handle_interrupt(void)
 	return 0;
 }
 
-#if !CONFIG_IS_ENABLED(DM_USB_GADGET)
-
-int usb_gadget_handle_interrupts(int index)
-{
-	return dwc2_udc_handle_interrupt();
-}
-
-#else /* CONFIG_IS_ENABLED(DM_USB_GADGET) */
-
+#if CONFIG_IS_ENABLED(DM_USB_GADGET)
 struct dwc2_priv_data {
 	struct clk_bulk		clks;
 	struct reset_ctl_bulk	resets;
 	struct phy_bulk phys;
 	struct udevice *usb33d_supply;
 };
-
-int dm_usb_gadget_handle_interrupts(struct udevice *dev)
-{
-	return dwc2_udc_handle_interrupt();
-}
 
 static int dwc2_phy_setup(struct udevice *dev, struct phy_bulk *phys)
 {
@@ -1181,6 +1168,15 @@ static int dwc2_udc_otg_remove(struct udevice *dev)
 	return dm_scan_fdt_dev(dev);
 }
 
+static int dwc2_gadget_handle_interrupts(struct udevice *dev)
+{
+	return dwc2_udc_handle_interrupt();
+}
+
+static const struct usb_gadget_generic_ops dwc2_gadget_ops = {
+	.handle_interrupts	= dwc2_gadget_handle_interrupts,
+};
+
 static const struct udevice_id dwc2_udc_otg_ids[] = {
 	{ .compatible = "snps,dwc2" },
 	{ .compatible = "brcm,bcm2835-usb" },
@@ -1193,6 +1189,7 @@ U_BOOT_DRIVER(dwc2_udc_otg) = {
 	.name	= "dwc2-udc-otg",
 	.id	= UCLASS_USB_GADGET_GENERIC,
 	.of_match = dwc2_udc_otg_ids,
+	.ops	= &dwc2_gadget_ops,
 	.of_to_plat = dwc2_udc_otg_of_to_plat,
 	.probe = dwc2_udc_otg_probe,
 	.remove = dwc2_udc_otg_remove,
@@ -1207,5 +1204,10 @@ int dwc2_udc_B_session_valid(struct udevice *dev)
 		(struct dwc2_usbotg_reg *)plat->regs_otg;
 
 	return readl(&usbotg_reg->gotgctl) & B_SESSION_VALID;
+}
+#else
+int dm_usb_gadget_handle_interrupts(struct udevice *dev)
+{
+	return dwc2_udc_handle_interrupt();
 }
 #endif /* CONFIG_IS_ENABLED(DM_USB_GADGET) */

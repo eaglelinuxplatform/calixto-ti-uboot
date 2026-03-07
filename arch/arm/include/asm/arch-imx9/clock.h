@@ -205,7 +205,14 @@ struct clk_root_map {
 	u32 mux_type;
 };
 
-int clock_init(void);
+struct imx_clk_setting {
+	u32 clk_root;
+	enum ccm_clk_src src;
+	u32 div;
+};
+
+int clock_init_early(void);
+int clock_init_late(void);
 u32 get_clk_src_rate(enum ccm_clk_src source);
 u32 get_lpuart_clk(void);
 void init_uart_clk(u32 index);
@@ -216,6 +223,7 @@ u32 mxc_get_clock(enum mxc_clock clk);
 void dram_pll_init(ulong pll_val);
 void dram_enable_bypass(ulong clk_val);
 void dram_disable_bypass(void);
+void set_arm_core_max_clk(void);
 
 int configure_intpll(enum ccm_clk_src pll, u32 freq);
 

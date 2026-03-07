@@ -5,7 +5,6 @@
  * Peng Fan <peng.fan@nxp.com>
  */
 
-#include <common.h>
 #include <command.h>
 #include <asm/arch/clock.h>
 #include <asm/arch/imx-regs.h>
@@ -18,6 +17,7 @@
 #include <linux/bitops.h>
 #include <linux/delay.h>
 #include <log.h>
+#include <phy.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -26,6 +26,7 @@ static struct anatop_reg *ana_regs = (struct anatop_reg *)ANATOP_BASE_ADDR;
 static struct imx_intpll_rate_table imx9_intpll_tbl[] = {
 	INT_PLL_RATE(1800000000U, 1, 150, 2), /* 1.8Ghz */
 	INT_PLL_RATE(1700000000U, 1, 141, 2), /* 1.7Ghz */
+	INT_PLL_RATE(1500000000U, 1, 125, 2), /* 1.5Ghz */
 	INT_PLL_RATE(1400000000U, 1, 175, 3), /* 1.4Ghz */
 	INT_PLL_RATE(1000000000U, 1, 166, 4), /* 1000Mhz */
 	INT_PLL_RATE(900000000U, 1, 150, 4), /* 900Mhz */
@@ -34,9 +35,14 @@ static struct imx_intpll_rate_table imx9_intpll_tbl[] = {
 static struct imx_fracpll_rate_table imx9_fracpll_tbl[] = {
 	FRAC_PLL_RATE(1000000000U, 1, 166, 4, 2, 3), /* 1000Mhz */
 	FRAC_PLL_RATE(933000000U, 1, 155, 4, 1, 2), /* 933Mhz */
+	FRAC_PLL_RATE(800000000U, 1, 200, 6, 0, 1), /* 800Mhz */
 	FRAC_PLL_RATE(700000000U, 1, 145, 5, 5, 6), /* 700Mhz */
+	FRAC_PLL_RATE(484000000U, 1, 121, 6, 0, 1),
+	FRAC_PLL_RATE(445333333U, 1, 167, 9, 0, 1),
 	FRAC_PLL_RATE(466000000U, 1, 155, 8, 1, 3), /* 466Mhz */
 	FRAC_PLL_RATE(400000000U, 1, 200, 12, 0, 1), /* 400Mhz */
+	FRAC_PLL_RATE(300000000U, 1, 150, 12, 0, 1),
+	FRAC_PLL_RATE(233000000U, 1, 174, 18, 3, 4), /* 233Mhz */
 };
 
 /* return in khz */
@@ -201,6 +207,9 @@ int configure_intpll(enum ccm_clk_src pll, u32 freq)
 	default:
 		return -EPERM;
 	}
+
+	/* Clear PLL HW CTRL SEL */
+	setbits_le32(&reg->ctrl.reg_clr, PLL_CTRL_HW_CTRL_SEL);
 
 	/* Bypass the PLL to ref */
 	writel(PLL_CTRL_CLKMUX_BYPASS, &reg->ctrl.reg_set);
@@ -570,7 +579,7 @@ u32 imx_get_i2cclk(u32 i2c_num)
 	if (i2c_num > 7)
 		return -EINVAL;
 
-	return ccm_clk_root_get_rate(LPUART1_CLK_ROOT + i2c_num);
+	return ccm_clk_root_get_rate(LPI2C1_CLK_ROOT + i2c_num);
 }
 
 u32 get_lpuart_clk(void)
@@ -594,21 +603,27 @@ void init_uart_clk(u32 index)
 
 void init_clk_usdhc(u32 index)
 {
-	/* 400 Mhz */
+	u32 div;
+
+	if (is_voltage_mode(VOLT_LOW_DRIVE))
+		div = 3; /* 266.67 Mhz */
+	else
+		div = 2; /* 400 Mhz */
+
 	switch (index) {
 	case 0:
 		ccm_lpcg_on(CCGR_USDHC1, 0);
-		ccm_clk_root_cfg(USDHC1_CLK_ROOT, SYS_PLL_PFD1, 2);
+		ccm_clk_root_cfg(USDHC1_CLK_ROOT, SYS_PLL_PFD1, div);
 		ccm_lpcg_on(CCGR_USDHC1, 1);
 		break;
 	case 1:
 		ccm_lpcg_on(CCGR_USDHC2, 0);
-		ccm_clk_root_cfg(USDHC2_CLK_ROOT, SYS_PLL_PFD1, 2);
+		ccm_clk_root_cfg(USDHC2_CLK_ROOT, SYS_PLL_PFD1, div);
 		ccm_lpcg_on(CCGR_USDHC2, 1);
 		break;
 	case 2:
 		ccm_lpcg_on(CCGR_USDHC3, 0);
-		ccm_clk_root_cfg(USDHC3_CLK_ROOT, SYS_PLL_PFD1, 2);
+		ccm_clk_root_cfg(USDHC3_CLK_ROOT, SYS_PLL_PFD1, div);
 		ccm_lpcg_on(CCGR_USDHC3, 1);
 		break;
 	default:
@@ -626,7 +641,7 @@ void enable_usboh3_clk(unsigned char enable)
 	}
 }
 
-#ifdef CONFIG_SPL_BUILD
+#ifdef CONFIG_XPL_BUILD
 void dram_pll_init(ulong pll_val)
 {
 	configure_fracpll(DRAM_PLL_CLK, pll_val);
@@ -635,6 +650,9 @@ void dram_pll_init(ulong pll_val)
 void dram_enable_bypass(ulong clk_val)
 {
 	switch (clk_val) {
+	case MHZ(625):
+		ccm_clk_root_cfg(DRAM_ALT_CLK_ROOT, SYS_PLL_PFD2, 1);
+		break;
 	case MHZ(400):
 		ccm_clk_root_cfg(DRAM_ALT_CLK_ROOT, SYS_PLL_PFD1, 2);
 		break;
@@ -670,42 +688,105 @@ void set_arm_clk(ulong freq)
 {
 	/* Increase ARM clock to 1.7Ghz */
 	ccm_shared_gpr_set(SHARED_GPR_A55_CLK, SHARED_GPR_A55_CLK_SEL_CCM);
-	configure_intpll(ARM_PLL_CLK, 1700000000);
+	configure_intpll(ARM_PLL_CLK, freq);
 	ccm_shared_gpr_set(SHARED_GPR_A55_CLK, SHARED_GPR_A55_CLK_SEL_PLL);
+}
+
+void set_arm_core_max_clk(void)
+{
+	/* Increase ARM clock to max rate according to speed grade */
+	u32 speed = get_cpu_speed_grade_hz();
+
+	set_arm_clk(speed);
 }
 
 #endif
 
-int clock_init(void)
-{
-	int i;
-
-	/* Set A55 periphal to 333M */
-	ccm_clk_root_cfg(ARM_A55_PERIPH_CLK_ROOT, SYS_PLL_PFD0, 3);
+struct imx_clk_setting imx_clk_ld_settings[] = {
+	/* Set A55 clk to 500M */
+	{ARM_A55_CLK_ROOT, SYS_PLL_PFD0, 2},
+	/* Set A55 periphal to 200M */
+	{ARM_A55_PERIPH_CLK_ROOT, SYS_PLL_PFD1, 4},
 	/* Set A55 mtr bus to 133M */
-	ccm_clk_root_cfg(ARM_A55_MTR_BUS_CLK_ROOT, SYS_PLL_PFD1_DIV2, 3);
+	{ARM_A55_MTR_BUS_CLK_ROOT, SYS_PLL_PFD1_DIV2, 3},
 
-	/* Sentinel to 200M */
-	ccm_clk_root_cfg(SENTINEL_CLK_ROOT, SYS_PLL_PFD1_DIV2, 2);
+	/* ELE to 133M */
+	{ELE_CLK_ROOT, SYS_PLL_PFD1_DIV2, 3},
 	/* Bus_wakeup to 133M */
-	ccm_clk_root_cfg(BUS_WAKEUP_CLK_ROOT, SYS_PLL_PFD1_DIV2, 3);
+	{BUS_WAKEUP_CLK_ROOT, SYS_PLL_PFD1_DIV2, 3},
 	/* Bus_AON to 133M */
-	ccm_clk_root_cfg(BUS_AON_CLK_ROOT, SYS_PLL_PFD1_DIV2, 3);
+	{BUS_AON_CLK_ROOT, SYS_PLL_PFD1_DIV2, 3},
+	/* M33 to 133M */
+	{M33_CLK_ROOT, SYS_PLL_PFD1_DIV2, 3},
+	/* WAKEUP_AXI to 200M  */
+	{WAKEUP_AXI_CLK_ROOT, SYS_PLL_PFD1, 4},
+	/* SWO TRACE to 133M */
+	{SWO_TRACE_CLK_ROOT, SYS_PLL_PFD1_DIV2, 3},
+	/* M33 systetick to 24M */
+	{M33_SYSTICK_CLK_ROOT, OSC_24M_CLK, 1},
+	/* NIC to 250M */
+	{NIC_CLK_ROOT, SYS_PLL_PFD0, 4},
+	/* NIC_APB to 133M */
+	{NIC_APB_CLK_ROOT, SYS_PLL_PFD1_DIV2, 3}
+};
+
+struct imx_clk_setting imx_clk_settings[] = {
+	/*
+	 * Set A55 clk to 500M. This clock root is normally used as intermediate
+	 * clock source for A55 core/DSU when doing ARM PLL reconfig. set it to
+	 * 500MHz(LD mode frequency) should be ok.
+	 */
+	{ARM_A55_CLK_ROOT, SYS_PLL_PFD0, 2},
+	/* Set A55 periphal to 333M */
+	{ARM_A55_PERIPH_CLK_ROOT, SYS_PLL_PFD0, 3},
+	/* Set A55 mtr bus to 133M */
+	{ARM_A55_MTR_BUS_CLK_ROOT, SYS_PLL_PFD1_DIV2, 3},
+	/* ELE to 200M */
+	{ELE_CLK_ROOT, SYS_PLL_PFD1_DIV2, 2},
+	/* Bus_wakeup to 133M */
+	{BUS_WAKEUP_CLK_ROOT, SYS_PLL_PFD1_DIV2, 3},
+	/* Bus_AON to 133M */
+	{BUS_AON_CLK_ROOT, SYS_PLL_PFD1_DIV2, 3},
 	/* M33 to 200M */
-	ccm_clk_root_cfg(M33_CLK_ROOT, SYS_PLL_PFD1_DIV2, 2);
+	{M33_CLK_ROOT, SYS_PLL_PFD1_DIV2, 2},
 	/*
 	 * WAKEUP_AXI to 312.5M, because of FEC only can support to 320M for
 	 * generating MII clock at 2.5M
 	 */
-	ccm_clk_root_cfg(WAKEUP_AXI_CLK_ROOT, SYS_PLL_PFD2, 2);
+	{WAKEUP_AXI_CLK_ROOT, SYS_PLL_PFD2, 2},
 	/* SWO TRACE to 133M */
-	ccm_clk_root_cfg(SWO_TRACE_CLK_ROOT, SYS_PLL_PFD1_DIV2, 3);
-	/* M33 systetick to 133M */
-	ccm_clk_root_cfg(M33_SYSTICK_CLK_ROOT, SYS_PLL_PFD1_DIV2, 3);
+	{SWO_TRACE_CLK_ROOT, SYS_PLL_PFD1_DIV2, 3},
+	/* M33 systetick to 24M */
+	{M33_SYSTICK_CLK_ROOT, OSC_24M_CLK, 1},
 	/* NIC to 400M */
-	ccm_clk_root_cfg(NIC_CLK_ROOT, SYS_PLL_PFD1, 2);
+	{NIC_CLK_ROOT, SYS_PLL_PFD1, 2},
 	/* NIC_APB to 133M */
-	ccm_clk_root_cfg(NIC_APB_CLK_ROOT, SYS_PLL_PFD1_DIV2, 3);
+	{NIC_APB_CLK_ROOT, SYS_PLL_PFD1_DIV2, 3}
+};
+
+void bus_clock_init_low_drive(void)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(imx_clk_ld_settings); i++) {
+		ccm_clk_root_cfg(imx_clk_ld_settings[i].clk_root,
+				 imx_clk_ld_settings[i].src, imx_clk_ld_settings[i].div);
+	}
+}
+
+void bus_clock_init(void)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(imx_clk_settings); i++) {
+		ccm_clk_root_cfg(imx_clk_settings[i].clk_root,
+				 imx_clk_settings[i].src, imx_clk_settings[i].div);
+	}
+}
+
+int clock_init_early(void)
+{
+	int i;
 
 	/* allow for non-secure access */
 	for (i = 0; i < OSCPLL_END; i++)
@@ -719,6 +800,19 @@ int clock_init(void)
 
 	for (i = 0; i < SHARED_GPR_NUM; i++)
 		ccm_shared_gpr_tz_access(i, true, false, false);
+
+	return 0;
+}
+
+/* Set bus and A55 core clock per voltage mode */
+int clock_init_late(void)
+{
+	if (is_voltage_mode(VOLT_LOW_DRIVE)) {
+		bus_clock_init_low_drive();
+		set_arm_core_max_clk();
+	} else {
+		bus_clock_init();
+	}
 
 	return 0;
 }
@@ -763,6 +857,63 @@ u32 imx_get_fecclk(void)
 	return ccm_clk_root_get_rate(WAKEUP_AXI_CLK_ROOT);
 }
 
+#if defined(CONFIG_IMX93) && defined(CONFIG_DWC_ETH_QOS)
+static int imx93_eqos_interface_init(struct udevice *dev, phy_interface_t interface_type)
+{
+	struct blk_ctrl_wakeupmix_regs *bctrl =
+		(struct blk_ctrl_wakeupmix_regs *)BLK_CTRL_WAKEUPMIX_BASE_ADDR;
+
+	clrbits_le32(&bctrl->eqos_gpr,
+		     BCTRL_GPR_ENET_QOS_INTF_MODE_MASK |
+		     BCTRL_GPR_ENET_QOS_CLK_GEN_EN);
+
+	switch (interface_type) {
+	case PHY_INTERFACE_MODE_MII:
+		setbits_le32(&bctrl->eqos_gpr,
+			     BCTRL_GPR_ENET_QOS_INTF_SEL_MII |
+			     BCTRL_GPR_ENET_QOS_CLK_GEN_EN);
+		break;
+	case PHY_INTERFACE_MODE_RMII:
+		setbits_le32(&bctrl->eqos_gpr,
+			     BCTRL_GPR_ENET_QOS_INTF_SEL_RMII |
+			     BCTRL_GPR_ENET_QOS_CLK_GEN_EN);
+		break;
+	case PHY_INTERFACE_MODE_RGMII:
+	case PHY_INTERFACE_MODE_RGMII_ID:
+	case PHY_INTERFACE_MODE_RGMII_RXID:
+	case PHY_INTERFACE_MODE_RGMII_TXID:
+		setbits_le32(&bctrl->eqos_gpr,
+			     BCTRL_GPR_ENET_QOS_INTF_SEL_RGMII |
+			     BCTRL_GPR_ENET_QOS_CLK_GEN_EN);
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	return 0;
+}
+#else
+static int imx93_eqos_interface_init(struct udevice *dev, phy_interface_t interface_type)
+{
+	return 0;
+}
+#endif
+
+int board_interface_eth_init(struct udevice *dev, phy_interface_t interface_type)
+{
+	if (IS_ENABLED(CONFIG_IMX93) &&
+	    IS_ENABLED(CONFIG_DWC_ETH_QOS) &&
+	    device_is_compatible(dev, "nxp,imx93-dwmac-eqos"))
+		return imx93_eqos_interface_init(dev, interface_type);
+
+	if (IS_ENABLED(CONFIG_IMX93) &&
+	    IS_ENABLED(CONFIG_FEC_MXC) &&
+	    device_is_compatible(dev, "fsl,imx93-fec"))
+		return 0;
+
+	return -EINVAL;
+}
+
 int set_clk_enet(enum enet_freq type)
 {
 	u32 div;
@@ -800,7 +951,7 @@ int set_clk_enet(enum enet_freq type)
 /*
  * Dump some clockes.
  */
-#ifndef CONFIG_SPL_BUILD
+#ifndef CONFIG_XPL_BUILD
 int do_showclocks(struct cmd_tbl *cmdtp, int flag, int argc, char * const argv[])
 {
 	u32 freq;

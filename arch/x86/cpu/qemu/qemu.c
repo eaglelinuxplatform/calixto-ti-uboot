@@ -3,7 +3,6 @@
  * Copyright (C) 2015, Bin Meng <bmeng.cn@gmail.com>
  */
 
-#include <common.h>
 #include <cpu_func.h>
 #include <init.h>
 #include <pci.h>
@@ -14,6 +13,7 @@
 #include <asm/processor.h>
 #include <asm/arch/device.h>
 #include <asm/arch/qemu.h>
+#include <asm/u-boot-x86.h>
 
 static bool i440fx;
 
@@ -48,7 +48,7 @@ static void enable_pm_ich9(void)
 	pci_write_config32(ICH9_PM, PMBA, CONFIG_ACPI_PM1_BASE | 1);
 }
 
-static void qemu_chipset_init(void)
+void qemu_chipset_init(void)
 {
 	u16 device, xbcs;
 	int pam, i;
@@ -97,7 +97,7 @@ static void qemu_chipset_init(void)
 	}
 }
 
-#if !CONFIG_IS_ENABLED(SPL_X86_32BIT_INIT)
+#if CONFIG_IS_ENABLED(X86_32BIT_INIT)
 int arch_cpu_init(void)
 {
 	post_code(POST_CPU_INIT);
@@ -108,12 +108,6 @@ int arch_cpu_init(void)
 int checkcpu(void)
 {
 	return 0;
-}
-
-int print_cpuinfo(void)
-{
-	post_code(POST_CPU_INFO);
-	return default_print_cpuinfo();
 }
 #endif
 

@@ -4,7 +4,9 @@
  * (C) Copyright 2013 - 2018 Xilinx, Inc.
  */
 
-#include <common.h>
+#include <config.h>
+#include <debug_uart.h>
+#include <dfu.h>
 #include <init.h>
 #include <log.h>
 #include <dm/uclass.h>
@@ -25,7 +27,7 @@
 
 DECLARE_GLOBAL_DATA_PTR;
 
-#if !defined(CONFIG_SPL_BUILD) && defined(CONFIG_DEBUG_UART_BOARD_INIT)
+#if !defined(CONFIG_XPL_BUILD) && defined(CONFIG_DEBUG_UART_BOARD_INIT)
 void board_debug_uart_init(void)
 {
 	/* Add initialization sequence if UART is not configured */
@@ -34,7 +36,7 @@ void board_debug_uart_init(void)
 
 int board_init(void)
 {
-	if (IS_ENABLED(CONFIG_SPL_BUILD))
+	if (IS_ENABLED(CONFIG_XPL_BUILD))
 		printf("Silicon version:\t%d\n", zynq_get_silicon_version());
 
 	if (CONFIG_IS_ENABLED(DM_I2C) && CONFIG_IS_ENABLED(I2C_EEPROM))
@@ -182,6 +184,7 @@ void set_dfu_alt_info(char *interface, char *devstr)
 			 "mmc 0=boot.bin fat 0 1;"
 			 "%s fat 0 1", CONFIG_SPL_FS_LOAD_PAYLOAD_NAME);
 		break;
+#if defined(CONFIG_SPL_SPI_LOAD)
 	case ZYNQ_BM_QSPI:
 		snprintf(buf, DFU_ALT_BUF_LEN,
 			 "sf 0:0=boot.bin raw 0 0x1500000;"
@@ -189,6 +192,7 @@ void set_dfu_alt_info(char *interface, char *devstr)
 			 CONFIG_SPL_FS_LOAD_PAYLOAD_NAME,
 			 CONFIG_SYS_SPI_U_BOOT_OFFS);
 		break;
+#endif
 	default:
 		return;
 	}

@@ -12,13 +12,6 @@
 		wdt = <&wdog1>;
 		bootph-pre-ram;
 	};
-
-	firmware {
-		optee {
-			compatible = "linaro,optee-tz";
-			method = "smc";
-		};
-	};
 };
 
 &reg_usdhc2_vmmc {
@@ -69,22 +62,6 @@
 	bootph-pre-ram;
 };
 
-&crypto {
-	bootph-pre-ram;
-};
-
-&sec_jr0 {
-	bootph-pre-ram;
-};
-
-&sec_jr1 {
-	bootph-pre-ram;
-};
-
-&sec_jr2 {
-	bootph-pre-ram;
-};
-
 &i2c1 {
 	bootph-pre-ram;
 };
@@ -128,12 +105,6 @@
 
 &wdog1 {
 	bootph-pre-ram;
-};
-
-&eqos {
-	/delete-property/ assigned-clocks;
-	/delete-property/ assigned-clock-parents;
-	/delete-property/ assigned-clock-rates;
 };
 
 &ethphy0 {

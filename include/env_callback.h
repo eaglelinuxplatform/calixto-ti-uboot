@@ -7,6 +7,7 @@
 #ifndef __ENV_CALLBACK_H__
 #define __ENV_CALLBACK_H__
 
+#include <config.h>
 #include <env_flags.h>
 #include <linker_lists.h>
 #include <search.h>
@@ -60,10 +61,18 @@
 #define NET6_CALLBACKS
 #endif
 
-#ifdef CONFIG_BOOTSTD
-#define BOOTSTD_CALLBACK	"bootmeths:bootmeths,"
+#ifdef CONFIG_BOOTSTD_FULL
+#define BOOTSTD_CALLBACK \
+	"bootmeths:bootmeths," \
+	"bootargs:bootargs,"
 #else
 #define BOOTSTD_CALLBACK
+#endif
+
+#ifdef CONFIG_DFU
+#define DFU_CALLBACK "dfu_alt_info:dfu_alt_info,"
+#else
+#define DFU_CALLBACK
 #endif
 
 /*
@@ -76,13 +85,14 @@
 	NET_CALLBACKS \
 	NET6_CALLBACKS \
 	BOOTSTD_CALLBACK \
+	DFU_CALLBACK \
 	"loadaddr:loadaddr," \
 	SILENT_CALLBACK \
 	"stdin:console,stdout:console,stderr:console," \
 	"serial#:serialno," \
 	CFG_ENV_CALLBACK_LIST_STATIC
 
-#ifndef CONFIG_SPL_BUILD
+#ifndef CONFIG_XPL_BUILD
 void env_callback_init(struct env_entry *var_entry);
 #else
 static inline void env_callback_init(struct env_entry *var_entry)

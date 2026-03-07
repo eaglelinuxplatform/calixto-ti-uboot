@@ -3,7 +3,6 @@
  * TI AM62 specific glue layer for DWC3
  */
 
-#include <common.h>
 #include <dm.h>
 #include <dm/device_compat.h>
 #include <regmap.h>
@@ -12,9 +11,6 @@
 
 #include "dwc3-generic.h"
 
-void dwc3_ti_am62_glue_configure(struct udevice *dev, int index,
-				 enum usb_dr_mode mode)
-{
 #define USBSS_MODE_CONTROL		0x1c
 #define USBSS_PHY_CONFIG		0x8
 #define USBSS_PHY_VBUS_SEL_MASK		GENMASK(2, 1)
@@ -37,6 +33,9 @@ static const int dwc3_ti_am62_rate_table[] = {	/* in KHZ */
 	52000,
 };
 
+static void dwc3_ti_am62_glue_configure(struct udevice *dev, int index,
+					enum usb_dr_mode mode)
+{
 	struct clk usb2_refclk;
 	int rate_code, i, ret;
 	unsigned long rate;
@@ -58,7 +57,7 @@ static const int dwc3_ti_am62_rate_table[] = {	/* in KHZ */
 		return;
 	}
 
-	/* Calcuate the rate code */
+	/* Calculate the rate code */
 	rate = clk_get_rate(&usb2_refclk);
 	rate /= 1000;	/* To KHz */
 	for (i = 0; i < ARRAY_SIZE(dwc3_ti_am62_rate_table); i++) {
@@ -123,5 +122,4 @@ U_BOOT_DRIVER(dwc3_am62_wrapper) = {
 	.probe = dwc3_glue_probe,
 	.remove = dwc3_glue_remove,
 	.plat_auto	= sizeof(struct dwc3_glue_data),
-
 };

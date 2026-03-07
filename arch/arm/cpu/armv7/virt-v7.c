@@ -8,7 +8,6 @@
  * needed to enable ARMv7 virtualization for current hypervisors
  */
 
-#include <common.h>
 #include <cpu_func.h>
 #include <asm/armv7.h>
 #include <asm/cache.h>
@@ -26,8 +25,8 @@ static unsigned int read_id_pfr1(void)
 
 static unsigned long get_gicd_base_address(void)
 {
-#ifdef CFG_ARM_GIC_BASE_ADDRESS
-	return CFG_ARM_GIC_BASE_ADDRESS + GIC_DIST_OFFSET;
+#ifdef CONFIG_ARM_GIC_BASE_ADDRESS
+	return CONFIG_ARM_GIC_BASE_ADDRESS + GIC_DIST_OFFSET;
 #else
 	unsigned periphbase;
 

@@ -2,13 +2,12 @@
 /*
  * Texas Instruments System Control Interface (TI SCI) power domain driver
  *
- * Copyright (C) 2018 Texas Instruments Incorporated - http://www.ti.com/
+ * Copyright (C) 2018 Texas Instruments Incorporated - https://www.ti.com/
  *	Andreas Dannenberg <dannenberg@ti.com>
  *
  * Loosely based on Linux kernel ti_sci_pm_domains.c...
  */
 
-#include <common.h>
 #include <dm.h>
 #include <errno.h>
 #include <log.h>

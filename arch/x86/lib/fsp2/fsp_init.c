@@ -3,7 +3,6 @@
  * Copyright 2019 Google LLC
  */
 
-#include <common.h>
 #include <binman.h>
 #include <binman_sym.h>
 #include <bootstage.h>
@@ -19,14 +18,14 @@
 #include <dm/uclass-internal.h>
 #include <asm/fsp2/fsp_internal.h>
 
-int fsp_setup_pinctrl(void *ctx, struct event *event)
+int fsp_setup_pinctrl(void)
 {
 	struct udevice *dev;
 	ofnode node;
 	int ret;
 
 	/* Make sure pads are set up early in U-Boot */
-	if (!ll_boot_init() || spl_phase() != PHASE_BOARD_F)
+	if (!ll_boot_init() || xpl_phase() != PHASE_BOARD_F)
 		return 0;
 
 	/* Probe all pinctrl devices to set up the pads */
@@ -42,7 +41,7 @@ int fsp_setup_pinctrl(void *ctx, struct event *event)
 
 	return ret;
 }
-EVENT_SPY(EVT_DM_POST_INIT, fsp_setup_pinctrl);
+EVENT_SPY_SIMPLE(EVT_DM_POST_INIT_F, fsp_setup_pinctrl);
 
 #if !defined(CONFIG_TPL_BUILD)
 binman_sym_declare(ulong, intel_fsp_m, image_pos);
@@ -135,7 +134,7 @@ int fsp_locate_fsp(enum fsp_type_t type, struct binman_entry *entry,
 			return log_msg_ret("Could not get flash mmap", ret);
 	}
 
-	if (spl_phase() >= PHASE_BOARD_F) {
+	if (xpl_phase() >= PHASE_BOARD_F) {
 		if (type != FSP_S)
 			return -EPROTONOSUPPORT;
 		ret = binman_entry_find("intel-fsp-s", entry);

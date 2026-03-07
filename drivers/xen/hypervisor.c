@@ -8,7 +8,6 @@
  * Copyright (c) 2005, Grzegorz Milos, gm281@cam.ac.uk,Intel Research Cambridge
  * Copyright (c) 2020, EPAM Systems Inc.
  */
-#include <common.h>
 #include <cpu_func.h>
 #include <log.h>
 #include <memalign.h>
@@ -264,7 +263,14 @@ void clear_evtchn(uint32_t port)
 
 int xen_init(void)
 {
+	int el = current_el();
+
 	debug("%s\n", __func__);
+
+	if (el != 1) {
+		puts("XEN:\tnot running from EL1\n");
+		return 0;
+	}
 
 	map_shared_info(NULL);
 	init_events();

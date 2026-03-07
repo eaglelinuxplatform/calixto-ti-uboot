@@ -1,13 +1,14 @@
-/* SPDX-License-Identifier: GPL-2.0+ */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 /*
- * Copyright (C) 2022 Texas Instruments Incorporated - https://www.ti.com/
- *	David Huang <d-huang@ti.com>
+ * Copyright (C) 2023-2024 Texas Instruments Incorporated - https://www.ti.com/
  */
+
 #ifndef _ASM_ARCH_J784S4_SPL_H_
 #define _ASM_ARCH_J784S4_SPL_H_
 
 /* With BootMode B = 0 */
 #include <linux/bitops.h>
+
 #define BOOT_DEVICE_HYPERFLASH		0x00
 #define BOOT_DEVICE_OSPI		0x01
 #define BOOT_DEVICE_QSPI		0x02
@@ -43,5 +44,7 @@
 
 #define K3_PRIMARY_BOOTMODE		0x0
 #define K3_BACKUP_BOOTMODE		0x1
+
+#define BOOT_DEVICE_CPGMAC              0x04
 
 #endif

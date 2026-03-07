@@ -4,7 +4,6 @@
  *
  */
 
-#include <common.h>
 #include <dm.h>
 #include <image.h>
 #include <init.h>
@@ -18,10 +17,11 @@
 #include <dm/lists.h>
 #include <asm/io.h>
 #include <asm/gpio.h>
-#include <asm/arch/sci/sci.h>
+#include <firmware/imx/sci/sci.h>
 #include <asm/arch/imx8-pins.h>
 #include <asm/arch/iomux.h>
 #include <asm/arch/sys_proto.h>
+#include <asm/sections.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 

@@ -29,11 +29,6 @@
  * 0x1F00000 - 0x2000000 : SPI.factory  (1MiB)
  */
 
-/* Below values are "dummy" - only to avoid build break */
-#define CFG_SYS_SPI_KERNEL_OFFS      0x150000
-#define CFG_SYS_SPI_ARGS_OFFS        0x140000
-#define CFG_SYS_SPI_ARGS_SIZE        0x10000
-
 #define CFG_MXC_UART_BASE		UART5_BASE
 
 /* MMC Configs */
@@ -118,7 +113,6 @@
 	"setenv rootfs_part ${rootfs_part_active};" \
 	"run tftp_mmc_rootfs;" \
 	"run tftp_mmc_rootfs_bkp;" \
-
 
 #define TFTP_UPDATE_RECOVERY_SWU_KERNEL \
 	"tftp_sf_fitImg_SWU=" \
@@ -288,5 +282,4 @@
 /* The 0x120000 value corresponds to above SPI-NOR memory MAP */
 #endif
 
-#define CFG_MXC_USB_PORTSC           (PORT_PTS_UTMI | PORT_PTS_PTW)
 #endif /* __CONFIG_H */

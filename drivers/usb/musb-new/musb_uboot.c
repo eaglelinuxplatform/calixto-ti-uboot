@@ -1,4 +1,3 @@
-#include <common.h>
 #include <console.h>
 #include <dm.h>
 #include <malloc.h>
@@ -376,7 +375,7 @@ struct dm_usb_ops musb_usb_ops = {
 #if defined(CONFIG_USB_MUSB_GADGET) && !CONFIG_IS_ENABLED(DM_USB_GADGET)
 static struct musb *gadget;
 
-int usb_gadget_handle_interrupts(int index)
+int dm_usb_gadget_handle_interrupts(struct udevice *dev)
 {
 	schedule();
 	if (!gadget || !gadget->isr)

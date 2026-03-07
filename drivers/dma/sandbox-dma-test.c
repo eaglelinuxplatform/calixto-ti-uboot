@@ -7,7 +7,6 @@
  * Author: Grygorii Strashko <grygorii.strashko@ti.com>
  */
 
-#include <common.h>
 #include <dm.h>
 #include <log.h>
 #include <malloc.h>
@@ -15,6 +14,7 @@
 #include <dma-uclass.h>
 #include <dt-structs.h>
 #include <errno.h>
+#include <linux/printk.h>
 
 #define SANDBOX_DMA_CH_CNT 3
 #define SANDBOX_DMA_BUF_SIZE 1024

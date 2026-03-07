@@ -29,12 +29,12 @@
 #include <linux/writeback.h>
 #else
 
-#include <common.h>
 #include <malloc.h>
 #include <memalign.h>
 #include <linux/bitops.h>
 #include <linux/bug.h>
 #include <linux/log2.h>
+#include <linux/printk.h>
 #include <linux/stat.h>
 #include <linux/err.h>
 #include "ubifs.h"
@@ -1758,11 +1758,13 @@ void ubifs_umount(struct ubifs_info *c)
 	ubifs_debugging_exit(c);
 #ifdef __UBOOT__
 	ubi_close_volume(c->ubi);
+	c->ubi = NULL;
 	mutex_unlock(&c->umount_mutex);
 	/* Finally free U-Boot's global copy of superblock */
 	if (ubifs_sb != NULL) {
-		free(ubifs_sb->s_fs_info);
-		free(ubifs_sb);
+		kfree(ubifs_sb->s_fs_info);
+		kfree(ubifs_sb);
+		ubifs_sb = NULL;
 	}
 #endif
 }
@@ -2061,6 +2063,7 @@ static void ubifs_put_super(struct super_block *sb)
 #ifndef __UBOOT__
 	bdi_destroy(&c->bdi);
 	ubi_close_volume(c->ubi);
+	c->ubi = NULL;
 	mutex_unlock(&c->umount_mutex);
 #endif
 }
@@ -2321,6 +2324,7 @@ static int ubifs_fill_super(struct super_block *sb, void *data, int silent)
 		goto out_umount;
 	}
 #else
+	ubifs_iput(root);
 	sb->s_root = NULL;
 #endif
 
@@ -2340,6 +2344,7 @@ out_bdi:
 out_close:
 #endif
 	ubi_close_volume(c->ubi);
+	c->ubi = NULL;
 out:
 	return err;
 }
@@ -2451,7 +2456,6 @@ retry:
 }
 
 EXPORT_SYMBOL(sget);
-
 
 static struct dentry *ubifs_mount(struct file_system_type *fs_type, int flags,
 			const char *name, void *data)

@@ -9,7 +9,6 @@
 
 #define LOG_CATEGORY UCLASS_CLK
 
-#include <common.h>
 #include <clk.h>
 #include <log.h>
 #include <clk-uclass.h>
@@ -21,6 +20,7 @@
 #include <linux/bitops.h>
 #include <linux/clk-provider.h>
 #include <linux/err.h>
+#include <linux/printk.h>
 
 #include "clk.h"
 

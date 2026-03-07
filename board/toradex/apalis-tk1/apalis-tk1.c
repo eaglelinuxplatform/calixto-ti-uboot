@@ -3,7 +3,6 @@
  * Copyright (c) 2016-2018 Toradex, Inc.
  */
 
-#include <common.h>
 #include <dm.h>
 #include <env.h>
 #include <init.h>
@@ -17,6 +16,7 @@
 #include <fdt_support.h>
 #include <pci_tegra.h>
 #include <linux/delay.h>
+#include <linux/printk.h>
 #include <power/as3722.h>
 #include <power/pmic.h>
 
@@ -86,13 +86,6 @@ int arch_misc_init(void)
 		gpio_request(VCC_USBO1, "VCC_USBO1");
 		gpio_direction_output(VCC_USBO1, 1);
 	}
-
-	return 0;
-}
-
-int checkboard(void)
-{
-	puts("Model: Toradex Apalis TK1 2GB\n");
 
 	return 0;
 }

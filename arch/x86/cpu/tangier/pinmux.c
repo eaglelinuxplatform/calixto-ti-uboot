@@ -3,7 +3,6 @@
  * Copyright (c) 2018 Emlid Limited
  */
 
-#include <common.h>
 #include <dm.h>
 #include <log.h>
 #include <dm/pinctrl.h>
@@ -13,6 +12,7 @@
 #include <asm/cpu.h>
 #include <asm/scu.h>
 #include <linux/io.h>
+#include <linux/printk.h>
 
 #define BUFCFG_OFFSET				0x100
 

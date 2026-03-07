@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0+ */
 /*
- * Copyright (C) 2021 Texas Instruments Incorporated - http://www.ti.com/
+ * Copyright (C) 2021 Texas Instruments Incorporated - https://www.ti.com/
  *	David Huang <d-huang@ti.com>
  */
 #ifndef _ASM_ARCH_J721S2_SPL_H_
@@ -12,6 +12,7 @@
 #define BOOT_DEVICE_OSPI		0x01
 #define BOOT_DEVICE_QSPI		0x02
 #define BOOT_DEVICE_SPI			0x03
+#define BOOT_DEVICE_CPGMAC		0x04
 #define BOOT_DEVICE_ETHERNET		0x04
 #define BOOT_DEVICE_SPINAND             0x05
 #define BOOT_DEVICE_I2C			0x06

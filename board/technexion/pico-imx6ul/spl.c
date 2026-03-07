@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0+
 
-#include <common.h>
 #include <cpu_func.h>
 #include <hang.h>
 #include <init.h>
@@ -14,11 +13,12 @@
 #include <asm/gpio.h>
 #include <asm/mach-imx/iomux-v3.h>
 #include <asm/mach-imx/boot_mode.h>
+#include <asm/sections.h>
 #include <fsl_esdhc_imx.h>
 #include <linux/libfdt.h>
 #include <spl.h>
 
-#if defined(CONFIG_SPL_BUILD)
+#if defined(CONFIG_XPL_BUILD)
 
 #ifdef CONFIG_SPL_OS_BOOT
 int spl_start_uboot(void)

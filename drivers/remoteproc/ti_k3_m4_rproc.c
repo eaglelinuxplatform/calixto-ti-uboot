@@ -2,11 +2,10 @@
 /*
  * Texas Instruments' K3 M4 Remoteproc driver
  *
- * Copyright (C) 2023 Texas Instruments Incorporated - http://www.ti.com/
+ * Copyright (C) 2024 Texas Instruments Incorporated - http://www.ti.com/
  *	Hari Nagalla <hnagalla@ti.com>
  */
 
-#include <common.h>
 #include <dm.h>
 #include <log.h>
 #include <malloc.h>
@@ -20,10 +19,8 @@
 #include <linux/err.h>
 #include <linux/sizes.h>
 #include <linux/soc/ti/ti_sci_protocol.h>
-#include <mach/security.h>
 #include "ti_sci_proc.h"
-
-#define KEYSTONE_RPROC_LOCAL_ADDRESS_MASK	(SZ_16M - 1)
+#include <mach/security.h>
 
 /**
  * struct k3_m4_mem - internal memory structure
@@ -40,7 +37,7 @@ struct k3_m4_mem {
 };
 
 /**
- * struct k3_m4_mem_data - memory definitions for a DSP
+ * struct k3_m4_mem_data - memory definitions for m4 remote core
  * @name: name for this memory entry
  * @dev_addr: device address for the memory entry
  */
@@ -61,7 +58,7 @@ struct k3_m4_boot_data {
 
 /**
  * struct k3_m4_privdata - Structure representing Remote processor data.
- * @rproc_rst:		rproc reset control data
+ * @m4_rst:		m4 rproc reset control data
  * @tsp:		Pointer to TISCI proc contrl handle
  * @data:		Pointer to DSP specific boot data structure
  * @mem:		Array of available memories
@@ -82,9 +79,7 @@ struct k3_m4_privdata {
  * used to release the global reset on M4F to allow loading into the M4F
  * internal RAMs. This helper function is invoked in k3_m4_load() before any
  * actual firmware loading and is undone only in k3_m4_stop(). The local reset
- * on M4 cores is a no-op and the global reset cannot be released on M4
- * cores until after the firmware images are loaded, so this function does
- * nothing for M4 cores.
+ * cannot be released on M4 cores until after the firmware images are loaded.
  */
 static int k3_m4_prepare(struct udevice *dev)
 {
@@ -92,7 +87,6 @@ static int k3_m4_prepare(struct udevice *dev)
 	struct k3_m4_boot_data *data = m4->data;
 	int ret;
 
-	/* local reset is no-op on M4 processors */
 	if (!data->uses_lreset)
 		return 0;
 
@@ -106,17 +100,16 @@ static int k3_m4_prepare(struct udevice *dev)
 
 /*
  * This function is the counterpart to k3_m4_prepare() and is used to assert
- * the global reset on M4 cores (no-op for M4 cores). This completes
- * the second step of powering down the M4 cores. The cores themselves
- * are halted through the local reset in first step. This function is invoked
- * in k3_m4_stop() after the local reset is asserted.
+ * the global reset on M4 cores. This completes the second step of powering
+ * down the M4 cores. The cores themselves are halted through the local reset
+ * in first step. This function is invoked in k3_m4_stop() after the local
+ * reset is asserted.
  */
 static int k3_m4_unprepare(struct udevice *dev)
 {
 	struct k3_m4_privdata *m4 = dev_get_priv(dev);
 	struct k3_m4_boot_data *data = m4->data;
 
-	/* local reset is no-op on M4 processors */
 	if (!data->uses_lreset)
 		return 0;
 
@@ -134,7 +127,6 @@ static int k3_m4_unprepare(struct udevice *dev)
 static int k3_m4_load(struct udevice *dev, ulong addr, ulong size)
 {
 	struct k3_m4_privdata *m4 = dev_get_priv(dev);
-	u32 boot_vector;
 	void *image_addr = (void *)addr;
 	int ret;
 
@@ -144,7 +136,7 @@ static int k3_m4_load(struct udevice *dev, ulong addr, ulong size)
 
 	ret = k3_m4_prepare(dev);
 	if (ret) {
-		dev_err(dev, "DSP prepare failed for core %d\n",
+		dev_err(dev, "Prepare failed for core %d\n",
 			m4->tsp.proc_id);
 		goto proc_release;
 	}
@@ -156,8 +148,6 @@ static int k3_m4_load(struct udevice *dev, ulong addr, ulong size)
 		dev_err(dev, "Loading elf failed %d\n", ret);
 		goto unprepare;
 	}
-
-	boot_vector = rproc_elf_get_boot_addr(dev, addr);
 
 unprepare:
 	if (ret)
@@ -385,8 +375,7 @@ static int k3_m4_probe(struct udevice *dev)
 	 * The M4 local resets are deasserted by default on Power-On-Reset.
 	 * Assert the local resets to ensure the M4s don't execute bogus code
 	 * in .load() callback when the module reset is released to support
-	 * internal memory loading. This is needed for M4 cores, and is a
-	 * no-op on M4s.
+	 * internal memory loading. This is needed for M4 cores.
 	 */
 	reset_assert(&m4->m4_rst);
 

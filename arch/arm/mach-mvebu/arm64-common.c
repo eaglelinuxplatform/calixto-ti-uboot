@@ -3,7 +3,7 @@
  * Copyright (C) 2016 Stefan Roese <sr@denx.de>
  */
 
-#include <common.h>
+#include <config.h>
 #include <dm.h>
 #include <fdtdec.h>
 #include <init.h>
@@ -30,7 +30,7 @@ DECLARE_GLOBAL_DATA_PTR;
  */
 #define USABLE_RAM_SIZE		0x80000000ULL
 
-phys_size_t board_get_usable_ram_top(phys_size_t total_size)
+phys_addr_t board_get_usable_ram_top(phys_size_t total_size)
 {
 	unsigned long top = CFG_SYS_SDRAM_BASE + min(gd->ram_size, USABLE_RAM_SIZE);
 

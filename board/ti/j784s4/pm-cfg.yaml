@@ -1,5 +1,6 @@
-# SPDX-License-Identifier: GPL-2.0+
-# Copyright (C) 2022 Texas Instruments Incorporated - https://www.ti.com/
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# Copyright (C) 2023-2024 Texas Instruments Incorporated - https://www.ti.com/
 #
 # Power management configuration for J784S4
 #
@@ -8,5 +9,5 @@
 
 pm-cfg:
     rev:
-        boardcfg_abi_maj : 0x0
-        boardcfg_abi_min : 0x1
+        boardcfg_abi_maj: 0x0
+        boardcfg_abi_min: 0x1

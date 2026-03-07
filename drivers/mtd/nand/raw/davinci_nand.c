@@ -28,13 +28,14 @@
  -
  */
 
-#include <common.h>
+#include <config.h>
 #include <log.h>
 #include <linux/mtd/rawnand.h>
 #include <asm/io.h>
 #include <nand.h>
 #include <dm/uclass.h>
 #include <asm/ti-common/davinci_nand.h>
+#include <linux/printk.h>
 
 /* Definitions for 4-bit hardware ECC */
 #define NAND_TIMEOUT			10240

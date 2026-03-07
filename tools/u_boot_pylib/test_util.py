@@ -15,17 +15,17 @@ from u_boot_pylib import command
 
 from io import StringIO
 
-buffer_outputs = True
 use_concurrent = True
 try:
-    from concurrencytest.concurrencytest import ConcurrentTestSuite
-    from concurrencytest.concurrencytest import fork_for_tests
+    from concurrencytest import ConcurrentTestSuite
+    from concurrencytest import fork_for_tests
 except:
     use_concurrent = False
 
 
-def run_test_coverage(prog, filter_fname, exclude_list, build_dir, required=None,
-                    extra_args=None):
+def run_test_coverage(prog, filter_fname, exclude_list, build_dir,
+                      required=None, extra_args=None, single_thread='-P1',
+                      args=None):
     """Run tests and check that we get 100% coverage
 
     Args:
@@ -40,6 +40,10 @@ def run_test_coverage(prog, filter_fname, exclude_list, build_dir, required=None
         required: List of modules which must be in the coverage report
         extra_args (str): Extra arguments to pass to the tool before the -t/test
             arg
+        single_thread (str): Argument string to make the tests run
+            single-threaded. This is necessary to get proper coverage results.
+            The default is '-P0'
+        args (list of str): List of tests to run, or None to run all
 
     Raises:
         ValueError if the code coverage is not 100%
@@ -58,11 +62,18 @@ def run_test_coverage(prog, filter_fname, exclude_list, build_dir, required=None
     prefix = ''
     if build_dir:
         prefix = 'PYTHONPATH=$PYTHONPATH:%s/sandbox_spl/tools ' % build_dir
-    cmd = ('%spython3-coverage run '
-           '--omit "%s" %s %s %s -P1' % (prefix, ','.join(glob_list),
-                                         prog, extra_args or '', test_cmd))
+
+    # Detect a Python virtualenv and use 'coverage' instead
+    covtool = ('python3-coverage' if sys.prefix == sys.base_prefix else
+               'coverage')
+
+    cmd = ('%s%s run '
+           '--omit "%s" %s %s %s %s %s' % (prefix, covtool, ','.join(glob_list),
+                                           prog, extra_args or '', test_cmd,
+                                           single_thread or '-P1',
+                                           ' '.join(args) if args else ''))
     os.system(cmd)
-    stdout = command.output('python3-coverage', 'report')
+    stdout = command.output(covtool, 'report')
     lines = stdout.splitlines()
     if required:
         # Convert '/path/to/name.py' just the module name 'name'
@@ -120,7 +131,6 @@ class FullTextTestResult(unittest.TextTestResult):
             0: Print nothing
             1: Print a dot per test
             2: Print test names
-            3: Print test names, and buffered outputs for failing tests
     """
     def __init__(self, stream, descriptions, verbosity):
         self.verbosity = verbosity
@@ -140,39 +150,12 @@ class FullTextTestResult(unittest.TextTestResult):
         self.printErrorList('XFAIL', self.expectedFailures)
         self.printErrorList('XPASS', unexpected_successes)
 
-    def addError(self, test, err):
-        """Called when an error has occurred."""
-        super().addError(test, err)
-        self._mirrorOutput &= self.verbosity >= 3
-
-    def addFailure(self, test, err):
-        """Called when a test has failed."""
-        super().addFailure(test, err)
-        self._mirrorOutput &= self.verbosity >= 3
-
-    def addSubTest(self, test, subtest, err):
-        """Called at the end of a subtest."""
-        super().addSubTest(test, subtest, err)
-        self._mirrorOutput &= self.verbosity >= 3
-
-    def addSuccess(self, test):
-        """Called when a test has completed successfully"""
-        super().addSuccess(test)
-        # Don't print stdout/stderr for successful tests
-        self._mirrorOutput = False
-
     def addSkip(self, test, reason):
         """Called when a test is skipped."""
         # Add empty line to keep spacing consistent with other results
         if not reason.endswith('\n'):
             reason += '\n'
         super().addSkip(test, reason)
-        self._mirrorOutput &= self.verbosity >= 3
-
-    def addExpectedFailure(self, test, err):
-        """Called when an expected failure/error occurred."""
-        super().addExpectedFailure(test, err)
-        self._mirrorOutput &= self.verbosity >= 3
 
 
 def run_test_suites(toolname, debug, verbosity, test_preserve_dirs, processes,
@@ -208,14 +191,12 @@ def run_test_suites(toolname, debug, verbosity, test_preserve_dirs, processes,
     runner = unittest.TextTestRunner(
         stream=sys.stdout,
         verbosity=(1 if verbosity is None else verbosity),
-        buffer=False if test_name else buffer_outputs,
         resultclass=FullTextTestResult,
     )
 
     if use_concurrent and processes != 1:
         suite = ConcurrentTestSuite(suite,
-                fork_for_tests(processes or multiprocessing.cpu_count(),
-                               buffer=False if test_name else buffer_outputs))
+                fork_for_tests(processes or multiprocessing.cpu_count()))
 
     for module in class_and_module_list:
         if isinstance(module, str) and (not test_name or test_name == module):

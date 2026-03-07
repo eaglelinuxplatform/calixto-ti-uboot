@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Bootdevice for USB
+ * Bootdev for USB
  *
  * Copyright 2021 Google LLC
  * Written by Simon Glass <sjg@chromium.org>
  */
 
-#include <common.h>
 #include <bootdev.h>
 #include <dm.h>
 #include <usb.h>
@@ -22,6 +21,9 @@ static int usb_bootdev_bind(struct udevice *dev)
 
 static int usb_bootdev_hunt(struct bootdev_hunter *info, bool show)
 {
+	if (usb_started)
+		return 0;
+
 	return usb_init();
 }
 

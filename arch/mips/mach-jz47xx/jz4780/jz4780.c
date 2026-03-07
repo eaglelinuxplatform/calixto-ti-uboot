@@ -7,7 +7,6 @@
  */
 
 #include <config.h>
-#include <common.h>
 #include <cpu_func.h>
 #include <hang.h>
 #include <image.h>
@@ -20,7 +19,7 @@
 #include <mmc.h>
 #include <spl.h>
 
-#ifdef CONFIG_SPL_BUILD
+#ifdef CONFIG_XPL_BUILD
 /* Pointer to the global data structure for SPL */
 DECLARE_GLOBAL_DATA_PTR;
 gd_t gdata __section(".bss");
@@ -42,7 +41,7 @@ void board_init_f(ulong dummy)
 	enable_caches();
 
 	/* Clear the BSS */
-	memset(__bss_start, 0, (char *)&__bss_end - __bss_start);
+	memset(__bss_start, 0, (size_t)__bss_end - (size_t)__bss_start);
 
 	gd->flags |= GD_FLG_SPL_INIT;
 
@@ -74,9 +73,9 @@ void board_init_f(ulong dummy)
 
 	hang();
 }
-#endif /* CONFIG_SPL_BUILD */
+#endif /* CONFIG_XPL_BUILD */
 
-phys_size_t board_get_usable_ram_top(phys_size_t total_size)
+phys_addr_t board_get_usable_ram_top(phys_size_t total_size)
 {
 	return CFG_SYS_SDRAM_BASE + (256 * 1024 * 1024);
 }

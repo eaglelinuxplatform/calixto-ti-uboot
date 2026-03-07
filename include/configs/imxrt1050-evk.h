@@ -18,17 +18,10 @@
 #define DMAMEM_BASE			(PHYS_SDRAM + PHYS_SDRAM_SIZE - \
 					 DMAMEM_SZ_ALL)
 
-#ifdef CONFIG_VIDEO
-#define CFG_EXTRA_ENV_SETTINGS \
-		"stdin=serial\0" \
-		"stdout=serial,vidconsole\0" \
-		"stderr=serial,vidconsole\0"
-#endif
-
 /*
- * Configuration of the external SDRAM memory
+ * Address of U-Boot for SPI NOR boot
  */
 
-#define CFG_SYS_UBOOT_START		0x800023FD
+#define CFG_SYS_UBOOT_BASE			0x60010000
 
 #endif /* __IMXRT1050_EVK_H */

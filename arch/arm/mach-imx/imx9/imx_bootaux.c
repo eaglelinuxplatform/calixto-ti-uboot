@@ -3,17 +3,18 @@
  * Copyright 2022 NXP
  */
 
-#include <common.h>
 #include <command.h>
 #include <log.h>
 #include <imx_sip.h>
+#include <vsprintf.h>
 #include <linux/arm-smccc.h>
+#include <linux/errno.h>
 
 int arch_auxiliary_core_check_up(u32 core_id)
 {
 	struct arm_smccc_res res;
 
-	arm_smccc_smc(IMX_SIP_SRC, IMX_SIP_SRC_M4_STARTED, 0, 0,
+	arm_smccc_smc(IMX_SIP_SRC, IMX_SIP_SRC_MCU_STARTED, 0, 0,
 		      0, 0, 0, 0, &res);
 
 	return res.a0;
@@ -25,7 +26,7 @@ int arch_auxiliary_core_down(u32 core_id)
 
 	printf("## Stopping auxiliary core\n");
 
-	arm_smccc_smc(IMX_SIP_SRC, IMX_SIP_SRC_M4_STOP, 0, 0,
+	arm_smccc_smc(IMX_SIP_SRC, IMX_SIP_SRC_MCU_STOP, 0, 0,
 		      0, 0, 0, 0, &res);
 
 	return 0;
@@ -34,17 +35,13 @@ int arch_auxiliary_core_down(u32 core_id)
 int arch_auxiliary_core_up(u32 core_id, ulong addr)
 {
 	struct arm_smccc_res res;
-	u32 stack, pc;
 
 	if (!addr)
 		return -EINVAL;
 
-	stack = *(u32 *)addr;
-	pc = *(u32 *)(addr + 4);
+	printf("## Starting auxiliary core addr = 0x%08lX...\n", addr);
 
-	printf("## Starting auxiliary core stack = 0x%08X, pc = 0x%08X...\n", stack, pc);
-
-	arm_smccc_smc(IMX_SIP_SRC, IMX_SIP_SRC_M4_START, 0, 0,
+	arm_smccc_smc(IMX_SIP_SRC, IMX_SIP_SRC_MCU_START, addr, 0,
 		      0, 0, 0, 0, &res);
 
 	return 0;
@@ -129,5 +126,5 @@ U_BOOT_CMD(
 	"Start auxiliary core",
 	"<address> [<core>]\n"
 	"   - start auxiliary core [<core>] (default 0),\n"
-	"     at address <address>\n"
+	"     at address <address> of auxiliary core view\n"
 );

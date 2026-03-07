@@ -3,7 +3,6 @@
  * Copyright (C) 2017 Marek Vasut <marek.vasut@gmail.com>
  */
 
-#include <common.h>
 #include <clk.h>
 #include <dm.h>
 #include <malloc.h>
@@ -130,20 +129,9 @@ static int rcar_gpio_get_function(struct udevice *dev, unsigned offset)
 		return GPIOF_INPUT;
 }
 
-static int rcar_gpio_request(struct udevice *dev, unsigned offset,
-			     const char *label)
-{
-	return pinctrl_gpio_request(dev, offset, label);
-}
-
-static int rcar_gpio_free(struct udevice *dev, unsigned offset)
-{
-	return pinctrl_gpio_free(dev, offset);
-}
-
 static const struct dm_gpio_ops rcar_gpio_ops = {
-	.request		= rcar_gpio_request,
-	.rfree			= rcar_gpio_free,
+	.request		= pinctrl_gpio_request,
+	.rfree			= pinctrl_gpio_free,
 	.direction_input	= rcar_gpio_direction_input,
 	.direction_output	= rcar_gpio_direction_output,
 	.get_value		= rcar_gpio_get_value,
@@ -176,7 +164,6 @@ static int rcar_gpio_probe(struct udevice *dev)
 	}
 
 	ret = clk_enable(&clk);
-	clk_free(&clk);
 	if (ret) {
 		dev_err(dev, "Failed to enable GPIO bank clock\n");
 		return ret;
@@ -195,6 +182,7 @@ static const struct udevice_id rcar_gpio_ids[] = {
 	{ .compatible = "renesas,gpio-r8a779a0", .data = RCAR_GPIO_HAS_INEN },
 	{ .compatible = "renesas,rcar-gen2-gpio" },
 	{ .compatible = "renesas,rcar-gen3-gpio" },
+	{ .compatible = "renesas,rcar-gen4-gpio", .data = RCAR_GPIO_HAS_INEN },
 	{ /* sentinel */ }
 };
 

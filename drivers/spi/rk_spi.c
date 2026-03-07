@@ -10,7 +10,6 @@
  * Peter, Software Engineering, <superpeter.cai@gmail.com>.
  */
 
-#include <common.h>
 #include <clk.h>
 #include <dm.h>
 #include <dt-structs.h>
@@ -45,7 +44,7 @@ struct rockchip_spi_plat {
 	struct dtd_rockchip_rk3288_spi of_plat;
 #endif
 	s32 frequency;		/* Default clock frequency, -1 for none */
-	fdt_addr_t base;
+	uintptr_t base;
 	uint deactivate_delay_us;	/* Delay to wait after deactivate */
 	uint activate_delay_us;		/* Delay to wait after activate */
 };
@@ -445,7 +444,7 @@ static int rockchip_spi_xfer(struct udevice *dev, unsigned int bitlen,
 
 	/* Assert CS before transfer */
 	if (flags & SPI_XFER_BEGIN)
-		spi_cs_activate(dev, slave_plat->cs);
+		spi_cs_activate(dev, slave_plat->cs[0]);
 
 	/*
 	 * To ensure fast loading of firmware images (e.g. full U-Boot
@@ -453,8 +452,17 @@ static int rockchip_spi_xfer(struct udevice *dev, unsigned int bitlen,
 	 * case of read-only transfers by using the full 16bits of each
 	 * FIFO element.
 	 */
-	if (!out)
+	if (!out) {
 		ret = rockchip_spi_16bit_reader(dev, &in, &len);
+		/*
+		 * If "in" isn't 16b-aligned, we need to send the last byte
+		 * ourselves. We however need to have the controller in RO mode
+		 * which differs from the default.
+		 */
+		clrsetbits_le32(&regs->ctrlr0,
+				TMOD_MASK << TMOD_SHIFT,
+				TMOD_RO << TMOD_SHIFT);
+	}
 
 	/* This is the original 8bit reader/writer code */
 	while (len > 0) {
@@ -465,12 +473,13 @@ static int rockchip_spi_xfer(struct udevice *dev, unsigned int bitlen,
 		rkspi_enable_chip(regs, true);
 
 		toread = todo;
-		towrite = todo;
+		/* Only write if we have something to write */
+		towrite = out ? todo : 0;
 		while (toread || towrite) {
 			u32 status = readl(&regs->sr);
 
 			if (towrite && !(status & SR_TF_FULL)) {
-				writel(out ? *out++ : 0, regs->txdr);
+				writel(*out++, regs->txdr);
 				towrite--;
 			}
 			if (toread && !(status & SR_RF_EMPT)) {
@@ -498,9 +507,13 @@ static int rockchip_spi_xfer(struct udevice *dev, unsigned int bitlen,
 
 	/* Deassert CS after transfer */
 	if (flags & SPI_XFER_END)
-		spi_cs_deactivate(dev, slave_plat->cs);
+		spi_cs_deactivate(dev, slave_plat->cs[0]);
 
 	rkspi_enable_chip(regs, false);
+	if (!out)
+		clrsetbits_le32(&regs->ctrlr0,
+				TMOD_MASK << TMOD_SHIFT,
+				TMOD_TR << TMOD_SHIFT);
 
 	return ret;
 }

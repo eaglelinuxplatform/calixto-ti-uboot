@@ -5,7 +5,7 @@ M68K / ColdFire
 
 History
 -------
-* November 02, 2017	Angelo Dureghello <angelo@sysam.it>
+* November 02, 2017	Angelo Dureghello <angelo@kernel-space.org>
 * August   08, 2005	Jens Scharsig <esw@bus-elektronik.de>
   MCF5282 implementation without preloader
 * January  12, 2004	<josef.baumgartner@telex.de>
@@ -82,9 +82,9 @@ A bash script similar to the one below may be used:
 Adopted toolchains
 ------------------
 
-Please check:
-https://www.denx.de/wiki/U-Boot/ColdFireNotes
-
+Currently the `kernel.org cross-development toolchains
+<https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/>`_ are
+used in the project CI builds.
 
 ColdFire specific configuration options/settings
 ------------------------------------------------

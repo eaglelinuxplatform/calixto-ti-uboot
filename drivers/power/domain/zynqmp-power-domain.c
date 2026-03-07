@@ -3,7 +3,6 @@
  * Copyright (c) 2021, Xilinx. Inc.
  */
 
-#include <common.h>
 #include <dm.h>
 #include <dm/device_compat.h>
 #include <log.h>
@@ -23,12 +22,17 @@ static int zynqmp_pm_request_node(const u32 node, const u32 capabilities,
 
 static int zynqmp_power_domain_request(struct power_domain *power_domain)
 {
+	int ret = 0;
+
 	dev_dbg(power_domain->dev, "Request for id: %ld\n", power_domain->id);
 
-	if (IS_ENABLED(CONFIG_ARCH_ZYNQMP))
-		return zynqmp_pmufw_node(power_domain->id);
+	if (IS_ENABLED(CONFIG_ARCH_ZYNQMP)) {
+		ret = zynqmp_pmufw_node(power_domain->id);
+		if (ret == -ENODEV)
+			ret = 0;
+	}
 
-	return 0;
+	return ret;
 }
 
 static int zynqmp_power_domain_free(struct power_domain *power_domain)

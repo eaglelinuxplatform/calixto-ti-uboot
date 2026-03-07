@@ -5,7 +5,6 @@
 
 #define LOG_CATEGORY UCLASS_PINCTRL
 
-#include <common.h>
 #include <dm.h>
 #include <hwspinlock.h>
 #include <log.h>
@@ -18,6 +17,7 @@
 #include <linux/bitops.h>
 #include <linux/err.h>
 #include <linux/libfdt.h>
+#include <linux/printk.h>
 
 #include "../gpio/stm32_gpio_priv.h"
 
@@ -39,7 +39,7 @@ struct stm32_gpio_bank {
 	struct list_head list;
 };
 
-#ifndef CONFIG_SPL_BUILD
+#ifndef CONFIG_XPL_BUILD
 
 static char pin_name[PINNAME_SIZE];
 static const char * const pinmux_mode[GPIOF_COUNT] = {
@@ -59,6 +59,13 @@ static const char * const pinmux_bias[] = {
 static const char * const pinmux_otype[] = {
 	[STM32_GPIO_OTYPE_PP] = "push-pull",
 	[STM32_GPIO_OTYPE_OD] = "open-drain",
+};
+
+static const char * const pinmux_speed[] = {
+	[STM32_GPIO_SPEED_2M] = "Low speed",
+	[STM32_GPIO_SPEED_25M] = "Medium speed",
+	[STM32_GPIO_SPEED_50M] = "High speed",
+	[STM32_GPIO_SPEED_100M] = "Very-high speed",
 };
 
 static int stm32_pinctrl_get_af(struct udevice *dev, unsigned int offset)
@@ -201,6 +208,7 @@ static int stm32_pinctrl_get_pin_muxing(struct udevice *dev,
 	int af_num;
 	unsigned int gpio_idx;
 	u32 pupd, otype;
+	u8 speed;
 
 	/* look up for the bank which owns the requested pin */
 	gpio_dev = stm32_pinctrl_get_gpio_dev(dev, selector, &gpio_idx);
@@ -214,6 +222,7 @@ static int stm32_pinctrl_get_pin_muxing(struct udevice *dev,
 	priv = dev_get_priv(gpio_dev);
 	pupd = (readl(&priv->regs->pupdr) >> (gpio_idx * 2)) & PUPD_MASK;
 	otype = (readl(&priv->regs->otyper) >> gpio_idx) & OTYPE_MSK;
+	speed = (readl(&priv->regs->ospeedr) >> gpio_idx * 2) & OSPEED_MASK;
 
 	switch (mode) {
 	case GPIOF_UNKNOWN:
@@ -222,13 +231,15 @@ static int stm32_pinctrl_get_pin_muxing(struct udevice *dev,
 		break;
 	case GPIOF_FUNC:
 		af_num = stm32_pinctrl_get_af(gpio_dev, gpio_idx);
-		snprintf(buf, size, "%s %d %s %s", pinmux_mode[mode], af_num,
-			 pinmux_otype[otype], pinmux_bias[pupd]);
+		snprintf(buf, size, "%s %d %s %s %s", pinmux_mode[mode], af_num,
+			 pinmux_otype[otype], pinmux_bias[pupd],
+			 pinmux_speed[speed]);
 		break;
 	case GPIOF_OUTPUT:
-		snprintf(buf, size, "%s %s %s %s",
+		snprintf(buf, size, "%s %s %s %s %s",
 			 pinmux_mode[mode], pinmux_otype[otype],
-			 pinmux_bias[pupd], label ? label : "");
+			 pinmux_bias[pupd], label ? label : "",
+			 pinmux_speed[speed]);
 		break;
 	case GPIOF_INPUT:
 		snprintf(buf, size, "%s %s %s", pinmux_mode[mode],
@@ -477,7 +488,7 @@ static struct pinctrl_ops stm32_pinctrl_ops = {
 #else /* PINCTRL_FULL */
 	.set_state_simple	= stm32_pinctrl_set_state_simple,
 #endif /* PINCTRL_FULL */
-#ifndef CONFIG_SPL_BUILD
+#ifndef CONFIG_XPL_BUILD
 	.get_pin_name		= stm32_pinctrl_get_pin_name,
 	.get_pins_count		= stm32_pinctrl_get_pins_count,
 	.get_pin_muxing		= stm32_pinctrl_get_pin_muxing,
@@ -493,6 +504,8 @@ static const struct udevice_id stm32_pinctrl_ids[] = {
 	{ .compatible = "st,stm32mp157-pinctrl" },
 	{ .compatible = "st,stm32mp157-z-pinctrl" },
 	{ .compatible = "st,stm32mp135-pinctrl" },
+	{ .compatible = "st,stm32mp257-pinctrl" },
+	{ .compatible = "st,stm32mp257-z-pinctrl" },
 	{ }
 };
 

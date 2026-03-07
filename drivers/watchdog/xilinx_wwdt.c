@@ -2,14 +2,13 @@
 /*
  * Xilinx window watchdog timer driver.
  *
- * Author(s):	Michal Simek <michal.simek@xilinx.com>
+ * Author(s):	Michal Simek <michal.simek@amd.com>
  *		Ashok Reddy Soma <ashok.reddy.soma@xilinx.com>
  *
  * Copyright (c) 2020, Xilinx Inc.
  */
 
 #include <clk.h>
-#include <common.h>
 #include <dm.h>
 #include <regmap.h>
 #include <wdt.h>
@@ -191,7 +190,8 @@ static const struct wdt_ops xlnx_wwdt_ops = {
 };
 
 static const struct udevice_id xlnx_wwdt_ids[] = {
-	{ .compatible = "xlnx,versal-wwdt-1.0", },
+	{ .compatible = "xlnx,versal-wwdt", },
+	{ .compatible = "xlnx,versal-wwdt-1.0", }, /* deprecated */
 	{},
 };
 

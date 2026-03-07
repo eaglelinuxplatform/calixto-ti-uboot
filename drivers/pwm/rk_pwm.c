@@ -4,7 +4,6 @@
  * Written by Simon Glass <sjg@chromium.org>
  */
 
-#include <common.h>
 #include <clk.h>
 #include <div64.h>
 #include <dm.h>
@@ -30,7 +29,7 @@ struct rockchip_pwm_data {
 };
 
 struct rk_pwm_priv {
-	fdt_addr_t base;
+	uintptr_t base;
 	ulong freq;
 	u32 conf_polarity;
 	const struct rockchip_pwm_data *data;

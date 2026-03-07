@@ -7,7 +7,6 @@
  * Copyright (C) 2013 Jagannadha Sutradharudu Teki, Xilinx Inc.
  */
 
-#include <common.h>
 #include <dm.h>
 #include <errno.h>
 #include <linux/mtd/spi-nor.h>
@@ -189,7 +188,8 @@ static int spi_flash_std_erase(struct udevice *dev, u32 offset, size_t len)
 	struct mtd_info *mtd = &flash->mtd;
 	struct erase_info instr;
 
-	if (offset % mtd->erasesize || len % mtd->erasesize) {
+	if (!mtd->erasesize ||
+	    (offset % mtd->erasesize || len % mtd->erasesize)) {
 		debug("SF: Erase offset/length not multiple of erase size\n");
 		return -EINVAL;
 	}

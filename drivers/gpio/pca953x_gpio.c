@@ -18,7 +18,6 @@
  * 2. Support Polarity Inversion
  */
 
-#include <common.h>
 #include <errno.h>
 #include <dm.h>
 #include <fdtdec.h>
@@ -39,7 +38,6 @@
 #define PCA957X_OUTPUT          5
 #define PCA957X_INVERT          1
 #define PCA957X_DIRECTION       4
-
 
 #define PCA_GPIO_MASK           0x00FF
 #define PCA_INT                 0x0100
@@ -407,6 +405,7 @@ static const struct udevice_id pca953x_ids[] = {
 	{ .compatible = "ti,tca6416", .data = OF_953X(16, PCA_INT), },
 	{ .compatible = "ti,tca6424", .data = OF_953X(24, PCA_INT), },
 	{ .compatible = "ti,tca9539", .data = OF_953X(16, PCA_INT), },
+	{ .compatible = "ti,tca9554", .data = OF_953X(8, PCA_INT), },
 
 	{ .compatible = "onsemi,pca9654", .data = OF_953X(8, PCA_INT), },
 

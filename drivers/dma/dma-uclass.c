@@ -11,7 +11,6 @@
 
 #define LOG_CATEGORY UCLASS_DMA
 
-#include <common.h>
 #include <cpu_func.h>
 #include <dm.h>
 #include <log.h>
@@ -22,6 +21,7 @@
 #include <linux/dma-mapping.h>
 #include <dt-structs.h>
 #include <errno.h>
+#include <linux/printk.h>
 
 #ifdef CONFIG_DMA_CHANNELS
 static inline struct dma_ops *dma_dev_ops(struct udevice *dev)

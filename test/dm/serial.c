@@ -3,7 +3,6 @@
  * Copyright (c) 2018, STMicroelectronics
  */
 
-#include <common.h>
 #include <log.h>
 #include <serial.h>
 #include <dm.h>
@@ -29,6 +28,7 @@ static int dm_test_serial(struct unit_test_state *uts)
 					      &dev_serial));
 
 	ut_assertok(serial_tstc());
+	ut_asserteq(115200, fetch_baud_from_dtb());
 	/*
 	 * test with default config which is the only one supported by
 	 * sandbox_serial driver
@@ -87,5 +87,4 @@ static int dm_test_serial(struct unit_test_state *uts)
 
 	return 0;
 }
-
-DM_TEST(dm_test_serial, UT_TESTF_SCAN_FDT);
+DM_TEST(dm_test_serial, UTF_SCAN_FDT);

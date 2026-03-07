@@ -8,7 +8,6 @@
 #ifndef __ASM_TEST_H
 #define __ASM_TEST_H
 
-#include <video.h>
 #include <pci_ids.h>
 
 struct unit_test_state;
@@ -49,6 +48,10 @@ struct unit_test_state;
 #define PCI_CAP_EA_SIZE_HI		0x00000010ULL
 #define PCI_EA_BAR2_MAGIC		0x72727272
 #define PCI_EA_BAR4_MAGIC		0x74747474
+
+/* Used by the sandbox iommu driver */
+#define SANDBOX_IOMMU_DVA_ADDR		0x89abc000
+#define SANDBOX_IOMMU_PAGE_SIZE		SZ_4K
 
 enum {
 	SANDBOX_IRQN_PEND = 1,	/* Interrupt number for 'pending' test */
@@ -299,22 +302,6 @@ void sandbox_cros_ec_set_test_flags(struct udevice *dev, uint flags);
  * Return: 0 if OK, -ENOSPC if the PWM number is invalid
  */
 int sandbox_cros_ec_get_pwm_duty(struct udevice *dev, uint index, uint *duty);
-
-/**
- * sandbox_sdl_set_bpp() - Set the depth of the sandbox display
- *
- * The device must not be active when this function is called. It activiates it
- * before returning.
- *
- * This updates the depth value and adjusts a few other settings accordingly.
- * It must be called before the display is probed.
- *
- * @dev: Device to adjust
- * @l2bpp: depth to set
- * Return: 0 if the device was already active, other error if it fails to probe
- * after the change
- */
-int sandbox_sdl_set_bpp(struct udevice *dev, enum video_log2_bpp l2bpp);
 
 /**
  * sandbox_set_fake_efi_mgr_dev() - Control EFI bootmgr producing valid bootflow

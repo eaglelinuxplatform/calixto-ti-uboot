@@ -25,6 +25,7 @@
 #define __ns16550_h
 
 #include <linux/types.h>
+#include <serial.h>
 
 #if CONFIG_IS_ENABLED(DM_SERIAL) ||  defined(CONFIG_NS16550_DYNAMIC) || \
 	defined(CONFIG_DEBUG_UART)
@@ -58,6 +59,7 @@ enum ns16550_flags {
  * struct ns16550_plat - information about a NS16550 port
  *
  * @base:		Base register address
+ * @size:		Size of register area in bytes
  * @reg_width:		IO accesses size of registers (in bytes, 1 or 4)
  * @reg_shift:		Shift size of registers (0=byte, 1=16bit, 2=32bit...)
  * @reg_offset:		Offset to start of registers (normally 0)
@@ -67,7 +69,8 @@ enum ns16550_flags {
  * @bdf:		PCI slot/function (pci_dev_t)
  */
 struct ns16550_plat {
-	unsigned long base;
+	ulong base;
+	ulong size;
 	int reg_width;
 	int reg_shift;
 	int reg_offset;
@@ -113,6 +116,15 @@ struct ns16550 {
 	struct ns16550_plat *plat;
 #endif
 };
+
+#if CONFIG_IS_ENABLED(DM_SERIAL)
+#define serial_out(value, addr)	\
+	ns16550_writeb(com_port, \
+		(unsigned char *)(addr) - (unsigned char *)com_port, value)
+#define serial_in(addr) \
+	ns16550_readb(com_port, \
+		(unsigned char *)(addr) - (unsigned char *)com_port)
+#endif
 
 #define thr rbr
 #define iir fcr
@@ -223,6 +235,14 @@ void ns16550_putc(struct ns16550 *com_port, char c);
 char ns16550_getc(struct ns16550 *com_port);
 int ns16550_tstc(struct ns16550 *com_port);
 void ns16550_reinit(struct ns16550 *com_port, int baud_divisor);
+int ns16550_serial_putc(struct udevice *dev, const char ch);
+int ns16550_serial_pending(struct udevice *dev, bool input);
+int ns16550_serial_getc(struct udevice *dev);
+int ns16550_serial_setbrg(struct udevice *dev, int baudrate);
+int ns16550_serial_setconfig(struct udevice *dev, uint serial_config);
+int ns16550_serial_getinfo(struct udevice *dev, struct serial_device_info *info);
+void ns16550_writeb(struct ns16550 *port, int offset, int value);
+void ns16550_setbrg(struct ns16550 *com_port, int baud_divisor);
 
 /**
  * ns16550_calc_divisor() - calculate the divisor given clock and baud rate

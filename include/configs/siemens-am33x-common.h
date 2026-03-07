@@ -7,7 +7,7 @@
  * Based on:
  * U-Boot file:/include/configs/am335x_evm.h
  *
- * Copyright (C) 2011 Texas Instruments Incorporated - http://www.ti.com/
+ * Copyright (C) 2011 Texas Instruments Incorporated - https://www.ti.com/
  */
 
 #ifndef __CONFIG_SIEMENS_AM33X_COMMON_H
@@ -39,7 +39,6 @@
 #define CFG_SYS_NS16550_CLK		(48000000)
 #define CFG_SYS_NS16550_COM1		0x44e09000
 #define CFG_SYS_NS16550_COM4		0x481a6000
-
 
 /* I2C Configuration */
 

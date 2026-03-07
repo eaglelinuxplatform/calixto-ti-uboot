@@ -7,7 +7,6 @@
 
 #define LOG_CATEGORY UCLASS_SPI
 
-#include <common.h>
 #include <clk.h>
 #include <dm.h>
 #include <errno.h>
@@ -18,6 +17,7 @@
 #include <dm/device_compat.h>
 #include <linux/bitops.h>
 #include <linux/delay.h>
+#include <linux/printk.h>
 
 #include <asm/io.h>
 #include <asm/gpio.h>
@@ -434,7 +434,7 @@ static int stm32_spi_xfer(struct udevice *slave, unsigned int bitlen,
 
 	slave_plat = dev_get_parent_plat(slave);
 	if (flags & SPI_XFER_BEGIN)
-		stm32_spi_set_cs(bus, slave_plat->cs, false);
+		stm32_spi_set_cs(bus, slave_plat->cs[0], false);
 
 	/* Be sure to have data in fifo before starting data transfer */
 	if (priv->tx_buf)
@@ -485,7 +485,7 @@ static int stm32_spi_xfer(struct udevice *slave, unsigned int bitlen,
 	stm32_spi_stopxfer(bus);
 
 	if (flags & SPI_XFER_END)
-		stm32_spi_set_cs(bus, slave_plat->cs, true);
+		stm32_spi_set_cs(bus, slave_plat->cs[0], true);
 
 	return xfer_status;
 }
@@ -525,22 +525,16 @@ static int stm32_spi_of_to_plat(struct udevice *dev)
 
 	ret = reset_get_by_index(dev, 0, &plat->rst_ctl);
 	if (ret < 0)
-		goto clk_err;
+		return ret;
 
 	ret = gpio_request_list_by_name(dev, "cs-gpios", plat->cs_gpios,
 					ARRAY_SIZE(plat->cs_gpios), 0);
 	if (ret < 0) {
 		dev_err(dev, "Can't get %s cs gpios: %d", dev->name, ret);
-		ret = -ENOENT;
-		goto clk_err;
+		return -ENOENT;
 	}
 
 	return 0;
-
-clk_err:
-	clk_free(&plat->clk);
-
-	return ret;
 }
 
 static int stm32_spi_probe(struct udevice *dev)
@@ -609,7 +603,6 @@ static int stm32_spi_probe(struct udevice *dev)
 
 clk_err:
 	clk_disable(&plat->clk);
-	clk_free(&plat->clk);
 
 	return ret;
 };
@@ -629,13 +622,7 @@ static int stm32_spi_remove(struct udevice *dev)
 
 	reset_free(&plat->rst_ctl);
 
-	ret = clk_disable(&plat->clk);
-	if (ret < 0)
-		return ret;
-
-	clk_free(&plat->clk);
-
-	return ret;
+	return clk_disable(&plat->clk);
 };
 
 static const struct dm_spi_ops stm32_spi_ops = {

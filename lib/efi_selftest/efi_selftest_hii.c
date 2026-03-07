@@ -220,14 +220,12 @@ static int test_hii_database_list_package_lists(void)
 	if (ret != EFI_BUFFER_TOO_SMALL) {
 		efi_st_error("list_package_lists returned %u\n",
 			     (unsigned int)ret);
-		ret = EFI_ST_FAILURE;
 		goto out;
 	}
 	ret = boottime->allocate_pool(EFI_LOADER_DATA, handles_size,
 				      (void **)&handles);
 	if (ret != EFI_SUCCESS) {
 		efi_st_error("AllocatePool failed\n");
-		ret = EFI_ST_FAILURE;
 		goto out;
 	}
 	ret = hii_database_protocol->list_package_lists(hii_database_protocol,
@@ -236,7 +234,6 @@ static int test_hii_database_list_package_lists(void)
 	if (ret != EFI_SUCCESS) {
 		efi_st_error("list_package_lists returned %u\n",
 			     (unsigned int)ret);
-		ret = EFI_ST_FAILURE;
 		goto out;
 	}
 	ret = boottime->free_pool(handles);
@@ -254,14 +251,12 @@ static int test_hii_database_list_package_lists(void)
 	if (ret != EFI_BUFFER_TOO_SMALL) {
 		efi_st_error("list_package_lists returned %u\n",
 			     (unsigned int)ret);
-		ret = EFI_ST_FAILURE;
 		goto out;
 	}
 	ret = boottime->allocate_pool(EFI_LOADER_DATA, handles_size,
 				      (void **)&handles);
 	if (ret != EFI_SUCCESS) {
 		efi_st_error("AllocatePool failed\n");
-		ret = EFI_ST_FAILURE;
 		goto out;
 	}
 	ret = hii_database_protocol->list_package_lists(hii_database_protocol,
@@ -270,13 +265,11 @@ static int test_hii_database_list_package_lists(void)
 	if (ret != EFI_SUCCESS) {
 		efi_st_error("list_package_lists returned %u\n",
 			     (unsigned int)ret);
-		ret = EFI_ST_FAILURE;
 		goto out;
 	}
 	ret = boottime->free_pool(handles);
 	if (ret != EFI_SUCCESS) {
 		efi_st_error("FreePool failed\n");
-		ret = EFI_ST_FAILURE;
 		goto out;
 	}
 
@@ -289,14 +282,12 @@ static int test_hii_database_list_package_lists(void)
 	if (ret != EFI_BUFFER_TOO_SMALL) {
 		efi_st_error("list_package_lists returned %u\n",
 			     (unsigned int)ret);
-		ret = EFI_ST_FAILURE;
 		goto out;
 	}
 	ret = boottime->allocate_pool(EFI_LOADER_DATA, handles_size,
 				      (void **)&handles);
 	if (ret != EFI_SUCCESS) {
 		efi_st_error("AllocatePool failed\n");
-		ret = EFI_ST_FAILURE;
 		goto out;
 	}
 	ret = hii_database_protocol->list_package_lists(hii_database_protocol,
@@ -305,13 +296,11 @@ static int test_hii_database_list_package_lists(void)
 	if (ret != EFI_SUCCESS) {
 		efi_st_error("list_package_lists returned %u\n",
 			     (unsigned int)ret);
-		ret = EFI_ST_FAILURE;
 		goto out;
 	}
 	ret = boottime->free_pool(handles);
 	if (ret != EFI_SUCCESS) {
 		efi_st_error("FreePool failed\n");
-		ret = EFI_ST_FAILURE;
 		goto out;
 	}
 
@@ -924,7 +913,7 @@ static int test_hii_string_get_languages(void)
 		goto out;
 	}
 
-	efi_st_printf("got languages are %s\n", languages);
+	efi_st_printf("Available languages: %s\n", languages);
 
 	result = EFI_ST_SUCCESS;
 

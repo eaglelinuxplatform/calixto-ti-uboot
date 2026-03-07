@@ -6,7 +6,6 @@
  *	Zhengxun Li <zhengxunli@mxic.com.tw>
  */
 
-#include <common.h>
 #include <clk.h>
 #include <dm.h>
 #include <malloc.h>
@@ -538,7 +537,7 @@ static int mxic_nfc_probe(struct udevice *dev)
 	ofnode child;
 	int err;
 
-	nfc->regs = (void *)dev_read_addr(dev);
+	nfc->regs = dev_read_addr_ptr(dev);
 
 	nfc->send_clk = devm_clk_get(dev, "send");
 	if (IS_ERR(nfc->send_clk))

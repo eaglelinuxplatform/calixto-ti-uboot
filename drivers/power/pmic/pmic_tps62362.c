@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * (C) Copyright 2014 Texas Instruments Incorporated -  http://www.ti.com
+ * (C) Copyright 2014 Texas Instruments Incorporated -  https://www.ti.com
  * Author: Felipe Balbi <balbi@ti.com>
  */
 
-#include <common.h>
 #include <i2c.h>
 #include <linux/errno.h>
 #include <power/pmic.h>

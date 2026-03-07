@@ -10,9 +10,9 @@
  * Copyright (C) 2014, Imagination Technologies Ltd.
  */
 
-#include <common.h>
 #include <asm/global_data.h>
 #include <asm/ptrace.h>
+#include <config.h>
 #include <cpu_func.h>
 #include <hang.h>
 #include <init.h>

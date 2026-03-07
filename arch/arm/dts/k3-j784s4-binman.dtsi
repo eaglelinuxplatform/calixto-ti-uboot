@@ -1,19 +1,19 @@
-// SPDX-License-Identifier: GPL-2.0
+// SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (C) 2022 Texas Instruments Incorporated - https://www.ti.com/
+ * Copyright (C) 2023 Texas Instruments Incorporated - https://www.ti.com/
  */
 
 #include "k3-binman.dtsi"
 
-#ifdef CONFIG_TARGET_J784S4_R5_EVM
+#if defined(CONFIG_CPU_V7R)
 
 &rcfg_yaml_tifs {
 	config = "tifs-rm-cfg.yaml";
 };
 
 &binman {
-	tiboot3-j784s4-hs-evm.bin {
-		filename = "tiboot3-j784s4-hs-evm.bin";
+	tiboot3_j784s4_hs: template-9 {
+		section {
 		ti-secure-rom {
 			content = <&u_boot_spl>, <&ti_fs_enc>, <&combined_tifs_cfg>,
 				<&combined_dm_cfg>, <&sysfw_inner_cert>;
@@ -33,33 +33,37 @@
 			load-sysfw-data = <0x66800>;
 			load-dm-data = <0x41c80000>;
 		};
+
 		u_boot_spl: u-boot-spl {
 			no-expanded;
 		};
+
 		ti_fs_enc: ti-fs-enc.bin {
-			filename = "ti-sysfw/ti-fs-firmware-j784s4-hs-enc.bin";
 			type = "blob-ext";
 			optional;
 		};
+
 		combined_tifs_cfg: combined-tifs-cfg.bin {
 			filename = "combined-tifs-cfg.bin";
 			type = "blob-ext";
 		};
+
 		sysfw_inner_cert: sysfw-inner-cert {
-			filename = "ti-sysfw/ti-fs-firmware-j784s4-hs-cert.bin";
 			type = "blob-ext";
 			optional;
 		};
+
 		combined_dm_cfg: combined-dm-cfg.bin {
 			filename = "combined-dm-cfg.bin";
 			type = "blob-ext";
+		};
 		};
 	};
 };
 
 &binman {
-	tiboot3-j784s4-hs-fs-evm.bin {
-		filename = "tiboot3-j784s4-hs-fs-evm.bin";
+	tiboot3_j784s4_hs_fs: template-10 {
+		section {
 		ti-secure-rom {
 			content = <&u_boot_spl_fs>, <&ti_fs_enc_fs>, <&combined_tifs_cfg_fs>,
 				<&combined_dm_cfg_fs>, <&sysfw_inner_cert_fs>;
@@ -79,34 +83,37 @@
 			load-sysfw-data = <0x66800>;
 			load-dm-data = <0x41c80000>;
 		};
+
 		u_boot_spl_fs: u-boot-spl {
 			no-expanded;
 		};
+
 		ti_fs_enc_fs: ti-fs-enc.bin {
-			filename = "ti-sysfw/ti-fs-firmware-j784s4-hs-fs-enc.bin";
 			type = "blob-ext";
 			optional;
 		};
+
 		combined_tifs_cfg_fs: combined-tifs-cfg.bin {
 			filename = "combined-tifs-cfg.bin";
 			type = "blob-ext";
 		};
+
 		sysfw_inner_cert_fs: sysfw-inner-cert {
-			filename = "ti-sysfw/ti-fs-firmware-j784s4-hs-fs-cert.bin";
 			type = "blob-ext";
 			optional;
 		};
+
 		combined_dm_cfg_fs: combined-dm-cfg.bin {
 			filename = "combined-dm-cfg.bin";
 			type = "blob-ext";
+		};
 		};
 	};
 };
 
 &binman {
-	tiboot3-j784s4-gp-evm.bin {
-		filename = "tiboot3-j784s4-gp-evm.bin";
-		symlink = "tiboot3.bin";
+	tiboot3_j784s4_gp: template-11 {
+		section {
 		ti-secure-rom {
 			content = <&u_boot_spl_unsigned>, <&ti_fs_gp>,
 				<&combined_tifs_cfg_gp>, <&combined_dm_cfg_gp>;
@@ -124,145 +131,71 @@
 			sw-rev = <1>;
 			keyfile = "ti-degenerate-key.pem";
 		};
+
 		u_boot_spl_unsigned: u-boot-spl {
 			no-expanded;
 		};
+
 		ti_fs_gp: ti-fs-gp.bin {
-			filename = "ti-sysfw/ti-fs-firmware-j784s4-gp.bin";
 			type = "blob-ext";
 			optional;
 		};
+
 		combined_tifs_cfg_gp: combined-tifs-cfg-gp.bin {
 			filename = "combined-tifs-cfg.bin";
 			type = "blob-ext";
 		};
+
 		combined_dm_cfg_gp: combined-dm-cfg-gp.bin {
 			filename = "combined-dm-cfg.bin";
 			type = "blob-ext";
 		};
-
-	};
-};
-#endif
-
-#ifdef CONFIG_TARGET_J784S4_A72_EVM
-
-#define SPL_NODTB "spl/u-boot-spl-nodtb.bin"
-#define SPL_J784S4_EVM_DTB "spl/dts/k3-j784s4-evm.dtb"
-#define SPL_AM69_SK_DTB "spl/dts/k3-am69-sk.dtb"
-
-#define UBOOT_NODTB "u-boot-nodtb.bin"
-#define J784S4_EVM_DTB "u-boot.dtb"
-#define AM69_SK_DTB "arch/arm/dts/k3-am69-sk.dtb"
-
-&binman {
-	ti-dm {
-		filename = "ti-dm.bin";
-		blob-ext {
-			filename = "ti-dm/j784s4/ipc_echo_testb_mcu1_0_release_strip.xer5f";
 		};
 	};
-	ti-spl {
-		filename = "tispl.bin";
-		pad-byte = <0xff>;
+};
+
+#else
+
+&binman {
+	ti_spl: template-12 {
+		insert-template = <&ti_spl_template>;
 
 		fit {
-			description = "Configuration to load ATF and SPL";
-			#address-cells = <1>;
-
 			images {
 
-				atf {
-					description = "ARM Trusted Firmware";
-					type = "firmware";
-					arch = "arm64";
-					compression = "none";
-					os = "arm-trusted-firmware";
-					load = <CONFIG_K3_ATF_LOAD_ADDR>;
-					entry = <CONFIG_K3_ATF_LOAD_ADDR>;
-					ti-secure {
-						content = <&atf>;
-						keyfile = "custMpk.pem";
-					};
-					atf: atf-bl31 {
+#ifdef CONFIG_K3_HSM_FW
+				hsm {
+					hsm: blob-ext {
+						filename = "ti-hsm/hsm-demo-firmware-j784s4-hs.bin";
 					};
 				};
 
-				tee {
-					description = "OPTEE";
-					type = "tee";
-					arch = "arm64";
-					compression = "none";
-					os = "tee";
-					load = <0x9e800000>;
-					entry = <0x9e800000>;
-					ti-secure {
-						content = <&tee>;
-						keyfile = "custMpk.pem";
-					};
-					tee: tee-os {
-					};
-				};
+#endif
 
 				dm {
-					description = "DM binary";
-					type = "firmware";
-					arch = "arm32";
-					compression = "none";
-					os = "DM";
-					load = <0x89000000>;
-					entry = <0x89000000>;
 					ti-secure {
 						content = <&dm>;
 						keyfile = "custMpk.pem";
 					};
-					dm: blob-ext {
-						filename = "ti-dm.bin";
-					};
-				};
 
-				spl {
-					description = "SPL (64-bit)";
-					type = "standalone";
-					os = "U-Boot";
-					arch = "arm64";
-					compression = "none";
-					load = <CONFIG_SPL_TEXT_BASE>;
-					entry = <CONFIG_SPL_TEXT_BASE>;
-					ti-secure {
-						content = <&u_boot_spl_nodtb>;
-						keyfile = "custMpk.pem";
-					};
-					u_boot_spl_nodtb: blob-ext {
-						filename = SPL_NODTB;
+					dm: ti-dm {
+						optional;
 					};
 				};
 
 				fdt-0 {
-					description = "k3-j784s4-evm";
+					description = BOARD_DESCRIPTION;
 					type = "flat_dt";
 					arch = "arm";
 					compression = "none";
+
 					ti-secure {
-						content = <&spl_j784s4_evm_dtb>;
+						content = <&spl_board_dtb>;
 						keyfile = "custMpk.pem";
-					};
-					spl_j784s4_evm_dtb: blob-ext {
-						filename = SPL_J784S4_EVM_DTB;
 					};
 
-				};
-				fdt-1 {
-					description = "k3-am69-sk";
-					type = "flat_dt";
-					arch = "arm";
-					compression = "none";
-					ti-secure {
-						content = <&spl_am69_sk_dtb>;
-						keyfile = "custMpk.pem";
-					};
-					spl_am69_sk_dtb: blob-ext {
-						filename = SPL_AM69_SK_DTB;
+					spl_board_dtb: blob-ext {
+						filename = SPL_BOARD_DTB;
 					};
 
 				};
@@ -272,17 +205,14 @@
 				default = "conf-0";
 
 				conf-0 {
-					description = "k3-j784s4-evm";
+					description = BOARD_DESCRIPTION;
 					firmware = "atf";
+#ifdef CONFIG_K3_HSM_FW
+					loadables = "hsm", "tee", "dm", "spl";
+#else
 					loadables = "tee", "dm", "spl";
+#endif
 					fdt = "fdt-0";
-				};
-
-				conf-1 {
-					description = "k3-am69-sk";
-					firmware = "atf";
-					loadables = "tee", "dm", "spl";
-					fdt = "fdt-1";
 				};
 			};
 		};
@@ -290,61 +220,28 @@
 };
 
 &binman {
-	u-boot {
-		filename = "u-boot.img";
-		pad-byte = <0xff>;
+	u_boot: template-13 {
+		insert-template = <&u_boot_template>;
 
 		fit {
-			description = "FIT image with multiple configurations";
-
 			images {
 				uboot {
-					description = "U-Boot for J784S4 board";
-					type = "firmware";
-					os = "u-boot";
-					arch = "arm";
-					compression = "none";
-					load = <CONFIG_TEXT_BASE>;
-					ti-secure {
-						content = <&u_boot_nodtb>;
-						keyfile = "custMpk.pem";
-					};
-					u_boot_nodtb: u-boot-nodtb {
-					};
-					hash {
-						algo = "crc32";
-					};
+					description = UBOOT_BOARD_DESCRIPTION;
 				};
 
 				fdt-0 {
-					description = "k3-j784s4-evm";
+					description = BOARD_DESCRIPTION;
 					type = "flat_dt";
 					arch = "arm";
 					compression = "none";
+
 					ti-secure {
 						content = <&j784s4_evm_dtb>;
 						keyfile = "custMpk.pem";
 					};
+
 					j784s4_evm_dtb: blob-ext {
-						filename = J784S4_EVM_DTB;
-					};
-
-					hash {
-						algo = "crc32";
-					};
-				};
-
-				fdt-1 {
-					description = "k3-am69-sk";
-					type = "flat_dt";
-					arch = "arm";
-					compression = "none";
-					ti-secure {
-						content = <&am69_sk_dtb>;
-						keyfile = "custMpk.pem";
-					};
-					am69_sk_dtb: blob-ext {
-						filename = AM69_SK_DTB;
+						filename = "u-boot.dtb";
 					};
 
 					hash {
@@ -357,17 +254,10 @@
 				default = "conf-0";
 
 				conf-0 {
-					description = "k3-j784s4-evm";
+					description = BOARD_DESCRIPTION;
 					firmware = "uboot";
 					loadables = "uboot";
 					fdt = "fdt-0";
-				};
-
-				conf-1 {
-					description = "k3-am69-sk";
-					firmware = "uboot";
-					loadables = "uboot";
-					fdt = "fdt-1";
 				};
 			};
 		};
@@ -375,85 +265,25 @@
 };
 
 &binman {
-	ti-spl_unsigned {
-		filename = "tispl.bin_unsigned";
-		pad-byte = <0xff>;
+	ti_spl_unsigned: template-14 {
+		insert-template = <&ti_spl_unsigned_template>;
 
 		fit {
-			description = "Configuration to load ATF and SPL";
-			#address-cells = <1>;
-
 			images {
-
-				atf {
-					description = "ARM Trusted Firmware";
-					type = "firmware";
-					arch = "arm64";
-					compression = "none";
-					os = "arm-trusted-firmware";
-					load = <CONFIG_K3_ATF_LOAD_ADDR>;
-					entry = <CONFIG_K3_ATF_LOAD_ADDR>;
-					atf-bl31 {
-						filename = "bl31.bin";
-					};
-				};
-
-				tee {
-					description = "OPTEE";
-					type = "tee";
-					arch = "arm64";
-					compression = "none";
-					os = "tee";
-					load = <0x9e800000>;
-					entry = <0x9e800000>;
-					tee-os {
-						filename = "tee-pager_v2.bin";
-					};
-				};
-
 				dm {
-					description = "DM binary";
-					type = "firmware";
-					arch = "arm32";
-					compression = "none";
-					os = "DM";
-					load = <0x89000000>;
-					entry = <0x89000000>;
-					blob-ext {
-						filename = "ti-dm.bin";
-					};
-				};
-
-				spl {
-					description = "SPL (64-bit)";
-					type = "standalone";
-					os = "U-Boot";
-					arch = "arm64";
-					compression = "none";
-					load = <CONFIG_SPL_TEXT_BASE>;
-					entry = <CONFIG_SPL_TEXT_BASE>;
-					blob {
-						filename = "spl/u-boot-spl-nodtb.bin";
+					ti-dm {
+						optional;
 					};
 				};
 
 				fdt-0 {
-					description = "k3-j784s4-evm";
+					description = BOARD_DESCRIPTION;
 					type = "flat_dt";
 					arch = "arm";
 					compression = "none";
-					blob {
-						filename = SPL_J784S4_EVM_DTB;
-					};
-				};
 
-				fdt-1 {
-					description = "k3-am69-sk";
-					type = "flat_dt";
-					arch = "arm";
-					compression = "none";
-					blob {
-						filename = SPL_AM69_SK_DTB;
+					spl_j784s4_evm_dtb_unsigned: blob {
+						filename = SPL_BOARD_DTB;
 					};
 				};
 			};
@@ -462,17 +292,10 @@
 				default = "conf-0";
 
 				conf-0 {
-					description = "k3-j784s4-evm";
+					description = BOARD_DESCRIPTION;
 					firmware = "atf";
 					loadables = "tee", "dm", "spl";
 					fdt = "fdt-0";
-				};
-
-				conf-1 {
-					description = "k3-am69-sk";
-					firmware = "atf";
-					loadables = "tee", "dm", "spl";
-					fdt = "fdt-1";
 				};
 			};
 		};
@@ -480,50 +303,25 @@
 };
 
 &binman {
-	u-boot_unsigned {
-		filename = "u-boot.img_unsigned";
-		pad-byte = <0xff>;
+	u_boot_unsigned: template-15 {
+		insert-template = <&u_boot_unsigned_template>;
 
 		fit {
-			description = "FIT image with multiple configurations";
-
 			images {
 				uboot {
-					description = "U-Boot for J784S4 board";
-					type = "firmware";
-					os = "u-boot";
-					arch = "arm";
-					compression = "none";
-					load = <CONFIG_TEXT_BASE>;
-					blob {
-						filename = UBOOT_NODTB;
-					};
-					hash {
-						algo = "crc32";
-					};
+					description = UBOOT_BOARD_DESCRIPTION;
 				};
 
 				fdt-0 {
-					description = "k3-j784s4-evm";
+					description = BOARD_DESCRIPTION;
 					type = "flat_dt";
 					arch = "arm";
 					compression = "none";
-					blob {
-						filename = J784S4_EVM_DTB;
-					};
-					hash {
-						algo = "crc32";
-					};
-				};
 
-				fdt-1 {
-					description = "k3-am69-sk";
-					type = "flat_dt";
-					arch = "arm";
-					compression = "none";
-					blob {
-						filename = AM69_SK_DTB;
+					j784s4_evm_dtb_unsigned: blob {
+						filename = "u-boot.dtb";
 					};
+
 					hash {
 						algo = "crc32";
 					};
@@ -534,17 +332,10 @@
 				default = "conf-0";
 
 				conf-0 {
-					description = "k3-j784s4-evm";
+					description = BOARD_DESCRIPTION;
 					firmware = "uboot";
 					loadables = "uboot";
 					fdt = "fdt-0";
-				};
-
-				conf-1 {
-					description = "k3-am69-sk";
-					firmware = "uboot";
-					loadables = "uboot";
-					fdt = "fdt-1";
 				};
 			};
 		};

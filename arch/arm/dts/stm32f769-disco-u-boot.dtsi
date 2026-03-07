@@ -28,11 +28,6 @@
 		button-gpio = <&gpioa 0 0>;
 	};
 
-	dsi_host: dsi_host {
-		compatible = "synopsys,dw-mipi-dsi";
-		status = "okay";
-	};
-
 	led1 {
 		compatible = "st,led1";
 		led-gpio = <&gpioj 5 0>;
@@ -75,22 +70,17 @@
 				};
 			};
 		};
+	};
+};
 
-		ltdc: display-controller@40016800 {
-			compatible = "st,stm32-ltdc";
-			reg = <0x40016800 0x200>;
-			resets = <&rcc STM32F7_APB2_RESET(LTDC)>;
-			clocks = <&rcc 0 STM32F7_APB2_CLOCK(LTDC)>;
+&ltdc {
+	clocks = <&rcc 0 STM32F7_APB2_CLOCK(LTDC)>;
+	bootph-all;
 
-			status = "okay";
-			bootph-all;
-
-			ports {
-				port@0 {
-					dp_out: endpoint {
-						remote-endpoint = <&dsi_in>;
-					};
-				};
+	ports {
+		port@0 {
+			dp_out: endpoint {
+				remote-endpoint = <&dsi_in>;
 			};
 		};
 	};

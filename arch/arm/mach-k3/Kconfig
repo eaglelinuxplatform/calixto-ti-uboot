@@ -4,6 +4,27 @@ choice
 	prompt "Texas Instruments' K3 based SoC select"
 	optional
 
+config SOC_K3_AM625
+	bool "TI's K3 based AM625 SoC Family Support"
+
+config SOC_K3_AM62A7
+	bool "TI's K3 based AM62A7 SoC Family Support"
+
+config SOC_K3_AM62L3
+	bool "TI's K3 based AM62L3 SoC Family Support"
+	select CLK_SCMI
+	select SPL_CLK_SCMI
+	select SCMI_FIRMWARE
+	select SCMI_POWER_DOMAIN
+	select SPL_SCMI_POWER_DOMAIN
+	select SYSRESET_PSCI
+
+config SOC_K3_AM62P5
+	bool "TI's K3 based AM62P5 SoC Family Support"
+
+config SOC_K3_AM642
+	bool "TI's K3 based AM642 SoC Family Support"
+
 config SOC_K3_AM654
 	bool "TI's K3 based AM654 SoC Family Support"
 
@@ -13,29 +34,25 @@ config SOC_K3_J721E
 config SOC_K3_J721S2
 	bool "TI's K3 based J721S2 SoC Family Support"
 
-config SOC_K3_AM642
-	bool "TI's K3 based AM642 SoC Family Support"
-
-config SOC_K3_AM625
-	bool "TI's K3 based AM625 SoC Family Support"
-
-config SOC_K3_AM62A7
-	bool "TI's K3 based AM62A7 SoC Family Support"
+config SOC_K3_J722S
+	bool "TI's K3 based J722S SoC Family Support"
 
 config SOC_K3_J784S4
 	bool "TI's K3 based J784S4 SoC Family Support"
 
-config SOC_K3_AM62P5
-	bool "TI's K3 based AM62P5 SoC Family Support"
-
 endchoice
+
+if SOC_K3_J721E
+config SOC_K3_J721E_J7200
+	bool "TI's K3 based J7200 SoC variant Family Support"
+endif
 
 config SYS_SOC
 	default "k3"
 
 config SYS_K3_NON_SECURE_MSRAM_SIZE
 	hex
-	default 0x80000 if SOC_K3_AM654 || SOC_K3_AM62P5
+	default 0x80000 if SOC_K3_AM654
 	default 0x100000 if SOC_K3_J721E || SOC_K3_J721S2 || SOC_K3_J784S4
 	default 0x1c0000 if SOC_K3_AM642
 	default 0x3c000 if SOC_K3_AM625 || SOC_K3_AM62A7
@@ -58,9 +75,7 @@ config SYS_K3_MAX_DOWNLODABLE_IMAGE_SIZE
 config SYS_K3_MCU_SCRATCHPAD_BASE
 	hex
 	default 0x40280000 if SOC_K3_AM654
-	default 0x41cff9fc if SOC_K3_J784S4
-	default 0x41cff9fc if SOC_K3_J721S2
-	default 0x41cff9fc if SOC_K3_J721E
+	default 0x41cff9fc if SOC_K3_J721E || SOC_K3_J721S2 || SOC_K3_J784S4
 	help
 	  Describes the base address of MCU Scratchpad RAM.
 
@@ -80,7 +95,9 @@ config SYS_K3_BOOT_PARAM_TABLE_INDEX
 	default 0x43c3f290 if SOC_K3_AM625
 	default 0x43c3f290 if SOC_K3_AM62A7 && CPU_V7R
 	default 0x7000f290 if SOC_K3_AM62A7 && ARM64
+	default 0x43c4f290 if SOC_K3_AM62L3
 	default 0x43c4f290 if SOC_K3_AM62P5
+	default 0x43c7f290 if SOC_K3_J722S
 	help
 	  Address at which ROM stores the value which determines if SPL
 	  is booted up by primary boot media or secondary boot media.
@@ -117,70 +134,45 @@ config K3_EARLY_CONS_IDX
 	  Use this option to set the index of the serial device to be used
 	  for the early console during SPL execution.
 
-config K3_LOAD_SYSFW
-	bool
-	depends on SPL
-
-config K3_SYSFW_IMAGE_NAME
-	string "File name of SYSFW firmware and configuration blob"
-	depends on K3_LOAD_SYSFW
-	default	"sysfw.itb"
+config K3_TIFS_LOAD_ADDR
+	hex "Load address of TI's Foundational Security (TIFS) firmware"
+	default 0x40000
 	help
-	  Filename of the combined System Firmware and configuration image tree
-	  blob to be loaded when booting from a filesystem.
+	  The load address for TI's Foundation Security firmware. This value is
+	  used to build the x509 certificate to tell boot ROM where to place the
+	  TIFS firmware in memory.
 
-config K3_SYSFW_IMAGE_MMCSD_RAW_MODE_SECT
-	hex "MMC sector to load SYSFW firmware and configuration blob from"
-	depends on K3_LOAD_SYSFW && SYS_MMCSD_RAW_MODE_U_BOOT_USE_SECTOR
-	default 0x3600
-	help
-	  Address on the MMC to load the combined System Firmware and
-	  configuration image tree blob from, when the MMC is being used
-	  in raw mode. Units: MMC sectors (1 sector = 512 bytes).
+	  Unless you know what you're doing. Do not change this value.
 
-config K3_SYSFW_IMAGE_MMCSD_RAW_MODE_PART
-	hex "MMC partition to load SYSFW firmware and configuration blob from"
-	depends on K3_LOAD_SYSFW && SYS_MMCSD_RAW_MODE_U_BOOT_USE_PARTITION
-	default 2
+config K3_TIFS_DATA_LOAD_ADDR
+	hex "Load address of TIFS configuration data"
+	default 0x6c000
 	help
-	  Partition on the MMC to the combined System Firmware and configuration
-	  image tree blob from, when the MMC is being used in raw mode.
+	  The load address for TI's Foundation Security configuration data. This
+	  value is used to build the x509 certificate to tell ROM where to place
+	  the TIFS firmware.
 
-config K3_SYSFW_IMAGE_SIZE_MAX
-	int "Amount of memory dynamically allocated for loading SYSFW blob"
-	depends on K3_LOAD_SYSFW
-	default	280000
-	help
-	  Amount of memory (in bytes) reserved through dynamic allocation at
-	  runtime for loading the combined System Firmware and configuration image
-	  tree blob. Keep it as tight as possible, as this directly affects the
-	  overall SPL memory footprint.
-
-config K3_SYSFW_IMAGE_SPI_OFFS
-	hex "SPI offset of SYSFW firmware and configuration blob"
-	depends on K3_LOAD_SYSFW
-	default	0x6C0000
-	help
-	  Offset of the combined System Firmware and configuration image tree
-	  blob to be loaded when booting from a SPI flash memory.
-
-config SYS_K3_SPL_ATF
-	bool "Start Cortex-A from SPL"
-	depends on SPL && CPU_V7R
-	help
-	  Enabling this will try to start Cortex-A (typically with ATF)
-	  after SPL from R5.
+	  Unless you know what you're doing. Do not change this value.
 
 config K3_ATF_LOAD_ADDR
 	hex "Load address of ATF image"
+	default 0x80000000 if (SOC_K3_AM625 || SOC_K3_AM62A7 || SOC_K3_AM62P5 || SOC_K3_J722S || SOC_K3_AM62L3)
 	default 0x70000000
 	help
-	  The load address for the ATF image. This value defaults to 0x70000000
+	  The load address for the ATF image. This value is used to build the
+	  FIT image header that places ATF in memory where it will run.
+
+config K3_OPTEE_LOAD_ADDR
+	hex "Load address of OPTEE image"
+	default 0x80200000 if SOC_K3_AM62L3
+	default 0x9e800000
+	help
+	  The load address for the OPTEE image. This value defaults to 0x9e800000
 	  if not provided in the board defconfig file.
 
 config K3_DM_FW
 	bool "Separate DM firmware image"
-	depends on SPL && CPU_V7R && !SOC_K3_AM642 && !SOC_K3_AM654 && !CLK_TI_SCI && !TI_SCI_POWER_DOMAIN
+	depends on CPU_V7R && !SOC_K3_AM62L3 && !SOC_K3_AM642 && !SOC_K3_AM654 && !CLK_TI_SCI && !TI_SCI_POWER_DOMAIN
 	default y
 	help
 	  Enabling this will indicate that the system has separate DM
@@ -189,19 +181,45 @@ config K3_DM_FW
 	  bootloader, it makes RM and PM services not being available
 	  during R5 SPL execution time.
 
+config K3_IODDR
+	bool "Enable IO+DDR Low Power Mode support"
+	depends on SPL && (SOC_K3_AM62A7 || SOC_K3_AM62P5)
+	default n
+	help
+	  Enable support for IO+DDR Low Power Mode. If this is enabled and a
+	  resume from IO+DDR is detected, K3_R5F_LPM_META_DATA will be used to
+	  restore TIFS and resume DM.
+
 config K3_X509_SWRV
 	int "SWRV for X509 certificate used for boot images"
 	default 1
 	help
 	  SWRV for X509 certificate used for boot images
 
-source "board/ti/am65x/Kconfig"
-source "board/ti/am64x/Kconfig"
-source "board/ti/am62x/Kconfig"
-source "board/ti/am62ax/Kconfig"
-source "board/ti/am62px/Kconfig"
-source "board/ti/j721e/Kconfig"
-source "board/siemens/iot2050/Kconfig"
-source "board/ti/j721s2/Kconfig"
-source "board/ti/j784s4/Kconfig"
+config NR_DRAM_BANKS
+	default 2
+
+config K3_HSM_FW
+	bool "Load and Boot HSM core"
+	default n
+	help
+	  Enabling this will indicate that the system has a HSM (High Security
+	  Module) M4 Core and the firmware for the core is present. When
+	  enabled, HSM core will be booted at R5 SPL execution time.
+
+if CPU_V7R
+source "arch/arm/mach-k3/r5/Kconfig"
+endif
+
+source "arch/arm/mach-k3/am65x/Kconfig"
+source "arch/arm/mach-k3/am64x/Kconfig"
+source "arch/arm/mach-k3/am62x/Kconfig"
+source "arch/arm/mach-k3/am62ax/Kconfig"
+source "arch/arm/mach-k3/am62lx/Kconfig"
+source "arch/arm/mach-k3/am62px/Kconfig"
+source "arch/arm/mach-k3/j721e/Kconfig"
+source "arch/arm/mach-k3/j721s2/Kconfig"
+source "arch/arm/mach-k3/j722s/Kconfig"
+source "arch/arm/mach-k3/j784s4/Kconfig"
+
 endif

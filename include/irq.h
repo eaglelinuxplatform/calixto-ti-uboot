@@ -109,7 +109,7 @@ struct irq_ops {
 	 * xxx_xlate() call, or as the only step in implementing a client's
 	 * irq_request() call.
 	 *
-	 * @irq:	The irq struct to request; this has been fille in by
+	 * @irq:	The irq struct to request; this has been filled in by
 	 *		a previoux xxx_xlate() function call, or by the caller
 	 *		of irq_request().
 	 * @return 0 if OK, or a negative error code.
@@ -199,6 +199,20 @@ int irq_restore_polarities(struct udevice *dev);
  *	cleared), -ve on error
  */
 int irq_read_and_clear(struct irq *irq);
+
+/**
+ * irq_get_interrupt_parent() - returns the interrupt parent
+ *
+ * Walks the devicetree and returns the interrupt parent's ofnode
+ * for the specified device.
+ *
+ * @dev: device
+ * @interrupt_parent: The interrupt parent's ofnode'
+ * Return: 0 success, or error value
+ *
+ */
+int irq_get_interrupt_parent(const struct udevice *dev,
+			     struct udevice **interrupt_parent);
 
 struct phandle_2_arg;
 /**

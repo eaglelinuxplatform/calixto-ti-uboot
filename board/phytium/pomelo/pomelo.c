@@ -7,13 +7,13 @@
 
 #include <stdio.h>
 #include <command.h>
+#include <event.h>
 #include <init.h>
 #include <asm/armv8/mmu.h>
 #include <asm/io.h>
 #include <linux/arm-smccc.h>
 #include <scsi.h>
 #include <init.h>
-#include <asm/u-boot.h>
 #include "cpu.h"
 
 DECLARE_GLOBAL_DATA_PTR;
@@ -102,7 +102,7 @@ int __asm_flush_l3_dcache(void)
 	return 0;
 }
 
-int last_stage_init(void)
+static int last_stage_init(void)
 {
 	int ret;
 
@@ -116,3 +116,4 @@ int last_stage_init(void)
 	}
 	return ret;
 }
+EVENT_SPY_SIMPLE(EVT_LAST_STAGE_INIT, last_stage_init);

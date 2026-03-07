@@ -9,7 +9,6 @@
  */
 
 #include <clk.h>
-#include <common.h>
 #include <cpu_func.h>
 #include <dm.h>
 #include <generic-phy.h>
@@ -30,6 +29,7 @@
 #include <asm/arch/hardware.h>
 #include <asm/arch/sys_proto.h>
 #include <dm/device_compat.h>
+#include <linux/bitfield.h>
 #include <linux/bitops.h>
 #include <linux/err.h>
 #include <linux/errno.h>
@@ -67,11 +67,6 @@
 #define ZYNQ_GEM_NWCFG_FSREM		0x00020000 /* FCS removal */
 #define ZYNQ_GEM_NWCFG_SGMII_ENBL	0x08000000 /* SGMII Enable */
 #define ZYNQ_GEM_NWCFG_PCS_SEL		0x00000800 /* PCS select */
-#ifdef CONFIG_ARM64
-#define ZYNQ_GEM_NWCFG_MDCCLKDIV	0x00100000 /* Div pclk by 64, max 160MHz */
-#else
-#define ZYNQ_GEM_NWCFG_MDCCLKDIV	0x000c0000 /* Div pclk by 48, max 120MHz */
-#endif
 
 #ifdef CONFIG_ARM64
 # define ZYNQ_GEM_DBUS_WIDTH	(1 << 21) /* 64 bit bus */
@@ -81,8 +76,7 @@
 
 #define ZYNQ_GEM_NWCFG_INIT		(ZYNQ_GEM_DBUS_WIDTH | \
 					ZYNQ_GEM_NWCFG_FDEN | \
-					ZYNQ_GEM_NWCFG_FSREM | \
-					ZYNQ_GEM_NWCFG_MDCCLKDIV)
+					ZYNQ_GEM_NWCFG_FSREM)
 
 #define ZYNQ_GEM_NWSR_MDIOIDLE_MASK	0x00000004 /* PHY management idle */
 
@@ -140,6 +134,18 @@
 #define ZYNQ_GEM_FREQUENCY_1000	125000000UL
 
 #define RXCLK_EN		BIT(0)
+
+/* GEM specific constants for CLK. */
+#define GEM_CLK_DIV8		0
+#define GEM_CLK_DIV16		1
+#define GEM_CLK_DIV32		2
+#define GEM_CLK_DIV48		3
+#define GEM_CLK_DIV64		4
+#define GEM_CLK_DIV96		5
+#define GEM_CLK_DIV128		6
+#define GEM_CLK_DIV224		7
+
+#define GEM_MDC_SET(val)	FIELD_PREP(GENMASK(20, 18), val)
 
 /* Device registers */
 struct zynq_gem_regs {
@@ -220,8 +226,8 @@ struct zynq_gem_priv {
 	struct mii_dev *bus;
 	struct clk rx_clk;
 	struct clk tx_clk;
+	struct clk pclk;
 	u32 max_speed;
-	bool int_pcs;
 	bool dma_64bit;
 	u32 clk_en_info;
 	struct reset_ctl_bulk resets;
@@ -313,17 +319,48 @@ static int zynq_gem_setup_mac(struct udevice *dev)
 	return 0;
 }
 
+static u32 gem_mdc_clk_div(struct zynq_gem_priv *priv)
+{
+	u32 config;
+	unsigned long pclk_hz;
+
+	pclk_hz = clk_get_rate(&priv->pclk);
+	if (pclk_hz <= 20000000)
+		config = GEM_MDC_SET(GEM_CLK_DIV8);
+	else if (pclk_hz <= 40000000)
+		config = GEM_MDC_SET(GEM_CLK_DIV16);
+	else if (pclk_hz <= 80000000)
+		config = GEM_MDC_SET(GEM_CLK_DIV32);
+	else if (pclk_hz <= 120000000)
+		config = GEM_MDC_SET(GEM_CLK_DIV48);
+	else if (pclk_hz <= 160000000)
+		config = GEM_MDC_SET(GEM_CLK_DIV64);
+	else if (pclk_hz <= 240000000)
+		config = GEM_MDC_SET(GEM_CLK_DIV96);
+	else if (pclk_hz <= 320000000)
+		config = GEM_MDC_SET(GEM_CLK_DIV128);
+	else
+		config = GEM_MDC_SET(GEM_CLK_DIV224);
+
+	return config;
+}
+
 static int zynq_phy_init(struct udevice *dev)
 {
-	int ret;
+	int ret, val;
 	struct zynq_gem_priv *priv = dev_get_priv(dev);
 	struct zynq_gem_regs *regs_mdio = priv->mdiobase;
+	struct zynq_gem_regs *regs = priv->iobase;
 	const u32 supported = SUPPORTED_10baseT_Half |
 			SUPPORTED_10baseT_Full |
 			SUPPORTED_100baseT_Half |
 			SUPPORTED_100baseT_Full |
 			SUPPORTED_1000baseT_Half |
 			SUPPORTED_1000baseT_Full;
+
+	val = gem_mdc_clk_div(priv);
+	if (val)
+		writel(val, &regs->nwcfg);
 
 	/* Enable only MDIO bus */
 	writel(ZYNQ_GEM_NWCTRL_MDEN_MASK, &regs_mdio->nwctrl);
@@ -354,7 +391,7 @@ static int zynq_phy_init(struct udevice *dev)
 
 static int zynq_gem_init(struct udevice *dev)
 {
-	u32 i, nwconfig;
+	u32 i, nwconfig, nwcfg;
 	int ret;
 	unsigned long clk_rate = 0;
 	struct zynq_gem_priv *priv = dev_get_priv(dev);
@@ -466,31 +503,31 @@ static int zynq_gem_init(struct udevice *dev)
 	 * Set SGMII enable PCS selection only if internal PCS/PMA
 	 * core is used and interface is SGMII.
 	 */
-	if (priv->interface == PHY_INTERFACE_MODE_SGMII &&
-	    priv->int_pcs) {
+	if (priv->interface == PHY_INTERFACE_MODE_SGMII) {
 		nwconfig |= ZYNQ_GEM_NWCFG_SGMII_ENBL |
 			    ZYNQ_GEM_NWCFG_PCS_SEL;
 	}
 
 	switch (priv->phydev->speed) {
 	case SPEED_1000:
-		writel(nwconfig | ZYNQ_GEM_NWCFG_SPEED1000,
-		       &regs->nwcfg);
+		nwconfig |= ZYNQ_GEM_NWCFG_SPEED1000;
 		clk_rate = ZYNQ_GEM_FREQUENCY_1000;
 		break;
 	case SPEED_100:
-		writel(nwconfig | ZYNQ_GEM_NWCFG_SPEED100,
-		       &regs->nwcfg);
+		nwconfig |= ZYNQ_GEM_NWCFG_SPEED100;
 		clk_rate = ZYNQ_GEM_FREQUENCY_100;
 		break;
 	case SPEED_10:
 		clk_rate = ZYNQ_GEM_FREQUENCY_10;
 		break;
 	}
+	nwcfg = readl(&regs->nwcfg);
+	nwcfg |= nwconfig;
+	if (nwcfg)
+		writel(nwcfg, &regs->nwcfg);
 
 #ifdef CONFIG_ARM64
-	if (priv->interface == PHY_INTERFACE_MODE_SGMII &&
-	    priv->int_pcs) {
+	if (priv->interface == PHY_INTERFACE_MODE_SGMII) {
 		/*
 		 * Disable AN for fixed link configuration, enable otherwise.
 		 * Must be written after PCS_SEL is set in nwconfig,
@@ -738,7 +775,7 @@ static int gem_zynqmp_set_dynamic_config(struct udevice *dev)
 	u32 pm_info[2];
 	int ret;
 
-	if (IS_ENABLED(CONFIG_ARCH_ZYNQMP)) {
+	if (IS_ENABLED(CONFIG_ARCH_ZYNQMP) && IS_ENABLED(CONFIG_ZYNQMP_FIRMWARE)) {
 		if (!zynqmp_pm_is_function_supported(PM_IOCTL,
 						     IOCTL_SET_GEM_CONFIG)) {
 			ret = ofnode_read_u32_array(dev_ofnode(dev),
@@ -828,6 +865,12 @@ static int zynq_gem_probe(struct udevice *dev)
 		}
 	}
 
+	ret = clk_get_by_name(dev, "pclk", &priv->pclk);
+	if (ret < 0) {
+		dev_err(dev, "failed to get pclk clock\n");
+		goto err2;
+	}
+
 	if (IS_ENABLED(CONFIG_DM_ETH_PHY))
 		priv->bus = eth_phy_get_mdio_bus(dev);
 
@@ -849,7 +892,8 @@ static int zynq_gem_probe(struct udevice *dev)
 	if (ret)
 		goto err3;
 
-	if (priv->interface == PHY_INTERFACE_MODE_SGMII && phy.dev) {
+	if (priv->interface == PHY_INTERFACE_MODE_SGMII &&
+	    generic_phy_valid(&phy)) {
 		if (IS_ENABLED(CONFIG_DM_ETH_PHY)) {
 			if (device_is_compatible(dev, "cdns,zynqmp-gem") ||
 			    device_is_compatible(dev, "xlnx,zynqmp-gem")) {
@@ -944,8 +988,6 @@ static int zynq_gem_of_to_plat(struct udevice *dev)
 	if (pdata->phy_interface == PHY_INTERFACE_MODE_NA)
 		return -EINVAL;
 	priv->interface = pdata->phy_interface;
-
-	priv->int_pcs = dev_read_bool(dev, "is-internal-pcspma");
 
 	priv->clk_en_info = dev_get_driver_data(dev);
 

@@ -3,11 +3,10 @@
  * Texas Instruments System Control Interface Protocol Driver
  * Based on drivers/firmware/ti_sci.c from Linux.
  *
- * Copyright (C) 2018 Texas Instruments Incorporated - http://www.ti.com/
+ * Copyright (C) 2018 Texas Instruments Incorporated - https://www.ti.com/
  *	Lokesh Vutla <lokeshvutla@ti.com>
  */
 
-#include <common.h>
 #include <dm.h>
 #include <errno.h>
 #include <log.h>
@@ -16,6 +15,7 @@
 #include <dm/device.h>
 #include <dm/device_compat.h>
 #include <dm/devres.h>
+#include <dm/lists.h>
 #include <linux/bitops.h>
 #include <linux/compat.h>
 #include <linux/err.h>
@@ -139,7 +139,6 @@ static struct ti_sci_xfer *ti_sci_setup_one_xfer(struct ti_sci_info *info,
 		return ERR_PTR(-ERANGE);
 	}
 
-
 	info->seq = ~info->seq;
 	xfer->tx_message.buf = buf;
 	xfer->tx_message.len = tx_message_size;
@@ -236,21 +235,27 @@ static int ti_sci_do_xfer(struct ti_sci_info *info,
 {
 	struct k3_sec_proxy_msg *msg = &xfer->tx_message;
 	u8 secure_buf[info->desc->max_msg_size];
-	struct ti_sci_secure_msg_hdr secure_hdr;
+	struct ti_sci_secure_msg_hdr *secure_hdr = (struct ti_sci_secure_msg_hdr *)secure_buf;
 	int ret;
 
+	/*
+	 * The reason why we need the is_secure code is because of boot R5.
+	 * boot R5 starts off in "secure mode" when it hands off from Boot
+	 * ROM over to the Secondary bootloader. The initial set of calls
+	 * we have to make need to be on a secure pipe.
+	 */
 	if (info->is_secure) {
 		/* ToDo: get checksum of the entire message */
-		secure_hdr.checksum = 0;
-		secure_hdr.reserved = 0;
-		memcpy(&secure_buf[sizeof(secure_hdr)], xfer->tx_message.buf,
+		secure_hdr->checksum = 0;
+		secure_hdr->reserved = 0;
+		memcpy(&secure_buf[sizeof(*secure_hdr)], xfer->tx_message.buf,
 		       xfer->tx_message.len);
 
 		xfer->tx_message.buf = (u32 *)secure_buf;
-		xfer->tx_message.len += sizeof(secure_hdr);
+		xfer->tx_message.len += sizeof(*secure_hdr);
 
 		if (xfer->rx_len)
-			xfer->rx_len += sizeof(secure_hdr);
+			xfer->rx_len += sizeof(*secure_hdr);
 	}
 
 	/* Send the message */
@@ -265,12 +270,107 @@ static int ti_sci_do_xfer(struct ti_sci_info *info,
 	if (xfer->rx_len) {
 		ret = ti_sci_get_response(info, xfer, &info->chan_rx);
 		if (!ti_sci_is_response_ack(xfer->tx_message.buf)) {
-			dev_err(info->dev, "Message not acknowledged");
+			dev_err(info->dev, "Message not acknowledged\n");
 			ret = -ENODEV;
 		}
 	}
 
 	return ret;
+}
+
+/**
+ * ti_sci_cmd_query_dm_cap() - Command to query DM firmware's capabilities
+ * @handle:	Pointer to TI SCI handle
+ * @fw_caps:	Pointer to firmware capabilities
+ *
+ * Return: 0 if all went fine, else return appropriate error.
+ */
+static int ti_sci_cmd_query_dm_cap(struct ti_sci_handle *handle, u64 *fw_caps)
+{
+	struct ti_sci_query_fw_caps_resp *cap_info;
+	struct ti_sci_msg_hdr hdr;
+	struct ti_sci_info *info;
+	struct ti_sci_xfer *xfer;
+	int ret;
+
+	if (IS_ERR(handle))
+		return PTR_ERR(handle);
+	if (!handle)
+		return -EINVAL;
+
+	info = handle_to_ti_sci_info(handle);
+
+	xfer = ti_sci_setup_one_xfer(info, TI_SCI_MSG_QUERY_FW_CAPS,
+				     TI_SCI_FLAG_REQ_ACK_ON_PROCESSED,
+				     (u32 *)&hdr, sizeof(struct ti_sci_msg_hdr),
+				     sizeof(*cap_info));
+	if (IS_ERR(xfer)) {
+		ret = PTR_ERR(xfer);
+		return ret;
+	}
+
+	ret = ti_sci_do_xfer(info, xfer);
+	if (ret)
+		return ret;
+
+	cap_info = (struct ti_sci_query_fw_caps_resp *)xfer->tx_message.buf;
+
+	*fw_caps = cap_info->fw_caps;
+
+	return 0;
+}
+
+/**
+ * ti_sci_cmd_get_dm_version() - command to get the DM version of the SCI
+ *				 entity
+ * @handle:	Pointer to TI SCI handle
+ * @dm_info:	Pointer to DM version information structure
+ *
+ * Return: 0 if all went fine, else return appropriate error.
+ */
+
+static int ti_sci_cmd_get_dm_version(struct ti_sci_handle *handle,
+				     struct ti_sci_dm_version_info *dm_info)
+{
+	struct ti_sci_msg_dm_resp_version *ver_info;
+	struct ti_sci_msg_hdr hdr;
+	struct ti_sci_info *info;
+	struct ti_sci_xfer *xfer;
+	int ret;
+
+	if (IS_ERR(handle))
+		return PTR_ERR(handle);
+	if (!handle || !dm_info)
+		return -EINVAL;
+
+	info = handle_to_ti_sci_info(handle);
+
+	xfer = ti_sci_setup_one_xfer(info, TI_SCI_MSG_DM_VERSION,
+				     TI_SCI_FLAG_REQ_ACK_ON_PROCESSED,
+				     (u32 *)&hdr, sizeof(struct ti_sci_msg_hdr),
+				     sizeof(*ver_info));
+	if (IS_ERR(xfer)) {
+		ret = PTR_ERR(xfer);
+		return ret;
+	}
+
+	ret = ti_sci_do_xfer(info, xfer);
+	if (ret)
+		return ret;
+
+	ver_info = (struct ti_sci_msg_dm_resp_version *)xfer->tx_message.buf;
+
+	dm_info->abi_major = ver_info->abi_major;
+	dm_info->abi_minor = ver_info->abi_minor;
+	dm_info->dm_ver = ver_info->version;
+	dm_info->patch_ver = ver_info->patch_version;
+	dm_info->sub_ver = ver_info->sub_version;
+	strlcpy(dm_info->sci_server_version, ver_info->sci_server_version,
+		sizeof(ver_info->sci_server_version));
+	strlcpy(dm_info->rm_pm_hal_version, ver_info->rm_pm_hal_version,
+		sizeof(ver_info->rm_pm_hal_version));
+
+	return 0;
 }
 
 /**
@@ -691,20 +791,25 @@ static int ti_sci_cmd_put_device(const struct ti_sci_handle *handle, u32 id)
 				       MSG_DEVICE_SW_STATE_AUTO_OFF);
 }
 
-static
-int ti_sci_cmd_release_exclusive_devices(const struct ti_sci_handle *handle)
+static int ti_sci_cmd_release_exclusive_devices(void)
 {
 	struct ti_sci_exclusive_dev *dev, *tmp;
 	struct ti_sci_info *info;
 	int i, cnt;
 
-	info = handle_to_ti_sci_info(handle);
-
-	list_for_each_entry_safe(dev, tmp, &info->dev_list, list) {
-		cnt = dev->count;
-		debug("%s: id = %d, cnt = %d\n", __func__, dev->id, cnt);
-		for (i = 0; i < cnt; i++)
-			ti_sci_cmd_put_device(handle, dev->id);
+	/*
+	 * Scan all ti_sci_list registrations, since with FIT images, we could
+	 * have started with one device tree registration and switched over
+	 * to a final version. This prevents exclusive devices identified
+	 * during the first probe to be left orphan.
+	 */
+	list_for_each_entry(info, &ti_sci_list, list) {
+		list_for_each_entry_safe(dev, tmp, &info->dev_list, list) {
+			cnt = dev->count;
+			debug("%s: id = %d, cnt = %d\n", __func__, dev->id, cnt);
+			for (i = 0; i < cnt; i++)
+				ti_sci_cmd_put_device(&info->handle, dev->id);
+		}
 	}
 
 	return 0;
@@ -2603,6 +2708,41 @@ static int ti_sci_cmd_change_fwl_owner(const struct ti_sci_handle *handle,
 	return ret;
 }
 
+static int ti_sci_cmd_restore_context(const struct ti_sci_handle *handle, u64 ctx_addr)
+{
+	struct ti_sci_msg_min_restore_context_req req;
+	struct ti_sci_msg_hdr *resp;
+	struct ti_sci_info *info;
+	struct ti_sci_xfer *xfer;
+	int ret = 0;
+
+	if (IS_ERR(handle))
+		return PTR_ERR(handle);
+	if (!handle)
+		return -EINVAL;
+
+	info = handle_to_ti_sci_info(handle);
+
+	xfer = ti_sci_setup_one_xfer(info, TI_SCI_MSG_MIN_CONTEXT_RESTORE,
+				     TI_SCI_FLAG_REQ_ACK_ON_PROCESSED,
+				     (u32 *)&req, sizeof(req), sizeof(*resp));
+	if (IS_ERR(xfer)) {
+		ret = PTR_ERR(xfer);
+		return ret;
+	}
+
+	req.ctx_lo = (u32)(ctx_addr & 0xffffffff);
+	req.ctx_hi = (u32)(ctx_addr >> 32);
+
+	ret = ti_sci_do_xfer(info, xfer);
+	if (ret) {
+		dev_err(info->dev, "Failed restoring context %d\n", ret);
+		return ret;
+	}
+
+	return ret;
+}
+
 /*
  * ti_sci_setup_ops() - Setup the operations structures
  * @info:	pointer to TISCI pointer
@@ -2614,12 +2754,14 @@ static void ti_sci_setup_ops(struct ti_sci_info *info)
 	struct ti_sci_dev_ops *dops = &ops->dev_ops;
 	struct ti_sci_clk_ops *cops = &ops->clk_ops;
 	struct ti_sci_core_ops *core_ops = &ops->core_ops;
+	struct ti_sci_firmware_ops *fw_ops = &ops->fw_ops;
 	struct ti_sci_rm_core_ops *rm_core_ops = &ops->rm_core_ops;
 	struct ti_sci_proc_ops *pops = &ops->proc_ops;
 	struct ti_sci_rm_ringacc_ops *rops = &ops->rm_ring_ops;
 	struct ti_sci_rm_psil_ops *psilops = &ops->rm_psil_ops;
 	struct ti_sci_rm_udmap_ops *udmap_ops = &ops->rm_udmap_ops;
 	struct ti_sci_fwl_ops *fwl_ops = &ops->fwl_ops;
+	struct ti_sci_lpm_ops *lpm_ops = &ops->lpm_ops;
 
 	bops->board_config = ti_sci_cmd_set_board_config;
 	bops->board_config_rm = ti_sci_cmd_set_board_config_rm;
@@ -2684,6 +2826,11 @@ static void ti_sci_setup_ops(struct ti_sci_info *info)
 	fwl_ops->set_fwl_region = ti_sci_cmd_set_fwl_region;
 	fwl_ops->get_fwl_region = ti_sci_cmd_get_fwl_region;
 	fwl_ops->change_fwl_owner = ti_sci_cmd_change_fwl_owner;
+
+	lpm_ops->restore_context = ti_sci_cmd_restore_context;
+
+	fw_ops->get_dm_version = ti_sci_cmd_get_dm_version;
+	fw_ops->query_dm_cap = ti_sci_cmd_query_dm_cap;
 }
 
 /**
@@ -2696,6 +2843,8 @@ static void ti_sci_setup_ops(struct ti_sci_info *info)
 const
 struct ti_sci_handle *ti_sci_get_handle_from_sysfw(struct udevice *sci_dev)
 {
+	int ret;
+
 	if (!sci_dev)
 		return ERR_PTR(-EINVAL);
 
@@ -2707,6 +2856,11 @@ struct ti_sci_handle *ti_sci_get_handle_from_sysfw(struct udevice *sci_dev)
 	struct ti_sci_handle *handle = &info->handle;
 
 	if (!handle)
+		return ERR_PTR(-EINVAL);
+
+	ret = ti_sci_cmd_get_revision(handle);
+
+	if (ret)
 		return ERR_PTR(-EINVAL);
 
 	return handle;
@@ -2828,14 +2982,18 @@ static int ti_sci_probe(struct udevice *dev)
 	info->dev = dev;
 	info->seq = 0xA;
 
+	INIT_LIST_HEAD(&info->dev_list);
+
 	list_add_tail(&info->list, &ti_sci_list);
 	ti_sci_setup_ops(info);
 
-	ret = ti_sci_cmd_get_revision(&info->handle);
+	if (IS_ENABLED(CONFIG_SYSRESET_TI_SCI)) {
+		ret = device_bind_driver(dev, "ti-sci-sysreset", "sysreset", NULL);
+		if (ret)
+			dev_warn(dev, "cannot bind SYSRESET (ret = %d)\n", ret);
+	}
 
-	INIT_LIST_HEAD(&info->dev_list);
-
-	return ret;
+	return 0;
 }
 
 /**
@@ -2867,6 +3025,8 @@ static __maybe_unused int ti_sci_dm_probe(struct udevice *dev)
 
 	info->dev = dev;
 	info->seq = 0xA;
+
+	INIT_LIST_HEAD(&info->dev_list);
 
 	list_add_tail(&info->list, &ti_sci_list);
 
@@ -3061,6 +3221,7 @@ U_BOOT_DRIVER(ti_sci) = {
 	.of_match = ti_sci_ids,
 	.probe = ti_sci_probe,
 	.priv_auto	= sizeof(struct ti_sci_info),
+	.flags = DM_FLAG_PRE_RELOC,
 };
 
 #if IS_ENABLED(CONFIG_K3_DM_FW)

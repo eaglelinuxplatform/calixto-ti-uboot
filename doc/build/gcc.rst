@@ -60,8 +60,14 @@ For building U-Boot on Alpine Linux at least the following packages are needed:
 
 .. code-block:: bash
 
-    apk add alpine-sdk bc bison dtc flex linux-headers ncurses-dev \
-      openssl-dev perl python3 py3-setuptools python3-dev sdl2-dev
+    apk add alpine-sdk bc bison dtc flex gnutls-dev linux-headers ncurses-dev \
+      openssl-dev py3-elftools py3-setuptools python3-dev swig util-linux-dev
+
+Depending on the build target further packages may be needed:
+
+* sandbox with lcd: sdl2-dev
+* riscv64 S-mode targets: opensbi
+* some arm64 targets: arm-trusted-firmware
 
 Prerequisites
 -------------
@@ -111,6 +117,34 @@ Assuming cross compiling on Debian for ARMv8 this would be
 .. code-block:: bash
 
     CROSS_COMPILE=aarch64-linux-gnu- make
+
+Out-of-tree building
+~~~~~~~~~~~~~~~~~~~~
+
+By default building is performed locally and the objects are saved in the source
+directory. To build out-out-tree use one of the two methods below:
+
+Add O= parameter to the make command line:
+
+.. code-block:: bash
+
+    make O=/tmp/build distclean
+    make O=/tmp/build NAME_defconfig
+    make O=/tmp/build
+
+Use environment variable KBUILD_OUTPUT:
+
+.. code-block:: bash
+
+    export KBUILD_OUTPUT=/tmp/build
+    make distclean
+    make NAME_defconfig
+    make
+
+.. note::
+
+    The command line "O=" parameter overrides the KBUILD_OUTPUT environment
+    variable.
 
 Build parameters
 ~~~~~~~~~~~~~~~~

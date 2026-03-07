@@ -5,7 +5,6 @@
  * Copyright (C) 2018 Xilinx, Inc.
  */
 
-#include <common.h>
 #include <dm.h>
 #include <log.h>
 #include <phy.h>
@@ -48,7 +47,14 @@ static int xilinxgmiitorgmii_config(struct phy_device *phydev)
 		return -EINVAL;
 	}
 
-	ext_phydev->interface = PHY_INTERFACE_MODE_RGMII;
+	ext_phydev->interface = ofnode_read_phy_mode(node);
+	if (ext_phydev->interface == PHY_INTERFACE_MODE_NA) {
+		ext_phydev->interface = PHY_INTERFACE_MODE_RGMII;
+	} else if (!phy_interface_is_rgmii(ext_phydev)) {
+		printf("Incorrect external interface type\n");
+		return -EINVAL;
+	}
+
 	ext_phydev->node = phandle.node;
 	phydev->priv = ext_phydev;
 
@@ -124,7 +130,7 @@ static int xilinxgmiitorgmii_probe(struct phy_device *phydev)
 	return 0;
 }
 
-static struct phy_driver gmii2rgmii_driver = {
+U_BOOT_PHY_DRIVER(gmii2rgmii) = {
 	.name = "XILINX GMII2RGMII",
 	.uid = PHY_GMII2RGMII_ID,
 	.mask = 0xffffffff,
@@ -135,10 +141,3 @@ static struct phy_driver gmii2rgmii_driver = {
 	.writeext = xilinxgmiitorgmii_extwrite,
 	.readext = xilinxgmiitorgmii_extread,
 };
-
-int phy_xilinx_gmii2rgmii_init(void)
-{
-	phy_register(&gmii2rgmii_driver);
-
-	return 0;
-}

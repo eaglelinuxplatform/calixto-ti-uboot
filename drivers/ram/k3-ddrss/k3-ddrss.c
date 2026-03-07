@@ -2,11 +2,11 @@
 /*
  * Texas Instruments' K3 DDRSS driver
  *
- * Copyright (C) 2020-2021 Texas Instruments Incorporated - http://www.ti.com/
+ * Copyright (C) 2020-2021 Texas Instruments Incorporated - https://www.ti.com/
  */
 
-#include <common.h>
 #include <config.h>
+#include <time.h>
 #include <clk.h>
 #include <div64.h>
 #include <dm.h>
@@ -17,6 +17,8 @@
 #include <log.h>
 #include <asm/io.h>
 #include <power-domain.h>
+#include <regmap.h>
+#include <syscon.h>
 #include <wait_bit.h>
 #include <power/regulator.h>
 
@@ -33,6 +35,12 @@
 #define DDRSS_V2A_CTL_REG			0x0020
 #define DDRSS_ECC_CTRL_REG			0x0120
 
+#define DDRSS_V2A_CTL_REG_SDRAM_IDX_CALC(x)	((ilog2(x) - 16) << 5)
+#define DDRSS_V2A_CTL_REG_SDRAM_IDX_MASK	(~(0x1F << 0x5))
+#define DDRSS_V2A_CTL_REG_REGION_IDX_MASK	(~(0X1F))
+#define DDRSS_V2A_CTL_REG_REGION_IDX_DEFAULT	0xF
+
+#define DDRSS_ECC_CTRL_REG_DEFAULT		0x0
 #define DDRSS_ECC_CTRL_REG_ECC_EN		BIT(0)
 #define DDRSS_ECC_CTRL_REG_RMW_EN		BIT(1)
 #define DDRSS_ECC_CTRL_REG_ECC_CK		BIT(2)
@@ -45,9 +53,34 @@
 #define DDRSS_ECC_R2_STR_ADDR_REG		0x0140
 #define DDRSS_ECC_R2_END_ADDR_REG		0x0144
 #define DDRSS_ECC_1B_ERR_CNT_REG		0x0150
+#define DDRSS_V2A_INT_SET_REG			0x00a8
+
+#define DDRSS_V2A_INT_SET_REG_ECC1BERR_EN	BIT(3)
+#define DDRSS_V2A_INT_SET_REG_ECC2BERR_EN	BIT(4)
+#define DDRSS_V2A_INT_SET_REG_ECCM1BERR_EN	BIT(5)
+
+#define K3_WKUP_CTRL_MMR0_DDR16SS_PMCTRL			0x0
+#define K3_WKUP_CTRL_MMR0_DDR16SS_PMCTRL_DATA_RET_LD		BIT(31)
+#define K3_WKUP_CTRL_MMR0_DDR16SS_PMCTRL_DATA_RETENTION_MASK	GENMASK(3, 0)
+
+#define K3_WKUP_CTRL_MMR_CANUART_WAKE_CTRL			0x0
+#define K3_WKUP_CTRL_MMR_CANUART_WAKE_CTRL_MW_LD	BIT(0)
+#define K3_WKUP_CTRL_MMR_CANUART_WAKE_CTRL_MW		0x55555554
+#define K3_WKUP_CTRL_MMR_CANUART_WAKE_CTRL_MW_MASK	GENMASK(31, 1)
+
+#define K3_WKUP_CTRL_MMR_CANUART_WAKE_STAT1					0x0c
+#define K3_WKUP_CTRL_MMR_CANUART_WAKE_STAT1_CANUART_IO_MODE	BIT(0)
+
+#define K3_WKUP_CTRL_MMR_CANUART_WAKE_OFF_MODE			0x10
+#define K3_WKUP_CTRL_MMR_CANUART_WAKE_OFF_MODE_MW		0xDD555555
+#define K3_WKUP_CTRL_MMR_CANUART_WAKE_OFF_MODE_MW_MASK	GENMASK(31, 0)
+
+#define K3_WKUP_CTRL_MMR_CANUART_WAKE_OFF_MODE_STAT		0x18
+#define K3_WKUP_CTRL_MMR_CANUART_WAKE_OFF_MODE_STAT_MW		0x555555
 
 #define SINGLE_DDR_SUBSYSTEM	0x1
 #define MULTI_DDR_SUBSYSTEM	0x2
+#define MAX_MULTI_DDR 4
 
 #define MULTI_DDR_CFG0  0x00114100
 #define MULTI_DDR_CFG1  0x00114104
@@ -69,6 +102,24 @@ enum intrlv_gran {
 	GRAN_6GB,
 	GRAN_8GB,
 	GRAN_16GB
+};
+
+u64 gran_bytes[] = {
+	0x80,
+	0x200,
+	0x800,
+	0x1000,
+	0x4000,
+	0x8000,
+	0x80000,
+	0x40000000,
+	0x60000000,
+	0x80000000,
+	0xC0000000,
+	0x100000000,
+	0x180000000,
+	0x200000000,
+	0x400000000
 };
 
 enum intrlv_size {
@@ -110,19 +161,21 @@ enum emif_active {
 	EMIF_ALL
 };
 
+#define K3_DDRSS_MAX_ECC_REGIONS		3
+
+struct k3_ddrss_ecc_region {
+	u64 start;
+	u64 range;
+};
+
 struct k3_msmc {
 	enum intrlv_gran gran;
 	enum intrlv_size size;
 	enum ecc_enable enable;
 	enum emif_config config;
 	enum emif_active active;
-};
-
-#define K3_DDRSS_MAX_ECC_REGIONS		3
-
-struct k3_ddrss_ecc_region {
-	u32 start;
-	u32 range;
+	u32 num_ddr;
+	struct k3_ddrss_ecc_region R0[MAX_MULTI_DDR];
 };
 
 struct k3_ddrss_desc {
@@ -144,9 +197,18 @@ struct k3_ddrss_desc {
 	lpddr4_obj *driverdt;
 	lpddr4_config config;
 	lpddr4_privatedata pd;
+	struct k3_ddrss_ecc_region ecc_range;
 	struct k3_ddrss_ecc_region ecc_regions[K3_DDRSS_MAX_ECC_REGIONS];
 	u64 ecc_reserved_space;
+	u64 ddr_bank_base[CONFIG_NR_DRAM_BANKS];
+	u64 ddr_bank_size[CONFIG_NR_DRAM_BANKS];
+	u64 ddr_ram_size;
 	bool ti_ecc_enabled;
+
+#if IS_ENABLED(CONFIG_REGMAP)
+	struct regmap *canuart_wake;
+	struct regmap *ddr_pmctrl;
+#endif
 };
 
 struct reginitdata {
@@ -175,6 +237,32 @@ struct reginitdata {
 
 #define DENALI_CTL_0_DRAM_CLASS_DDR4		0xA
 #define DENALI_CTL_0_DRAM_CLASS_LPDDR4		0xB
+
+#define K3_DDRSS_CFG_DENALI_CTL_20				0x0050
+#define K3_DDRSS_CFG_DENALI_CTL_20_PHY_INDEP_TRAIN_MODE		BIT(24)
+#define K3_DDRSS_CFG_DENALI_CTL_21				0x0054
+#define K3_DDRSS_CFG_DENALI_CTL_21_PHY_INDEP_INIT_MODE		BIT(8)
+#define K3_DDRSS_CFG_DENALI_CTL_106				0x01a8
+#define K3_DDRSS_CFG_DENALI_CTL_106_PWRUP_SREFRESH_EXIT		BIT(16)
+#define K3_DDRSS_CFG_DENALI_CTL_160				0x0280
+#define K3_DDRSS_CFG_DENALI_CTL_160_LP_CMD_MASK			GENMASK(14, 8)
+#define K3_DDRSS_CFG_DENALI_CTL_160_LP_CMD_ENTRY		BIT(9)
+#define K3_DDRSS_CFG_DENALI_CTL_169				0x02a4
+#define K3_DDRSS_CFG_DENALI_CTL_169_LP_AUTO_EXIT_EN_MASK	GENMASK(27, 24)
+#define K3_DDRSS_CFG_DENALI_CTL_169_LP_AUTO_ENTRY_EN_MASK	GENMASK(19, 16)
+#define K3_DDRSS_CFG_DENALI_CTL_169_LP_STATE_MASK		GENMASK(14, 8)
+#define K3_DDRSS_CFG_DENALI_CTL_169_LP_STATE_SHIFT		8
+#define K3_DDRSS_CFG_DENALI_CTL_345				0x0564
+#define K3_DDRSS_CFG_DENALI_CTL_345_INT_STATUS_LOWPOWER_SHIFT	16
+#define K3_DDRSS_CFG_DENALI_CTL_353				0x0584
+#define K3_DDRSS_CFG_DENALI_CTL_353_INT_ACK_LOWPOWER_SHIFT	16
+#define K3_DDRSS_CFG_DENALI_PI_6				0x2018
+#define K3_DDRSS_CFG_DENALI_PI_6_PI_DFI_PHYMSTR_STATE_SEL_R	BIT(8)
+#define K3_DDRSS_CFG_DENALI_PI_146				0x2248
+#define K3_DDRSS_CFG_DENALI_PI_150				0x2258
+#define K3_DDRSS_CFG_DENALI_PI_150_PI_DRAM_INIT_EN		BIT(8)
+#define K3_DDRSS_CFG_DENALI_PHY_1820				0x5C70
+#define K3_DDRSS_CFG_DENALI_PHY_1820_SET_DFI_INPUT_2_SHIFT	16
 
 #define TH_OFFSET_FROM_REG(REG, SHIFT, offset) do {\
 	char *i, *pstr = xstr(REG); offset = 0;\
@@ -331,32 +419,29 @@ static int k3_ddrss_ofdata_to_priv(struct udevice *dev)
 {
 	struct k3_ddrss_desc *ddrss = dev_get_priv(dev);
 	struct k3_ddrss_data *ddrss_data = (struct k3_ddrss_data *)dev_get_driver_data(dev);
-	phys_addr_t reg;
+	void *reg;
 	int ret;
 
 	debug("%s(dev=%p)\n", __func__, dev);
 
-	reg = dev_read_addr_name(dev, "cfg");
-	if (reg == FDT_ADDR_T_NONE) {
+	reg = dev_read_addr_name_ptr(dev, "cfg");
+	if (!reg) {
 		dev_err(dev, "No reg property for DDRSS wrapper logic\n");
 		return -EINVAL;
 	}
-	ddrss->ddrss_ctl_cfg = (void *)reg;
+	ddrss->ddrss_ctl_cfg = reg;
 
-	reg = dev_read_addr_name(dev, "ctrl_mmr_lp4");
-	if (reg == FDT_ADDR_T_NONE) {
+	reg = dev_read_addr_name_ptr(dev, "ctrl_mmr_lp4");
+	if (!reg) {
 		dev_err(dev, "No reg property for CTRL MMR\n");
 		return -EINVAL;
 	}
-	ddrss->ddrss_ctrl_mmr = (void *)reg;
+	ddrss->ddrss_ctrl_mmr = reg;
 
-	reg = dev_read_addr_name(dev, "ss_cfg");
-	if (reg == FDT_ADDR_T_NONE) {
+	reg = dev_read_addr_name_ptr(dev, "ss_cfg");
+	if (!reg)
 		dev_dbg(dev, "No reg property for SS Config region, but this is optional so continuing.\n");
-		ddrss->ddrss_ss_cfg = NULL;
-	} else {
-		ddrss->ddrss_ss_cfg = (void *)reg;
-	}
+	ddrss->ddrss_ss_cfg = reg;
 
 	ret = power_domain_get_by_index(dev, &ddrss->ddrcfg_pwrdmn, 0);
 	if (ret) {
@@ -408,7 +493,25 @@ static int k3_ddrss_ofdata_to_priv(struct udevice *dev)
 	if (ret)
 		dev_err(dev, "ddr fhs cnt not populated %d\n", ret);
 
+
+
 	ddrss->ti_ecc_enabled = dev_read_bool(dev, "ti,ecc-enable");
+
+#if IS_ENABLED(CONFIG_SYSCON)
+	if (IS_ENABLED(CONFIG_K3_IODDR)) {
+		ddrss->canuart_wake = syscon_regmap_lookup_by_phandle(dev, "ti,canuart-wake");
+		if (IS_ERR_OR_NULL(ddrss->canuart_wake)) {
+			dev_err(dev, "ti,canuart-wake failed\n");
+			return PTR_ERR(ddrss->canuart_wake);
+		}
+		ddrss->ddr_pmctrl = syscon_regmap_lookup_by_phandle(dev, "ti,ddr-pmctrl");
+		if (IS_ERR_OR_NULL(ddrss->ddr_pmctrl)) {
+			dev_err(dev, "ti,ddr-pmctrl failed\n");
+			return PTR_ERR(ddrss->ddr_pmctrl);
+		}
+	}
+#endif
+
 
 	return ret;
 }
@@ -551,27 +654,219 @@ void k3_lpddr4_start(struct k3_ddrss_desc *ddrss)
 	}
 }
 
-static void k3_ddrss_set_ecc_range_r0(u32 base, u32 start_address, u32 size)
+static void k3_ddrss_set_ecc_range_r0(u32 base, u64 start_address, u64 size)
 {
 	writel((start_address) >> 16, base + DDRSS_ECC_R0_STR_ADDR_REG);
 	writel((start_address + size - 1) >> 16, base + DDRSS_ECC_R0_END_ADDR_REG);
 }
 
-static void k3_ddrss_preload_ecc_mem_region(u32 *addr, u32 size, u32 word)
+#define BIST_MODE_MEM_INIT		4
+#define BIST_MEM_INIT_TIMEOUT		10000 /* 1msec loops per block = 10s */
+static void k3_lpddr4_bist_init_mem_region(struct k3_ddrss_desc *ddrss,
+					   u64 addr, u64 size,
+					   u32 pattern)
 {
-	int i;
+	lpddr4_obj *driverdt = ddrss->driverdt;
+	lpddr4_privatedata *pd = &ddrss->pd;
+	u32 status, offset, regval;
+	bool int_status;
+	int i = 0;
 
+	/* Set BIST_START_ADDR_0 [31:0] */
+	regval = (u32)(addr & TH_FLD_MASK(LPDDR4__BIST_START_ADDRESS_0__FLD));
+	TH_OFFSET_FROM_REG(LPDDR4__BIST_START_ADDRESS_0__REG, CTL_SHIFT, offset);
+	driverdt->writereg(pd, LPDDR4_CTL_REGS, offset, regval);
+
+	/* Set BIST_START_ADDR_1 [32 or 34:32] */
+	regval = (u32)(addr >> TH_FLD_WIDTH(LPDDR4__BIST_START_ADDRESS_0__FLD));
+	regval &= TH_FLD_MASK(LPDDR4__BIST_START_ADDRESS_1__FLD);
+	TH_OFFSET_FROM_REG(LPDDR4__BIST_START_ADDRESS_1__REG, CTL_SHIFT, offset);
+	driverdt->writereg(pd, LPDDR4_CTL_REGS, offset, regval);
+
+	/* Set ADDR_SPACE = log2(size) */
+	regval = (u32)(ilog2(size) << TH_FLD_SHIFT(LPDDR4__ADDR_SPACE__FLD));
+	TH_OFFSET_FROM_REG(LPDDR4__ADDR_SPACE__REG, CTL_SHIFT, offset);
+	driverdt->writereg(pd, LPDDR4_CTL_REGS, offset, regval);
+
+	/* Enable the BIST data check. On 32bit lpddr4 (e.g J7) this shares a
+	 * register with ADDR_SPACE and BIST_GO.
+	 */
+	TH_OFFSET_FROM_REG(LPDDR4__BIST_DATA_CHECK__REG, CTL_SHIFT, offset);
+	driverdt->readreg(pd, LPDDR4_CTL_REGS, offset, &regval);
+	regval |= TH_FLD_MASK(LPDDR4__BIST_DATA_CHECK__FLD);
+	driverdt->writereg(pd, LPDDR4_CTL_REGS, offset, regval);
+	/* Clear the address check bit */
+	TH_OFFSET_FROM_REG(LPDDR4__BIST_ADDR_CHECK__REG, CTL_SHIFT, offset);
+	driverdt->readreg(pd, LPDDR4_CTL_REGS, offset, &regval);
+	regval &= ~TH_FLD_MASK(LPDDR4__BIST_ADDR_CHECK__FLD);
+	driverdt->writereg(pd, LPDDR4_CTL_REGS, offset, regval);
+
+	/* Set BIST_TEST_MODE[2:0] to memory initialize (4) */
+	regval = BIST_MODE_MEM_INIT;
+	TH_OFFSET_FROM_REG(LPDDR4__BIST_TEST_MODE__REG, CTL_SHIFT, offset);
+	driverdt->writereg(pd, LPDDR4_CTL_REGS, offset, regval);
+
+	/* Set BIST_DATA_PATTERN[31:0] */
+	TH_OFFSET_FROM_REG(LPDDR4__BIST_DATA_PATTERN_0__REG, CTL_SHIFT, offset);
+	driverdt->writereg(pd, LPDDR4_CTL_REGS, offset, pattern);
+
+	/* Set BIST_DATA_PATTERN[63:32] */
+	TH_OFFSET_FROM_REG(LPDDR4__BIST_DATA_PATTERN_1__REG, CTL_SHIFT, offset);
+	driverdt->writereg(pd, LPDDR4_CTL_REGS, offset, pattern);
+
+	udelay(1000);
+
+	/* Enable the programmed BIST operation - BIST_GO = 1 */
+	TH_OFFSET_FROM_REG(LPDDR4__BIST_GO__REG, CTL_SHIFT, offset);
+	driverdt->readreg(pd, LPDDR4_CTL_REGS, offset, &regval);
+	regval |= TH_FLD_MASK(LPDDR4__BIST_GO__FLD);
+	driverdt->writereg(pd, LPDDR4_CTL_REGS, offset, regval);
+
+	/* Wait for the BIST_DONE interrupt */
+	while (i < BIST_MEM_INIT_TIMEOUT) {
+		status = driverdt->checkctlinterrupt(pd, LPDDR4_INTR_BIST_DONE,
+						     &int_status);
+		if (!status & int_status) {
+			/* Clear LPDDR4_INTR_BIST_DONE */
+			driverdt->ackctlinterrupt(pd, LPDDR4_INTR_BIST_DONE);
+			break;
+		}
+		udelay(1000);
+		i++;
+	}
+
+	/* Before continuing we have to stop BIST - BIST_GO = 0 */
+	TH_OFFSET_FROM_REG(LPDDR4__BIST_GO__REG, CTL_SHIFT, offset);
+	driverdt->writereg(pd, LPDDR4_CTL_REGS, offset, 0);
+
+	/* Timeout hit while priming the memory. We can't continue,
+	 * since the memory is not fully initialized and we most
+	 * likely get an uncorrectable error exception while booting.
+	 */
+	if (i == BIST_MEM_INIT_TIMEOUT) {
+		printf("ERROR: Timeout while priming the memory.\n");
+		hang();
+	}
+}
+
+static void k3_ddrss_lpddr4_preload_full_mem(struct k3_ddrss_desc *ddrss,
+					     u64 total_size, u32 pattern)
+{
+	u32 done, max_size2;
+
+	/* Get the max size (log2) supported in this config (16/32 lpddr4)
+	 * from the start_addess width - 16bit: 8G, 32bit: 32G
+	 */
+	max_size2 = TH_FLD_WIDTH(LPDDR4__BIST_START_ADDRESS_0__FLD) +
+		    TH_FLD_WIDTH(LPDDR4__BIST_START_ADDRESS_1__FLD) + 1;
+
+	/* ECC is enabled in dt but we can't preload the memory if
+	 * the memory configuration is recognized and supported.
+	 */
+	if (!total_size || total_size > (1ull << max_size2) ||
+	    total_size & (total_size - 1)) {
+		printf("ECC: the memory configuration is not supported\n");
+		hang();
+	}
 	printf("ECC is enabled, priming DDR which will take several seconds.\n");
+	done = get_timer(0);
+	k3_lpddr4_bist_init_mem_region(ddrss, 0, total_size, pattern);
+	printf("ECC: priming DDR completed in %lu msec\n", get_timer(done));
+}
 
-	for (i = 0; i < (size / 4); i++)
-		addr[i] = word;
+static void k3_ddrss_ddr_bank_base_size_calc(struct k3_ddrss_desc *ddrss)
+{
+	int bank, na, ns, len, parent;
+	const fdt32_t *ptr, *end;
+
+	for (bank = 0; bank < CONFIG_NR_DRAM_BANKS; bank++) {
+		ddrss->ddr_bank_base[bank] = 0;
+		ddrss->ddr_bank_size[bank] = 0;
+	}
+
+	ofnode mem = ofnode_null();
+
+	do {
+		mem = ofnode_by_prop_value(mem, "device_type", "memory", 7);
+	} while (!ofnode_is_enabled(mem));
+
+	const void *fdt = ofnode_to_fdt(mem);
+	int node = ofnode_to_offset(mem);
+	const char *property = "reg";
+
+	parent = fdt_parent_offset(fdt, node);
+	na = fdt_address_cells(fdt, parent);
+	ns = fdt_size_cells(fdt, parent);
+	ptr = fdt_getprop(fdt, node, property, &len);
+	end = ptr + len / sizeof(*ptr);
+
+	for (bank = 0; bank < CONFIG_NR_DRAM_BANKS; bank++) {
+		if (ptr + na + ns <= end) {
+			if (CONFIG_IS_ENABLED(OF_TRANSLATE))
+				ddrss->ddr_bank_base[bank] = fdt_translate_address(fdt, node, ptr);
+			else
+				ddrss->ddr_bank_base[bank] = fdtdec_get_number(ptr, na);
+
+			ddrss->ddr_bank_size[bank] = fdtdec_get_number(&ptr[na], ns);
+		}
+
+		ptr += na + ns;
+	}
+
+	for (bank = 0; bank < CONFIG_NR_DRAM_BANKS; bank++)
+		ddrss->ddr_ram_size += ddrss->ddr_bank_size[bank];
+}
+
+static void k3_ddrss_ddr_reg_init(struct k3_ddrss_desc *ddrss)
+{
+	u32 v2a_ctl_reg, sdram_idx;
+
+	sdram_idx = DDRSS_V2A_CTL_REG_SDRAM_IDX_CALC(ddrss->ddr_ram_size);
+	v2a_ctl_reg = readl(ddrss->ddrss_ss_cfg + DDRSS_V2A_CTL_REG);
+	v2a_ctl_reg = (v2a_ctl_reg & DDRSS_V2A_CTL_REG_SDRAM_IDX_MASK) | sdram_idx;
+
+	if (IS_ENABLED(CONFIG_SOC_K3_AM642))
+		v2a_ctl_reg = (v2a_ctl_reg & DDRSS_V2A_CTL_REG_REGION_IDX_MASK) |
+			      DDRSS_V2A_CTL_REG_REGION_IDX_DEFAULT;
+
+	writel(v2a_ctl_reg, ddrss->ddrss_ss_cfg + DDRSS_V2A_CTL_REG);
+	writel(DDRSS_ECC_CTRL_REG_DEFAULT, ddrss->ddrss_ss_cfg + DDRSS_ECC_CTRL_REG);
+}
+
+static void k3_ddrss_ddr_inline_ecc_base_size_calc(struct k3_ddrss_ecc_region *range)
+{
+	fdt_addr_t base;
+	fdt_size_t size;
+	ofnode node1;
+
+	node1 = ofnode_null();
+
+	do {
+		node1 = ofnode_by_prop_value(node1, "device_type", "ecc", 4);
+	} while (!ofnode_is_enabled(node1));
+
+	base = ofnode_get_addr_size(node1, "reg", &size);
+
+	if (base == FDT_ADDR_T_NONE) {
+		debug("%s: Failed to get ECC node reg and size\n", __func__);
+		range->start = 0;
+		range->range = 0;
+	} else {
+		range->start = base;
+		range->range = size;
+	}
 }
 
 static void k3_ddrss_lpddr4_ecc_calc_reserved_mem(struct k3_ddrss_desc *ddrss)
 {
 	fdtdec_setup_mem_size_base_lowest();
 
-	ddrss->ecc_reserved_space = gd->ram_size;
+	/*
+	 * For every 512-byte data block, 64 bytes of ECC is stored inline and
+	 * is a reserved region. It remains 1/9th of the total DDR size
+	 * irrespective of the size of the region under protection.
+	 */
+	ddrss->ecc_reserved_space = ddrss->ddr_ram_size;
 	do_div(ddrss->ecc_reserved_space, 9);
 
 	/* Round to clean number */
@@ -580,24 +875,28 @@ static void k3_ddrss_lpddr4_ecc_calc_reserved_mem(struct k3_ddrss_desc *ddrss)
 
 static void k3_ddrss_lpddr4_ecc_init(struct k3_ddrss_desc *ddrss)
 {
-	u32 ecc_region_start = ddrss->ecc_regions[0].start;
-	u32 ecc_range = ddrss->ecc_regions[0].range;
+	u64 ecc_region_start = ddrss->ecc_regions[0].start;
+	u64 ecc_range = ddrss->ecc_regions[0].range;
 	u32 base = (u32)ddrss->ddrss_ss_cfg;
 	u32 val;
 
 	/* Only Program region 0 which covers full ddr space */
-	k3_ddrss_set_ecc_range_r0(base, ecc_region_start - gd->ram_base, ecc_range);
+	k3_ddrss_set_ecc_range_r0(base, ecc_region_start, ecc_range);
 
 	/* Enable ECC, RMW, WR_ALLOC */
 	writel(DDRSS_ECC_CTRL_REG_ECC_EN | DDRSS_ECC_CTRL_REG_RMW_EN |
 	       DDRSS_ECC_CTRL_REG_WR_ALLOC, base + DDRSS_ECC_CTRL_REG);
 
-	/* Preload ECC Mem region with 0's */
-	k3_ddrss_preload_ecc_mem_region((u32 *)ecc_region_start, ecc_range,
-					0x00000000);
+	/* Preload the full memory with 0's using the BIST engine of
+	 * the LPDDR4 controller.
+	 */
+	k3_ddrss_lpddr4_preload_full_mem(ddrss, ddrss->ddr_ram_size, 0);
 
 	/* Clear Error Count Register */
 	writel(0x1, base + DDRSS_ECC_1B_ERR_CNT_REG);
+
+	writel(DDRSS_V2A_INT_SET_REG_ECC1BERR_EN | DDRSS_V2A_INT_SET_REG_ECC2BERR_EN |
+		   DDRSS_V2A_INT_SET_REG_ECCM1BERR_EN, base + DDRSS_V2A_INT_SET_REG);
 
 	/* Enable ECC Check */
 	val = readl(base + DDRSS_ECC_CTRL_REG);
@@ -605,10 +904,216 @@ static void k3_ddrss_lpddr4_ecc_init(struct k3_ddrss_desc *ddrss)
 	writel(val, base + DDRSS_ECC_CTRL_REG);
 }
 
+static void k3_ddrss_reg_update_bits(void __iomem *addr, u32 offset, u32 mask, u32 set)
+{
+	u32 val = readl(addr + offset);
+
+	val &= ~mask;
+	val |= set;
+	writel(val, addr + offset);
+}
+
+static void k3_ddrss_self_refresh_exit(struct k3_ddrss_desc *ddrss)
+{
+	k3_ddrss_reg_update_bits(ddrss->ddrss_ctl_cfg,
+				 K3_DDRSS_CFG_DENALI_CTL_169,
+				 K3_DDRSS_CFG_DENALI_CTL_169_LP_AUTO_EXIT_EN_MASK |
+				 K3_DDRSS_CFG_DENALI_CTL_169_LP_AUTO_ENTRY_EN_MASK,
+				 0x0);
+	k3_ddrss_reg_update_bits(ddrss->ddrss_ctl_cfg,
+				 K3_DDRSS_CFG_DENALI_PHY_1820,
+				 0,
+				 BIT(2) << K3_DDRSS_CFG_DENALI_PHY_1820_SET_DFI_INPUT_2_SHIFT);
+	k3_ddrss_reg_update_bits(ddrss->ddrss_ctl_cfg,
+				 K3_DDRSS_CFG_DENALI_CTL_106,
+				 0,
+				 K3_DDRSS_CFG_DENALI_CTL_106_PWRUP_SREFRESH_EXIT);
+	writel(0, ddrss->ddrss_ctl_cfg + K3_DDRSS_CFG_DENALI_PI_146);
+	k3_ddrss_reg_update_bits(ddrss->ddrss_ctl_cfg,
+				 K3_DDRSS_CFG_DENALI_PI_150,
+				 K3_DDRSS_CFG_DENALI_PI_150_PI_DRAM_INIT_EN,
+				 0x0);
+	k3_ddrss_reg_update_bits(ddrss->ddrss_ctl_cfg,
+				 K3_DDRSS_CFG_DENALI_PI_6,
+				 0,
+				 K3_DDRSS_CFG_DENALI_PI_6_PI_DFI_PHYMSTR_STATE_SEL_R);
+	k3_ddrss_reg_update_bits(ddrss->ddrss_ctl_cfg,
+				 K3_DDRSS_CFG_DENALI_CTL_21,
+				 K3_DDRSS_CFG_DENALI_CTL_21_PHY_INDEP_INIT_MODE,
+				 0);
+	k3_ddrss_reg_update_bits(ddrss->ddrss_ctl_cfg,
+				 K3_DDRSS_CFG_DENALI_CTL_20,
+				 0,
+				 K3_DDRSS_CFG_DENALI_CTL_20_PHY_INDEP_TRAIN_MODE);
+}
+
+static void k3_ddrss_lpm_resume(struct k3_ddrss_desc *ddrss)
+{
+	k3_ddrss_reg_update_bits(ddrss->ddrss_ctl_cfg,
+				 K3_DDRSS_CFG_DENALI_CTL_160,
+				 K3_DDRSS_CFG_DENALI_CTL_160_LP_CMD_MASK,
+				 K3_DDRSS_CFG_DENALI_CTL_160_LP_CMD_ENTRY);
+	while (!(readl(ddrss->ddrss_ctl_cfg + K3_DDRSS_CFG_DENALI_CTL_345) &
+		 (1 << K3_DDRSS_CFG_DENALI_CTL_345_INT_STATUS_LOWPOWER_SHIFT)))
+		;
+
+	k3_ddrss_reg_update_bits(ddrss->ddrss_ctl_cfg,
+				 K3_DDRSS_CFG_DENALI_CTL_353,
+				 0,
+				 1 << K3_DDRSS_CFG_DENALI_CTL_353_INT_ACK_LOWPOWER_SHIFT);
+	while ((readl(ddrss->ddrss_ctl_cfg + K3_DDRSS_CFG_DENALI_CTL_169) &
+		K3_DDRSS_CFG_DENALI_CTL_169_LP_STATE_MASK) !=
+	       0x40 << K3_DDRSS_CFG_DENALI_CTL_169_LP_STATE_SHIFT)
+		;
+}
+
+#if IS_ENABLED(CONFIG_REGMAP)
+static void k3_ddrss_deassert_retention(struct k3_ddrss_desc *ddrss)
+{
+	regmap_update_bits(ddrss->ddr_pmctrl,
+			   K3_WKUP_CTRL_MMR0_DDR16SS_PMCTRL,
+			   K3_WKUP_CTRL_MMR0_DDR16SS_PMCTRL_DATA_RET_LD |
+			   K3_WKUP_CTRL_MMR0_DDR16SS_PMCTRL_DATA_RETENTION_MASK,
+			   0);
+	regmap_update_bits(ddrss->ddr_pmctrl,
+			   K3_WKUP_CTRL_MMR0_DDR16SS_PMCTRL,
+			   K3_WKUP_CTRL_MMR0_DDR16SS_PMCTRL_DATA_RET_LD,
+			   K3_WKUP_CTRL_MMR0_DDR16SS_PMCTRL_DATA_RET_LD);
+
+	while (true) {
+		u32 val;
+
+		regmap_read(ddrss->ddr_pmctrl, K3_WKUP_CTRL_MMR0_DDR16SS_PMCTRL, &val);
+		if (val & K3_WKUP_CTRL_MMR0_DDR16SS_PMCTRL_DATA_RET_LD)
+			break;
+	}
+
+	regmap_update_bits(ddrss->ddr_pmctrl,
+			   K3_WKUP_CTRL_MMR0_DDR16SS_PMCTRL,
+			   K3_WKUP_CTRL_MMR0_DDR16SS_PMCTRL_DATA_RET_LD,
+			   0);
+}
+
+static void k3_ddrss_clear_retention_latch_and_magic_words(struct k3_ddrss_desc *ddrss)
+{
+	u32 val;
+
+	regmap_update_bits(ddrss->canuart_wake,
+			   K3_WKUP_CTRL_MMR_CANUART_WAKE_OFF_MODE,
+			   K3_WKUP_CTRL_MMR_CANUART_WAKE_OFF_MODE_MW_MASK,
+			   K3_WKUP_CTRL_MMR_CANUART_WAKE_OFF_MODE_MW);
+
+	regmap_update_bits(ddrss->canuart_wake,
+			   K3_WKUP_CTRL_MMR_CANUART_WAKE_CTRL,
+			   K3_WKUP_CTRL_MMR_CANUART_WAKE_CTRL_MW_MASK |
+				   K3_WKUP_CTRL_MMR_CANUART_WAKE_CTRL_MW_LD,
+			   K3_WKUP_CTRL_MMR_CANUART_WAKE_CTRL_MW |
+				   K3_WKUP_CTRL_MMR_CANUART_WAKE_CTRL_MW_LD);
+
+	if (regmap_read_poll_timeout(ddrss->canuart_wake,
+				     K3_WKUP_CTRL_MMR_CANUART_WAKE_STAT1, val,
+				     val, 0, 1)) {
+		pr_emerg("%s: Timeout during latch clearing sequence\n", __func__);
+		hang();
+	}
+
+	regmap_update_bits(ddrss->ddr_pmctrl,
+			   K3_WKUP_CTRL_MMR0_DDR16SS_PMCTRL,
+			   K3_WKUP_CTRL_MMR0_DDR16SS_PMCTRL_DATA_RET_LD |
+			   K3_WKUP_CTRL_MMR0_DDR16SS_PMCTRL_DATA_RETENTION_MASK,
+			   K3_WKUP_CTRL_MMR0_DDR16SS_PMCTRL_DATA_RET_LD);
+
+	regmap_update_bits(ddrss->ddr_pmctrl,
+			   K3_WKUP_CTRL_MMR0_DDR16SS_PMCTRL,
+			   K3_WKUP_CTRL_MMR0_DDR16SS_PMCTRL_DATA_RET_LD,
+			   0);
+
+	regmap_update_bits(ddrss->canuart_wake,
+			   K3_WKUP_CTRL_MMR_CANUART_WAKE_CTRL,
+			   K3_WKUP_CTRL_MMR_CANUART_WAKE_CTRL_MW_LD,
+			   0);
+
+	if (regmap_read_poll_timeout(ddrss->canuart_wake,
+				     K3_WKUP_CTRL_MMR_CANUART_WAKE_STAT1, val,
+				     !val, 0, 1)) {
+		pr_emerg("%s: Timeout during latch clearing sequence\n", __func__);
+		hang();
+	}
+
+	regmap_update_bits(ddrss->canuart_wake,
+			   K3_WKUP_CTRL_MMR_CANUART_WAKE_OFF_MODE,
+			   K3_WKUP_CTRL_MMR_CANUART_WAKE_OFF_MODE_MW_MASK,
+			   0);
+
+	regmap_update_bits(ddrss->canuart_wake,
+			   K3_WKUP_CTRL_MMR_CANUART_WAKE_CTRL,
+			   K3_WKUP_CTRL_MMR_CANUART_WAKE_CTRL_MW_MASK,
+			   0);
+}
+
+static bool k3_ddrss_wkup_conf_canuart_wakeup_active(struct k3_ddrss_desc *ddrss)
+{
+	u32 active;
+
+	regmap_read(ddrss->canuart_wake, K3_WKUP_CTRL_MMR_CANUART_WAKE_STAT1, &active);
+
+	return !!(active & K3_WKUP_CTRL_MMR_CANUART_WAKE_STAT1_CANUART_IO_MODE);
+}
+
+static bool k3_ddrss_wkup_conf_canuart_magic_word_set(struct k3_ddrss_desc *ddrss)
+{
+	u32 magic_word;
+
+	regmap_read(ddrss->canuart_wake, K3_WKUP_CTRL_MMR_CANUART_WAKE_OFF_MODE_STAT,
+		    &magic_word);
+
+	return magic_word == K3_WKUP_CTRL_MMR_CANUART_WAKE_OFF_MODE_STAT_MW;
+}
+
+static bool k3_ddrss_wkup_conf_boot_is_resume(struct k3_ddrss_desc *ddrss)
+{
+	return IS_ENABLED(CONFIG_K3_IODDR) &&
+		k3_ddrss_wkup_conf_canuart_wakeup_active(ddrss) &&
+		k3_ddrss_wkup_conf_canuart_magic_word_set(ddrss);
+}
+
+static void k3_ddrss_run_retention_latch_clear_sequence(struct k3_ddrss_desc *ddrss)
+{
+	/*
+	 * Workaround of errata i12487
+	 * Errata states that During entry to the Deep Sleep or RTC+IO+DDR
+	 * low-power modes, SoC may not properly transition the attached
+	 * DDR into retention mode, which will lead to corruption of the DDR
+	 * data.
+	 */
+	if (IS_ENABLED(CONFIG_K3_IODDR))
+		k3_ddrss_clear_retention_latch_and_magic_words(ddrss);
+}
+#else
+static void k3_ddrss_deassert_retention(struct k3_ddrss_desc *ddrss)
+{
+}
+
+static bool k3_ddrss_wkup_conf_boot_is_resume(struct k3_ddrss_desc *ddrss)
+{
+	return false;
+}
+
+static void k3_ddrss_run_retention_latch_clear_sequence(struct k3_ddrss_desc *ddrss)
+{
+}
+#endif
+
 static int k3_ddrss_probe(struct udevice *dev)
 {
+	u64 end, bank0, bank1;
 	int ret;
 	struct k3_ddrss_desc *ddrss = dev_get_priv(dev);
+	__maybe_unused u32 inst, ddr_ram_size, ecc_res, start;
+	__maybe_unused struct k3_ddrss_data *ddrss_data = (struct k3_ddrss_data *)dev_get_driver_data(dev);
+	__maybe_unused struct k3_ddrss_ecc_region *range = &ddrss->ecc_range;
+	__maybe_unused struct k3_msmc *msmc_parent = NULL;
+	bool is_lpm_resume;
 
 	debug("%s(dev=%p)\n", __func__, dev);
 
@@ -616,16 +1121,23 @@ static int k3_ddrss_probe(struct udevice *dev)
 	if (ret)
 		return ret;
 
+	is_lpm_resume = !IS_ERR_OR_NULL(ddrss->canuart_wake) &&
+		k3_ddrss_wkup_conf_boot_is_resume(ddrss);
+
+	if (is_lpm_resume)
+		dev_info(dev, "Detected IO+DDR resume\n");
+	else
+		/* Clear the latch after any reset or partial I/O exit */
+		k3_ddrss_run_retention_latch_clear_sequence(ddrss);
+
 	ddrss->dev = dev;
 	ret = k3_ddrss_power_on(ddrss);
 	if (ret)
 		return ret;
 
-#ifdef CONFIG_K3_AM64_DDRSS
-	/* AM64x supports only up to 2 GB SDRAM */
-	writel(0x000001EF, ddrss->ddrss_ss_cfg + DDRSS_V2A_CTL_REG);
-	writel(0x0, ddrss->ddrss_ss_cfg + DDRSS_ECC_CTRL_REG);
-#endif
+	k3_ddrss_ddr_bank_base_size_calc(ddrss);
+
+	k3_ddrss_ddr_reg_init(ddrss);
 
 	ddrss->driverdt = lpddr4_getinstance();
 
@@ -633,13 +1145,22 @@ static int k3_ddrss_probe(struct udevice *dev)
 	k3_lpddr4_init(ddrss);
 	k3_lpddr4_hardware_reg_init(ddrss);
 
+	if (is_lpm_resume)
+		k3_ddrss_self_refresh_exit(ddrss);
+
 	ret = k3_ddrss_init_freq(ddrss);
 	if (ret)
 		return ret;
 
+	if (is_lpm_resume)
+		k3_ddrss_deassert_retention(ddrss);
+
 	k3_lpddr4_start(ddrss);
 
-	if (ddrss->ti_ecc_enabled) {
+	if (is_lpm_resume)
+		k3_ddrss_lpm_resume(ddrss);
+
+	if (IS_ENABLED(CONFIG_K3_INLINE_ECC)) {
 		if (!ddrss->ddrss_ss_cfg) {
 			printf("%s: ss_cfg is required if ecc is enabled but not provided.",
 			       __func__);
@@ -648,9 +1169,73 @@ static int k3_ddrss_probe(struct udevice *dev)
 
 		k3_ddrss_lpddr4_ecc_calc_reserved_mem(ddrss);
 
-		/* Always configure one region that covers full DDR space */
-		ddrss->ecc_regions[0].start = gd->ram_base;
-		ddrss->ecc_regions[0].range = gd->ram_size - ddrss->ecc_reserved_space;
+		k3_ddrss_ddr_inline_ecc_base_size_calc(range);
+
+		bank0 = ddrss->ddr_bank_base[0];
+		bank1 = ddrss->ddr_bank_base[1];
+
+		if (!range->range) {
+			/* Configure entire DDR space by default */
+			debug("%s: Defaulting to protecting entire DDR space using inline ECC\n",
+			      __func__);
+			ddrss->ecc_range.start = bank0;
+			ddrss->ecc_range.range = ddrss->ddr_ram_size - ddrss->ecc_reserved_space;
+		} else {
+			ddrss->ecc_range.start = range->start;
+			ddrss->ecc_range.range = range->range;
+		}
+
+#if !CONFIG_IS_ENABLED(K3_MULTI_DDR)
+		end = ddrss->ecc_range.start + ddrss->ecc_range.range;
+		start = ddrss->ecc_range.start;
+		inst = ddrss->instance;
+		ddr_ram_size = ddrss->ddr_ram_size;
+		ecc_res = ddrss->ecc_reserved_space;
+
+		if (end > (ddr_ram_size - ecc_res))
+			ddrss->ecc_regions[0].range = ddr_ram_size - ecc_res;
+		else
+			ddrss->ecc_regions[0].range = ddrss->ecc_range.range;
+
+		/* Check in which bank we are */
+		if (start >= bank1)
+			ddrss->ecc_regions[0].start = start - bank1 + ddrss->ddr_bank_size[0];
+		else
+			ddrss->ecc_regions[0].start = start - bank0;
+#else
+
+		/* In case multi-DDR, we rely on MSMC's calculation of regions for each DDR */
+		msmc_parent = kzalloc(sizeof(msmc_parent), GFP_KERNEL);
+		if (!msmc_parent) {
+			debug("%s: failed to allocate msmc_parent\n", __func__);
+			return -ENOMEM;
+		}
+		msmc_parent = dev_get_priv(dev->parent);
+		if (!msmc_parent) {
+			printf("%s: could not get MSMC parent to set up inline ECC regions\n",
+			       __func__);
+			kfree(msmc_parent);
+			return -EINVAL;
+		}
+
+		if (msmc_parent->R0[0].start < 0) {
+			/* Configure entire DDR space by default */
+			ddrss->ecc_regions[0].start = bank0;
+			ddrss->ecc_regions[0].range = ddr_ram_size - ecc_res;
+		} else {
+			end = msmc_parent->R0[inst].start + msmc_parent->R0[inst].range;
+
+			if (end > (ddr_ram_size - ecc_res))
+				ddrss->ecc_regions[0].range = ddr_ram_size - ecc_res;
+			else
+				ddrss->ecc_regions[0].range = msmc_parent->R0[inst].range;
+
+			ddrss->ecc_regions[0].start =  msmc_parent->R0[inst].start;
+		}
+
+		kfree(msmc_parent);
+#endif
+
 		k3_ddrss_lpddr4_ecc_init(ddrss);
 	}
 
@@ -659,27 +1244,24 @@ static int k3_ddrss_probe(struct udevice *dev)
 
 int k3_ddrss_ddr_fdt_fixup(struct udevice *dev, void *blob, struct bd_info *bd)
 {
-	struct k3_ddrss_desc *ddrss = dev_get_priv(dev);
-	u64 start[CONFIG_NR_DRAM_BANKS];
-	u64 size[CONFIG_NR_DRAM_BANKS];
 	int bank;
+	struct k3_ddrss_desc *ddrss = dev_get_priv(dev);
+
+	if (ddrss->ecc_reserved_space == 0)
+		return 0;
 
 	for (bank = CONFIG_NR_DRAM_BANKS - 1; bank >= 0; bank--) {
-		if (ddrss->ecc_reserved_space > bd->bi_dram[bank].size) {
-			ddrss->ecc_reserved_space -= bd->bi_dram[bank].size;
-			bd->bi_dram[bank].size = 0;
+		if (ddrss->ecc_reserved_space > ddrss->ddr_bank_size[bank]) {
+			ddrss->ecc_reserved_space -= ddrss->ddr_bank_size[bank];
+			ddrss->ddr_bank_size[bank] = 0;
 		} else {
-			bd->bi_dram[bank].size -= ddrss->ecc_reserved_space;
+			ddrss->ddr_bank_size[bank] -= ddrss->ecc_reserved_space;
 			break;
 		}
 	}
 
-	for (bank = 0; bank < CONFIG_NR_DRAM_BANKS; bank++) {
-		start[bank] =  bd->bi_dram[bank].start;
-		size[bank] = bd->bi_dram[bank].size;
-	}
-
-	return fdt_fixup_memory_banks(blob, start, size, CONFIG_NR_DRAM_BANKS);
+	return fdt_fixup_memory_banks(blob, ddrss->ddr_bank_base,
+				      ddrss->ddr_bank_size, CONFIG_NR_DRAM_BANKS);
 }
 
 static int k3_ddrss_get_info(struct udevice *dev, struct ram_info *info)
@@ -715,6 +1297,83 @@ U_BOOT_DRIVER(k3_ddrss) = {
 	.probe			= k3_ddrss_probe,
 	.priv_auto		= sizeof(struct k3_ddrss_desc),
 };
+
+#if IS_ENABLED(CONFIG_K3_MULTI_DDR) && IS_ENABLED(CONFIG_K3_INLINE_ECC)
+static int k3_msmc_calculate_r0_regions(struct k3_msmc *msmc)
+{
+	u32 n1;
+	u32 size, ret = 0;
+	u32 gran = gran_bytes[msmc->gran];
+	u32 num_ddr = msmc->num_ddr;
+	struct k3_ddrss_ecc_region *range = NULL;
+	struct k3_ddrss_ecc_region R[num_ddr];
+
+	range = kzalloc(sizeof(range), GFP_KERNEL);
+	if (!range) {
+		debug("%s: failed to allocate range\n", __func__);
+		ret = -ENOMEM;
+		return ret;
+	}
+
+	k3_ddrss_ddr_inline_ecc_base_size_calc(range);
+
+	if (!range->range) {
+		ret = -EINVAL;
+		goto range_err;
+	}
+
+	memset(R, 0, num_ddr);
+
+	/* Find the first controller in the range */
+	n1 = ((range->start / gran) % num_ddr);
+	size = range->range;
+
+	if (size < gran) {
+		R[n1].start = range->start - 0x80000000;
+		R[n1].range = range->start + range->range - 0x80000000;
+	} else {
+		u32 chunk_start_addr = range->start;
+		u32 chunk_size = range->range;
+
+		while (chunk_size > 0) {
+			u32 edge;
+			u32 end = range->start + range->range;
+
+			if ((chunk_start_addr % gran) == 0)
+				edge = chunk_start_addr + gran;
+			else
+				edge = ((chunk_start_addr + (gran - 1)) & (-gran));
+
+			if (edge > end)
+				break;
+
+			if (R[n1].start == 0)
+				R[n1].start = chunk_start_addr;
+
+			R[n1].range = edge - R[n1].start;
+			chunk_size = end - edge;
+			chunk_start_addr = edge;
+
+			if (n1 == (num_ddr - 1))
+				n1 = 0;
+			else
+				n1++;
+		}
+
+		for (int i = 0; i < num_ddr; i++)
+			R[i].start = (R[i].start - 0x80000000 - (gran * i)) / num_ddr;
+	}
+
+	for (int i = 0; i < num_ddr; i++) {
+		msmc->R0[i].start = R[i].start;
+		msmc->R0[i].range = R[i].range;
+	}
+
+range_err:
+	free(range);
+	return ret;
+}
+#endif
 
 static int k3_msmc_set_config(struct k3_msmc *msmc)
 {
@@ -788,6 +1447,24 @@ static int k3_msmc_probe(struct udevice *dev)
 		return -EINVAL;
 	}
 
+	ret = device_get_child_count(dev);
+	if (ret <= 0) {
+		dev_err(dev, "no child ddr nodes present");
+		return -EINVAL;
+	}
+	msmc->num_ddr = ret;
+
+#if IS_ENABLED(CONFIG_K3_MULTI_DDR) && IS_ENABLED(CONFIG_K3_INLINE_ECC)
+	ret = k3_msmc_calculate_r0_regions(msmc);
+	if (ret) {
+		/* Default to enabling inline ECC for entire DDR region */
+		debug("%s: calculation of inline ECC regions failed, defaulting to entire region\n",
+		      __func__);
+
+		/* Use first R0 entry as a flag to denote MSMC calculation failure */
+		msmc->R0[0].start = -1;
+	}
+#endif
 	return 0;
 }
 

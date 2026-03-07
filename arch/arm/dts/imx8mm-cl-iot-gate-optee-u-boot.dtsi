@@ -6,13 +6,6 @@
 #include "imx8mm-u-boot.dtsi"
 
 / {
-	firmware {
-		optee {
-			compatible = "linaro,optee-tz";
-			method = "smc";
-		};
-	};
-
 	wdt-reboot {
 		compatible = "wdt-reboot";
 		bootph-pre-ram;
@@ -41,9 +34,11 @@
 	};
 };
 
+/* This cannot work since it refers to a template node
 &binman_configuration {
 	loadables = "atf", "fip";
 };
+*/
 
 &fec1 {
 	phy-reset-gpios = <&gpio4 22 GPIO_ACTIVE_LOW>;
