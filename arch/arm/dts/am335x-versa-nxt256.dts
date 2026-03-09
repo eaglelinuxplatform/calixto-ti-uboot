@@ -13,9 +13,8 @@
  * Modified by Vipin Vijayan <vipin.v@calixto.in>
  */
  /dts-v1/;
- 
+
 #include "am33xx.dtsi"
-#include "versa-include.dtsi"
 #include <dt-bindings/interrupt-controller/irq.h>
 / {
 	model = "CALIXTO AM335x VERSA-NXT_UBOOT";
@@ -178,8 +177,6 @@
 
 };
 
-
-
 &uart0 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&uart0_pins>;
@@ -208,7 +205,6 @@
 
 };
 
-
 &mmc1 {
 	status = "okay";
 	vmmc-supply = <&vmmcsd_supply>;
@@ -225,13 +221,6 @@
     vmmc-supply = <&vmmcsd_fixed>;
     bus-width = <4>;
     ti,non-removable;
-    /* dmas = <&edma_xbar 12 0 1 &edma_xbar 13 0 2>; */
-    /* dma-names = "tx", "rx"; */
-};
-
-&edma {
-	ti,edma-xbar-event-map = /bits/ 16 <1 12
-					    2 13>;
 };
 
 &mac {
@@ -258,7 +247,7 @@
 	phy-mode = "rgmii-txid";
 };
 
-&spi3 {
+&spi0 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&spi0_pins_default>;
 	status = "okay";
@@ -300,4 +289,3 @@
 		 };
 	};
 };
-

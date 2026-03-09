@@ -172,7 +172,7 @@
 			};
 		};
 
-		target-module@9000 {			/* 0x44e09000, ap 16 04.0 */
+		Ftarget-module@9000 {			/* 0x44e09000, ap 16 04.0 */
 			compatible = "ti,sysc-omap2", "ti,sysc";
 			reg = <0x9050 0x4>,
 			      <0x9054 0x4>,
@@ -949,7 +949,7 @@
 			ranges = <0x0 0x2a000 0x1000>;
 		};
 
-		target-module@30000 {			/* 0x48030000, ap 77 08.0 */
+		spi0_target: target-module@30000 {			/* 0x48030000, ap 77 08.0 */
 			compatible = "ti,sysc-omap2", "ti,sysc";
 			reg = <0x30000 0x4>,
 			      <0x30110 0x4>,

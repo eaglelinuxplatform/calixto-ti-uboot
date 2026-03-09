@@ -12,11 +12,9 @@
  * Modified from am335x-evmsk
  * Modified by Vipin Vijayan <vipin.v@calixto.in>
  */
- 
-  /dts-v1/;
+ /dts-v1/;
 
 #include "am33xx.dtsi"
-#include "versa-include.dtsi"
 #include <dt-bindings/interrupt-controller/irq.h>
 / {
 	model = "CALIXTO AM335x VERSA-NXT_UBOOT";
@@ -179,8 +177,6 @@
 
 };
 
-
-
 &uart0 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&uart0_pins>;
@@ -188,8 +184,6 @@
 	status = "okay";
 };
 
-
-/* check here to */
 &cppi41dma  {
 	status = "okay";
 };
@@ -211,8 +205,6 @@
 
 };
 
-/* here */
-
 &mmc1 {
 	status = "okay";
 	vmmc-supply = <&vmmcsd_supply>;
@@ -229,13 +221,6 @@
     vmmc-supply = <&vmmcsd_fixed>;
     bus-width = <4>;
     ti,non-removable;
-    /* dmas = <&edma_xbar 12 0 1 &edma_xbar 13 0 2>; */
-    /* dma-names = "tx", "rx"; */
-};
-
-&edma {
-	ti,edma-xbar-event-map = /bits/ 16 <1 12
-					    2 13>;
 };
 
 &mac {
@@ -262,76 +247,16 @@
 	phy-mode = "rgmii-txid";
 };
 
-/*
-&l4_per {
-    bootph-all;
-};
-*/
-/*
-&spi3 {
-	pinctrl-names = "default";
-	bootph-pre-ram;
-	pinctrl-0 = <&spi0_pins_default>;
-	status = "okay";
-	//u-boot,dm-spl;
-	
-
-	spi_nor: flash@0 {
-		 bootph-pre-ram;
-		 #address-cells = <1>;
-		 #size-cells = <1>;
-		 //compatible = "winbond,w25q64cv";
-		 compatible = "winbond,w25q64cv" , "jedec,spi-nor";
-		 //spi-max-frequency = <24000000>;
-		 //m25p,fast-read;
-		 reg = <0>;
-		 
-		 spi-max-frequency = <25000000>;
-   		 spi-tx-bus-width = <1>;
-   		 spi-rx-bus-width = <1>;
-   		 spi-cpol;
-   		 spi-cpha;
-		 
-
-
-		 partition@0 {
-			 label = "u-boot-spl";
-			 reg = <0x000000 0x80000>;
-		 };
-
-
-		 partition@1 {
-			 label = "u-boot";
-			 reg = <0x80000 0x100000>;
-		 };
-
-		 partition@2 {
-			 label = "env1";
-			 reg = <0x180000 0x20000>;
-		 };
-
-		 partition@3 {
-			 label = "env2";
-			 reg = <0x1A0000 0x660000>;
-		 };
-	};
-};
-*/
-
-&spi3 {
+&spi0 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&spi0_pins_default>;
 	status = "okay";
-	//u-boot,dm-spl;
 	
 
 	spi_nor: flash@0 {
 		 #address-cells = <1>;
 		 #size-cells = <1>;
-		 //compatible = "winbond,w25q64cv";
 		 compatible = "winbond,w25q64cv" , "jedec,spi-nor";
-		 //spi-max-frequency = <24000000>;
-		 //m25p,fast-read;
 		 reg = <0>;
 		 
 		 spi-max-frequency = <25000000>;
