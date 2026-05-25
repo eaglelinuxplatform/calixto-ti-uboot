@@ -635,9 +635,15 @@ struct ti_sci_fwl_ops {
 /**
  * struct ti_sci_lpm_ops - Low Power Mode operations
  * @restore_context: Request restoring context from DDR.
+ * @decrypt_tfa: Request for decrypting TFA at specific address.
+ * @core_resume: Request for resuming TFA once decrypted.
+ * @lpm_save_addr: Send DDR Save address to TIFS
  */
 struct ti_sci_lpm_ops {
 	int (*restore_context)(const struct ti_sci_handle *handle, u64 ctx_addr);
+	int (*decrypt_tfa)(const struct ti_sci_handle *handle,	uint64_t unencrypted_address);
+	int (*core_resume)(const struct ti_sci_handle *handle);
+	int (*lpm_save_addr)(const struct ti_sci_handle *handle, uint64_t context_addr, uint32_t size);
 };
 
 /**

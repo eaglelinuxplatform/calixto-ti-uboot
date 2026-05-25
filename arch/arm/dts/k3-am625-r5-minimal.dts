@@ -67,3 +67,12 @@
 		bootph-pre-ram;
 	};
 };
+
+&main_timer0 {
+	/delete-property/ clocks;
+	/delete-property/ clock-names;
+	/delete-property/ assigned-clocks;
+	/delete-property/ assigned-clock-parents;
+	clock-frequency = <25000000>;
+	bootph-pre-ram;
+};

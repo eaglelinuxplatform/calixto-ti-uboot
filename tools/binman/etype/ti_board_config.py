@@ -123,8 +123,10 @@ class Entry_ti_board_config(Entry_section):
             size = 1
         elif (data_type == '#/definitions/u16'):
             size = 2
-        else:
+        elif (data_type == '#/definitions/u32'):
             size = 4
+        else:
+            size = 8
         if type(val) == int:
             br = val.to_bytes(size, byteorder='little')
         return br

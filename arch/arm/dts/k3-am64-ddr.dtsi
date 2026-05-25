@@ -3,8 +3,7 @@
  * Copyright (C) 2020-2021 Texas Instruments Incorporated - https://www.ti.com/
  */
 
-/ {
-	memorycontroller: memorycontroller@f300000 {
+&memorycontroller {
 		compatible = "ti,am64-ddrss";
 		reg = <0x00 0x0f308000 0x00 0x4000>,
 		      <0x00 0x43014000 0x00 0x100>,
@@ -2201,5 +2200,4 @@
 			DDRSS_PHY_1404_DATA
 			DDRSS_PHY_1405_DATA
 		>;
-	};
 };

@@ -1,0 +1,7 @@
+ImagePos    Offset      Size  Name
+00000000  00000000  00036041  tiboot3.bin
+00000000   00000000  000007dc  ti-secure-rom
+000007dc   000007dc  00009045  atf-bl1
+00009821   00009821  0002c000  tifs-enc.bin
+00035821   00035821  0000018c  sysfw-data.bin
+000359ad   000359ad  00000694  tifs-cert.bin

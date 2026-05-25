@@ -15,9 +15,25 @@ config TARGET_AM62L3_EVM
 	select BINMAN
 	select OF_UPSTREAM
 	select OF_SYSTEM_SETUP
+	
+config TARGET_AM62L3_STAMP_1GB
+	bool "Calixto K3 based AM62L3 STAMP 1 GB"
+	select ARM64
+	select BINMAN
+	select OF_UPSTREAM
+	select OF_SYSTEM_SETUP
+	
+config TARGET_AM62L3_STAMP_2GB
+	bool "Calixto K3 based AM62L3 STAMP 2 GB"
+	select ARM64
+	select BINMAN
+	select OF_UPSTREAM
+	select OF_SYSTEM_SETUP
 
 endchoice
 
 source "board/ti/am62lx/Kconfig"
+source "board/calixto/am62l_stamp_1gb/Kconfig"
+source "board/calixto/am62l_stamp_2gb/Kconfig"
 
 endif

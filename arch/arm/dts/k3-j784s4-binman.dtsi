@@ -214,6 +214,14 @@
 #endif
 					fdt = "fdt-0";
 				};
+				conf-1 {
+					description = "k3-lpm";
+#ifdef CONFIG_K3_HSM_FW
+					loadables = "hsm", "dm";
+#else
+					loadables = "dm";
+#endif
+				};
 			};
 		};
 	};
@@ -296,6 +304,10 @@
 					firmware = "atf";
 					loadables = "tee", "dm", "spl";
 					fdt = "fdt-0";
+				};
+				conf-1 {
+					description = "k3-lpm";
+					loadables = "dm";
 				};
 			};
 		};

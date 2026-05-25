@@ -19,6 +19,9 @@
 #include <asm/io.h>
 #include <spl.h>
 #include <asm/arch/k3-ddr.h>
+#include <power/pmic.h>
+#include <wait_bit.h>
+#include <mach/k3-ddrss.h>
 #include "../common/fdt_ops.h"
 
 DECLARE_GLOBAL_DATA_PTR;
@@ -98,6 +101,10 @@ static void __maybe_unused detect_enable_spinand(void *blob)
 #if defined(CONFIG_XPL_BUILD)
 void spl_perform_fixups(struct spl_image_info *spl_image)
 {
+#if IS_ENABLED(CONFIG_TARGET_J784S4_R5_EVM)
+	if (board_is_resuming())
+		return;
+#endif
 	if (IS_ENABLED(CONFIG_K3_DDRSS)) {
 		if (IS_ENABLED(CONFIG_K3_INLINE_ECC))
 			fixup_ddr_driver_for_ecc(spl_image);
@@ -108,6 +115,16 @@ void spl_perform_fixups(struct spl_image_info *spl_image)
 }
 #endif
 
+#if (IS_ENABLED(CONFIG_SPL_LOAD_FIT) && IS_ENABLED(CONFIG_TARGET_J784S4_R5_EVM))
+int board_fit_config_name_match(const char *name)
+{
+	if (board_is_resuming())
+		if (!strcmp(name, "k3-lpm"))
+			return 0;
+	return -1;
+}
+#endif
+
 #ifdef CONFIG_BOARD_LATE_INIT
 int board_late_init(void)
 {
@@ -115,6 +132,80 @@ int board_late_init(void)
 	return 0;
 }
 #endif
+
+#if (IS_ENABLED(CONFIG_SPL_BUILD) && (IS_ENABLED(CONFIG_TARGET_J784S4_R5_EVM) || IS_ENABLED(CONFIG_TARGET_J742S2_R5_EVM)))
+
+#define SCRATCH_PAD_REG_3 0xCB
+#define MAGIC_SUSPEND 0xBA
+#define LPM_WAKE_SOURCE_PMIC_GPIO 0x91
+#define LPM_WAKE_SOURCE_MCU_IO    0x81
+
+static void clear_isolation(void)
+{
+	int ret;
+	const void *wait_reg = (const void *)(WKUP_CTRL_MMR0_BASE + MCU_GEN_WAKE_STAT1);
+
+	/* un-set the magic word for MCU_GENERAL IOs */
+	writel(IO_ISO_MAGIC_VAL, WKUP_CTRL_MMR0_BASE + MCU_GEN_WAKE_CTRL);
+	writel((IO_ISO_MAGIC_VAL + 0x1), WKUP_CTRL_MMR0_BASE + MCU_GEN_WAKE_CTRL);
+	writel(IO_ISO_MAGIC_VAL, WKUP_CTRL_MMR0_BASE + MCU_GEN_WAKE_CTRL);
+
+	/* wait for MCU_GEN_IO_MODE bit to be cleared */
+	ret = wait_for_bit_32(wait_reg,
+			      MCU_GEN_WAKE_STAT1_MCU_GEN_IO_MODE,
+			      false,
+			      DEISOLATION_TIMEOUT_MS,
+			      false);
+	if (ret < 0)
+		pr_err("Deisolation timeout");
+}
+
+/* in board_init_f(), there's no BSS, so we can't use global/static variables */
+int board_is_resuming(void)
+{
+	struct udevice *pmic;
+	u32 pmctrl_val = readl(WKUP_CTRL_MMR0_BASE + PMCTRL_IO_0);
+	struct lpm_scratch_space *lpm_scratch = (struct lpm_scratch_space *)TI_SRAM_LPM_SCRATCH;
+	int err;
+
+	if (gd_k3_resuming() >= 0)
+		goto end;
+
+	if ((pmctrl_val & IO_ISO_STATUS) == IO_ISO_STATUS) {
+		lpm_scratch->wake_src = LPM_WAKE_SOURCE_MCU_IO;
+		clear_isolation();
+		gd_set_k3_resuming(1);
+		debug("board is resuming from IO_DDR mode\n");
+		return gd_k3_resuming();
+	}
+
+	err = uclass_get_device_by_name(UCLASS_PMIC,
+					"pmic@48", &pmic);
+	if (err) {
+		printf("Getting PMIC init failed: %d\n", err);
+		goto end;
+	}
+	debug("%s: PMIC is detected (%s)\n", __func__, pmic->name);
+
+	if (pmic_reg_read(pmic, SCRATCH_PAD_REG_3) == MAGIC_SUSPEND) {
+		debug("%s: board is resuming\n", __func__);
+		lpm_scratch->wake_src = LPM_WAKE_SOURCE_PMIC_GPIO;
+		gd_set_k3_resuming(1);
+
+		/* clean magic suspend */
+		if (pmic_reg_write(pmic, SCRATCH_PAD_REG_3, 0))
+			printf("Failed to clean magic value for suspend detection in PMIC\n");
+	} else {
+		debug("%s: board is booting (no resume detected)\n", __func__);
+		lpm_scratch->wake_src = 0;
+		lpm_scratch->reserved = 0;
+		gd_set_k3_resuming(0);
+	}
+end:
+	return gd_k3_resuming();
+}
+
+#endif /* CONFIG_SPL_BUILD && CONFIG_TARGET_J784s4_R5_EVM */
 
 void spl_board_init(void)
 {

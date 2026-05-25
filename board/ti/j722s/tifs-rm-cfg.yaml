@@ -45,26 +45,26 @@ tifs-rm-cfg:
                     allowed_priority: 0xAAAA
                     allowed_sched_priority: 0xAA
                 -  # 5
-                    host_id: 31
-                    allowed_atype: 0x2A
-                    allowed_qos: 0xAAAA
-                    allowed_orderid: 0xAAAAAAAA
-                    allowed_priority: 0xAAAA
-                    allowed_sched_priority: 0xAA
-                -  # 6
                     host_id: 36
                     allowed_atype: 0x2A
                     allowed_qos: 0xAAAA
                     allowed_orderid: 0xAAAAAAAA
                     allowed_priority: 0xAAAA
                     allowed_sched_priority: 0xAA
-                -  # 7
+                -  # 6
                     host_id: 38
                     allowed_atype: 0x2A
                     allowed_qos: 0xAAAA
                     allowed_orderid: 0xAAAAAAAA
                     allowed_priority: 0xAAAA
                     allowed_sched_priority: 0xAA
+                -  # 7
+                    host_id: 0
+                    allowed_atype: 0
+                    allowed_qos: 0
+                    allowed_orderid: 0
+                    allowed_priority: 0
+                    allowed_sched_priority: 0
                 -  # 8
                     host_id: 0
                     allowed_atype: 0
@@ -244,18 +244,12 @@ tifs-rm-cfg:
             subhdr:
                 magic: 0x7B25
                 size: 8
-            resasg_entries_size: 1048
+            resasg_entries_size: 992
             reserved: 0
     resasg_entries:
         -
             start_resource: 0
-            num_resource: 2
-            type: 1677
-            host_id: 31
-            reserved: 0
-        -
-            start_resource: 2
-            num_resource: 14
+            num_resource: 16
             type: 1677
             host_id: 12
             reserved: 0
@@ -291,13 +285,7 @@ tifs-rm-cfg:
             reserved: 0
         -
             start_resource: 57
-            num_resource: 1
-            type: 1678
-            host_id: 31
-            reserved: 0
-        -
-            start_resource: 58
-            num_resource: 15
+            num_resource: 16
             type: 1678
             host_id: 12
             reserved: 0
@@ -327,13 +315,7 @@ tifs-rm-cfg:
             reserved: 0
         -
             start_resource: 32
-            num_resource: 1
-            type: 1679
-            host_id: 31
-            reserved: 0
-        -
-            start_resource: 33
-            num_resource: 11
+            num_resource: 12
             type: 1679
             host_id: 12
             reserved: 0
@@ -369,13 +351,7 @@ tifs-rm-cfg:
             reserved: 0
         -
             start_resource: 0
-            num_resource: 2
-            type: 1696
-            host_id: 31
-            reserved: 0
-        -
-            start_resource: 2
-            num_resource: 14
+            num_resource: 16
             type: 1696
             host_id: 12
             reserved: 0
@@ -411,13 +387,7 @@ tifs-rm-cfg:
             reserved: 0
         -
             start_resource: 0
-            num_resource: 1
-            type: 1697
-            host_id: 31
-            reserved: 0
-        -
-            start_resource: 1
-            num_resource: 15
+            num_resource: 16
             type: 1697
             host_id: 12
             reserved: 0
@@ -447,13 +417,7 @@ tifs-rm-cfg:
             reserved: 0
         -
             start_resource: 0
-            num_resource: 1
-            type: 1698
-            host_id: 31
-            reserved: 0
-        -
-            start_resource: 1
-            num_resource: 11
+            num_resource: 12
             type: 1698
             host_id: 12
             reserved: 0
@@ -489,13 +453,7 @@ tifs-rm-cfg:
             reserved: 0
         -
             start_resource: 7
-            num_resource: 5
-            type: 1802
-            host_id: 31
-            reserved: 0
-        -
-            start_resource: 12
-            num_resource: 16
+            num_resource: 21
             type: 1802
             host_id: 12
             reserved: 0

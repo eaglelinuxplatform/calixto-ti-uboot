@@ -413,18 +413,6 @@ dtb-$(CONFIG_AM33XX) += \
 	am335x-brsmarc1.dtb \
 	am335x-draco.dtb \
 	am335x-evm.dtb \
-	am335x-versa-nxt256.dtb \
-	am335x-versa-nxt512.dtb \
-	am335x-versa-nxt1024.dtb \
-	am335x-stamp-nxt256.dtb \
-	am335x-stamp-nxt512.dtb \
-	am335x-stamp-nxt1024.dtb \
-	iiot-gateway-m1-256.dtb \
-	iiot-gateway-m1-512.dtb \
-	iiot-gateway-m1-1024.dtb \
-	iot-gateway-rosella-256.dtb \
-	iot-gateway-rosella-512.dtb \
-	iot-gateway-rosella-1024.dtb \
 	am335x-evmsk.dtb \
 	am335x-bonegreen.dtb \
 	am335x-bonegreen-eco.dtb \
@@ -1195,6 +1183,9 @@ dtb-$(CONFIG_SOC_K3_AM625) += k3-am625-r5-sk.dtb \
 			      k3-am625-r5-beagleplay.dtb \
 			      k3-am625-verdin-r5.dtb \
 			      k3-am625-r5-phycore-som-2gb.dtb
+
+dtb-$(CONFIG_SOC_K3_AM62L3) += k3-am62l3-stamp-1gb.dtb
+dtb-$(CONFIG_SOC_K3_AM62L3) += k3-am62l3-stamp-2gb.dtb
 
 dtb-$(CONFIG_SOC_K3_AM62A7) += k3-am62a7-r5-sk.dtb
 

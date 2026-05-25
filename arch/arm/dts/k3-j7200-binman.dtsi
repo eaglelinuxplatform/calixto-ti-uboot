@@ -311,7 +311,7 @@
 
 						firewall-4760-1 {
 							/* nb_slv0__mem0 Foreground Firewall */
-							insert-template = <&firewall_armv8_atf_fg>;
+							insert-template = <&firewall_armv8_atf_tifs_fg>;
 							id = <4760>;
 							region = <1>;
 						};
@@ -324,7 +324,7 @@
 
 						firewall-4761-1 {
 							/* nb_slv1__mem0 Foreground Firewall */
-							insert-template = <&firewall_armv8_atf_fg>;
+							insert-template = <&firewall_armv8_atf_tifs_fg>;
 							id = <4761>;
 							region = <1>;
 						};
@@ -346,12 +346,11 @@
 							region = <2>;
 						};
 
-						firewall-4762-0 {
-							/* nb_slv2__mem0 Background Firewall - 0 */
-							insert-template = <&firewall_bg_3>;
-							id = <4762>;
-							region = <0>;
-						};
+						/*	firewall-4762-0 {
+						 *		nb_slv2__mem0 Background Firewall - 0 
+						 *		Already configured by security entity
+						 * 	};
+						 */
 
 						firewall-4762-1 {
 							/* nb_slv2__mem0 Foreground Firewall */
@@ -360,12 +359,11 @@
 							region = <1>;
 						};
 
-						firewall-4763-0 {
-							/* nb_slv3__mem0 Background Firewall - 0 */
-							insert-template = <&firewall_bg_3>;
-							id = <4763>;
-							region = <0>;
-						};
+						/*	firewall-4763-0 {
+						 *		 nb_slv3__mem0 Background Firewall - 0
+						 *		 Already configured by security entity
+						 *	};
+						 */
 
 						firewall-4763-1 {
 							/* nb_slv3__mem0 Foreground Firewall */
@@ -410,6 +408,10 @@
 					firmware = "atf";
 					loadables = "tee", "dm", "spl";
 					fdt = "fdt-0";
+				};
+				conf-1 {
+					description = "k3-lpm";
+					loadables = "dm";
 				};
 			};
 		};
@@ -491,6 +493,10 @@
 					firmware = "atf";
 					loadables = "tee", "dm", "spl";
 					fdt = "fdt-1";
+				};
+				conf-2 {
+					description = "k3-lpm";
+					loadables = "dm";
 				};
 			};
 		};

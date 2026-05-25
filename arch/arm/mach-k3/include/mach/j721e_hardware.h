@@ -15,6 +15,17 @@
 #define MCU_CTRL_MMR0_BASE				0x40f00000
 #define CTRL_MMR0_BASE					0x00100000
 
+#define PMCTRL_IO_1						(DMSC_PWRCTRL_BASE + 0x88)
+#define DMSC_PWRCTRL_BASE				0x44130000
+#define CANUART_WAKE_CTRL				0x18300
+#define CANUART_WAKE_STAT0				0x18308
+#define CANUART_WAKE_STAT1				0x1830C
+
+#define IO_ISO_MAGIC_VAL			0x55555554
+#define IO_ISO_STATUS				BIT(25)
+#define CANUART_WAKE_STAT1_CANUART_IO_MODE	BIT(0)
+#define DEISOLATION_TIMEOUT_MS			10
+
 #define CTRLMMR_MAIN_DEVSTAT				(CTRL_MMR0_BASE + 0x30)
 #define MAIN_DEVSTAT_BOOT_MODE_B_MASK		BIT(0)
 #define MAIN_DEVSTAT_BOOT_MODE_B_SHIFT		0
@@ -36,6 +47,7 @@
 
 /* MCU SCRATCHPAD usage */
 #define TI_SRAM_SCRATCH_BOARD_EEPROM_START	CONFIG_SYS_K3_MCU_SCRATCHPAD_BASE
+#define TI_SRAM_SCRATCH_LPM_START    0x40280000
 
 #if defined(CONFIG_SYS_K3_SPL_ATF) && !defined(__ASSEMBLY__)
 
@@ -51,6 +63,14 @@ static const u32 put_device_ids[] = {
 
 #define J721E_DEV_MCU_ARMSS0_CPU0		250
 #define J721E_DEV_MCU_ARMSS0_CPU1		251
+
+struct lpm_scratch_space {
+	u16 wake_src;
+	u16 reserved;
+} __packed;
+
+#define TI_SRAM_LPM_SCRATCH ((struct lpm_scratch_space *)\
+				TI_SRAM_SCRATCH_LPM_START)
 
 static const u32 put_core_ids[] = {
 	J721E_DEV_MCU_ARMSS0_CPU1,

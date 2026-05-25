@@ -9,7 +9,6 @@
 / {
 	chosen {
 		stdout-path = "serial2:115200n8";
-		tick-timer = &main_timer0;
 	};
 
 	memory@80000000 {
@@ -23,10 +22,6 @@
 
 &wkup_r5fss0_core0_memory_region {
 	bootph-pre-ram;
-};
-
-&main_timer0 {
-	bootph-all;
 };
 
 &cbass_main {

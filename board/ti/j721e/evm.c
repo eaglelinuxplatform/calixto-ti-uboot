@@ -16,6 +16,9 @@
 #include <spl.h>
 #include <dm.h>
 #include <asm/arch/k3-ddr.h>
+#include <power/pmic.h>
+#include <wait_bit.h>
+#include <mach/k3-ddrss.h>
 
 #include "../common/board_detect.h"
 #include "../common/fdt_ops.h"
@@ -94,6 +97,11 @@ int board_fit_config_name_match(const char *name)
 {
 	bool eeprom_read = board_ti_was_eeprom_read();
 
+#if IS_ENABLED(CONFIG_TARGET_J7200_R5_EVM)
+	if (board_is_resuming())
+		if (!strcmp(name, "k3-lpm"))
+			return 0;
+#endif
 	if (!eeprom_read || board_is_j721e_som()) {
 		if (!strcmp(name, "k3-j721e-common-proc-board") ||
 		    !strcmp(name, "k3-j721e-r5-common-proc-board"))
@@ -141,6 +149,10 @@ static void __maybe_unused detect_enable_hyperflash(void *blob)
 					defined(CONFIG_TARGET_J721E_A72_EVM) || defined(CONFIG_TARGET_J721E_R5_EVM))
 void spl_perform_fixups(struct spl_image_info *spl_image)
 {
+#if IS_ENABLED(CONFIG_TARGET_J7200_R5_EVM)
+	if (board_is_resuming())
+		return;
+#endif
 	detect_enable_hyperflash(spl_image->fdt_addr);
 }
 #endif
@@ -413,7 +425,7 @@ static struct ti_fdt_map ti_j721e_evm_fdt_map[] = {
 };
 static void setup_board_eeprom_env(void)
 {
-	char *name = "j721e";
+	char *name = NULL;
 
 	if (do_board_detect())
 		goto invalid_eeprom;
@@ -505,6 +517,88 @@ err_free_gpio:
 		return ret;
 	}
 }
+
+#if (IS_ENABLED(CONFIG_SPL_BUILD) && IS_ENABLED(CONFIG_TARGET_J7200_R5_EVM))
+
+#define SCRATCH_PAD_REG_3 0xCB
+#define MAGIC_SUSPEND 0xBA
+#define LPM_WAKE_SOURCE_PMIC_GPIO 0x91
+#define LPM_WAKE_SOURCE_MAIN_IO   0x80
+
+static void clear_isolation(void)
+{
+	int ret;
+	const void *wait_reg = (const void *)(WKUP_CTRL_MMR0_BASE + CANUART_WAKE_STAT1);
+
+	/* un-set the magic word for canuart IOs */
+	writel(IO_ISO_MAGIC_VAL, WKUP_CTRL_MMR0_BASE + CANUART_WAKE_CTRL);
+	writel((IO_ISO_MAGIC_VAL + 0x1), WKUP_CTRL_MMR0_BASE + CANUART_WAKE_CTRL);
+	writel(IO_ISO_MAGIC_VAL, WKUP_CTRL_MMR0_BASE + CANUART_WAKE_CTRL);
+
+	/* wait for CANUART_IO_MODE bit to be cleared */
+	ret = wait_for_bit_32(wait_reg,
+			      CANUART_WAKE_STAT1_CANUART_IO_MODE,
+			      false,
+			      DEISOLATION_TIMEOUT_MS,
+			      false);
+	if (ret < 0)
+		pr_err("Deisolation timeout");
+}
+
+int board_is_resuming(void)
+{
+	struct udevice *pmica;
+	struct udevice *pmicb;
+	u32 pmctrl_val = readl(PMCTRL_IO_1);
+	struct lpm_scratch_space *lpm_scratch = (struct lpm_scratch_space *)TI_SRAM_LPM_SCRATCH;
+	int ret;
+
+	if (gd_k3_resuming() >= 0)
+		goto end;
+
+	if ((pmctrl_val & IO_ISO_STATUS) == IO_ISO_STATUS) {
+		lpm_scratch->wake_src = LPM_WAKE_SOURCE_MAIN_IO;
+		clear_isolation();
+		gd_set_k3_resuming(1);
+		debug("Resuming from IO_DDR mode\n");
+		return gd_k3_resuming();
+	}
+
+	ret = uclass_get_device_by_name(UCLASS_PMIC,
+					"pmic@48", &pmica);
+	if (ret) {
+		printf("Getting PMICA init failed: %d\n", ret);
+		goto end;
+	}
+	debug("%s: PMICA is detected (%s)\n", __func__, pmica->name);
+
+	ret = uclass_get_device_by_name(UCLASS_PMIC,
+					"pmic@4c", &pmicb);
+	if (ret) {
+		printf("Getting PMICB init failed: %d\n", ret);
+		goto end;
+	}
+	debug("%s: PMICB is detected (%s)\n", __func__, pmicb->name);
+
+	if (pmic_reg_read(pmica, SCRATCH_PAD_REG_3) == MAGIC_SUSPEND) {
+		debug("%s: board is resuming\n", __func__);
+		lpm_scratch->wake_src = LPM_WAKE_SOURCE_PMIC_GPIO;
+		gd_set_k3_resuming(1);
+
+		/* clean magic suspend */
+		if (pmic_reg_write(pmica, SCRATCH_PAD_REG_3, 0))
+			printf("Failed to clean magic value for suspend detection in PMICA\n");
+	} else {
+		debug("%s: board is booting (no resume detected)\n", __func__);
+		lpm_scratch->wake_src = 0;
+		lpm_scratch->reserved = 0;
+		gd_set_k3_resuming(0);
+	}
+end:
+	return gd_k3_resuming();
+}
+
+#endif /* CONFIG_SPL_BUILD && CONFIG_TARGET_J7200_R5_EVM */
 
 void spl_board_init(void)
 {

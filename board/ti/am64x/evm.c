@@ -163,9 +163,19 @@ static struct ti_fdt_map ti_am64_evm_fdt_map[] = {
 	{ /* Sentinel. */ }
 };
 
+static void add_on_board_clock_gen_overlay(void)
+{
+	char *dt_overlay = "ti/k3-am642-evm-onboard-clkgen-pcie-serdes.dtbo";
+	int ret;
+
+	ret = env_set("name_overlays", dt_overlay);
+	if (ret)
+		printf("Failed to add %s overlay to environment", dt_overlay);
+}
+
 static void setup_board_eeprom_env(void)
 {
-	char *name = "am64x_gpevm";
+	char *name = NULL;
 
 	if (do_board_detect())
 		goto invalid_eeprom;
@@ -220,6 +230,15 @@ int board_late_init(void)
 		 * an index of 1.
 		 */
 		board_ti_am6_set_ethaddr(1, ep->mac_addr_cnt);
+
+		/*
+		 * AM642-EVM Rev B, C and D have an on-board clock generator.
+		 * Apply the device-tree overlay to use it and to avoid
+		 * reference clock contention.
+		 */
+		if (!strcmp(ep->version, "B") || !strcmp(ep->version, "C") ||
+		    !strcmp(ep->version, "D"))
+			add_on_board_clock_gen_overlay();
 	}
 
 	return 0;
