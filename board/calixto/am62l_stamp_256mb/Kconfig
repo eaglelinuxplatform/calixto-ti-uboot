@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: GPL-2.0+
+#
+# Copyright (C) 2025 Texas Instruments Incorporated - https://www.ti.com/
+#
+
+if TARGET_AM62L3_STAMP_256MB
+
+config SYS_BOARD
+       default "am62l_stamp_256mb"
+
+config SYS_VENDOR
+       default "calixto"
+
+config SYS_CONFIG_NAME
+       default "am62l_stamp_256mb"
+
+source "board/calixto/common/Kconfig"
+
+endif

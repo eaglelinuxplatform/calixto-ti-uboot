@@ -3,7 +3,7 @@
  * Copyright (C) 2024 Texas Instruments Incorporated - https://www.ti.com/
  */
 
-#include "k3-am62l3-stamp-2gb-binman.dtsi"
+#include "k3-am62l-calixto-stamp_2GB-binman.dtsi"
 
 / {
 	aliases {
