@@ -329,9 +329,9 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&mdio1_pins_default>;
 	
-	cpsw3g_phy0: ethernet-phy@7 {
+	cpsw3g_phy0: ethernet-phy@6 {
 		compatible = "ethernet-phy-ieee802.3-c22";
-		reg = <7>;
+		reg = <6>;
 	};
 };
 
