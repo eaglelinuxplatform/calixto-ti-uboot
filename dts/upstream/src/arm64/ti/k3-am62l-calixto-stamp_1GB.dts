@@ -325,9 +325,9 @@
 };
 
 &cpsw3g_mdio {
-        status = "okay";
 	pinctrl-names = "default";
 	pinctrl-0 = <&mdio1_pins_default>;
+	status = "okay";
 	
 	cpsw3g_phy0: ethernet-phy@6 {
 		compatible = "ethernet-phy-ieee802.3-c22";
